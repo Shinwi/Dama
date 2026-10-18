@@ -2,9 +2,9 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { Board } from './board/board';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
-import { DARK, LIGHT } from '../engine/types';
+import { DARK, LIGHT, Outcome } from '../engine/types';
 import { Difficulty } from '../engine/ai';
-import { GameMode } from './game/game-controller';
+import { GameMode, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
@@ -58,6 +58,8 @@ export class App {
   });
 
   protected readonly pieceCounts = computed(() => this.game.pieceCounts());
+
+  protected readonly gameOver = computed(() => describeGameOver(this.game.outcome(), this.game.settings()));
 
   private nextSquares(wantCaptures: boolean): number[] {
     const selection = this.game.selection();
@@ -117,4 +119,38 @@ export class App {
 
 function sideName(side: typeof LIGHT | typeof DARK): string {
   return side === LIGHT ? 'Light' : 'Dark';
+}
+
+export interface GameOverInfo {
+  variant: 'win' | 'loss' | 'neutral';
+  title: string;
+  subtitle: string;
+}
+
+/** Pure so it's unit-testable without driving a whole game through the UI. */
+export function describeGameOver(outcome: Outcome, settings: Settings): GameOverInfo | null {
+  if (outcome.kind === 'draw') {
+    return {
+      variant: 'neutral',
+      title: 'Draw',
+      subtitle: '50 moves in a row with no capture and no man moving.',
+    };
+  }
+  if (outcome.kind !== 'win') return null;
+
+  if (settings.mode === 'computer') {
+    const youWon = outcome.winner === settings.playerSide;
+    return {
+      variant: youWon ? 'win' : 'loss',
+      title: youWon ? 'You win!' : 'You lose',
+      subtitle: youWon ? 'The computer has no legal move left.' : 'You have no legal move left.',
+    };
+  }
+
+  const loser = outcome.winner === LIGHT ? DARK : LIGHT;
+  return {
+    variant: 'win',
+    title: `${sideName(outcome.winner)} wins!`,
+    subtitle: `${sideName(loser)} has no legal move left.`,
+  };
 }

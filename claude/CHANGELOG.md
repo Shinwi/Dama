@@ -179,3 +179,45 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   MSYS path-mangling auto-converting the leading-slash argument (a Windows-local quirk,
   confirmed by rerunning with `MSYS_NO_PATHCONV=1` and getting the correct `/Dama/` — GitHub's
   actual Linux runners won't hit this at all).
+- User confirmed the GitHub Pages deploy is live and working, then reported a gameplay bug:
+  sometimes after capturing one piece of a multi-jump, the second capture isn't playable and
+  the piece looks "blocked". Checked `gh api repos/Shinwi/Dama/issues` — no open or closed
+  issues on the repo (no `gh` CLI installed locally, used the public REST API directly via
+  `curl`).
+  **Investigation**: `GameController` — the class that turns a sequence of taps into engine
+  moves, including stepping through a multi-jump square by square — had **zero test
+  coverage**, despite being the most likely place for a bug like this to hide (it's the most
+  bespoke, least-exercised-by-the-engine's-own-tests code in the project). Added
+  `game-controller.spec.ts`: stepwise tapping through a real two-hop capture
+  (`c3xe5xg7`, from `rules-cases.json`), tapping straight to the final square, a deliberately
+  wrong tap mid-sequence, two independently-capturing pieces in the same position, and strict
+  mode. **All 5 passed on the first run** — the tap-sequencing logic itself is correct.
+  That points at one of two explanations instead of a logic bug: (a) the position actually had
+  two *separate* pieces that could each capture independently (not one piece chaining two
+  jumps) — the user played one, which is a complete legal move and ends the turn, and the
+  *other* piece naturally can't also move since it's the opponent's turn now; this is correct
+  dama rules (one piece moves per turn, even under compulsory capture) but can look exactly
+  like "I could eat two, ate one, the other's stuck". Or (b) it genuinely was one piece's
+  multi-jump, and a slightly mistaken second tap (wrong square) silently did nothing — the
+  `game-controller.spec.ts` "mistaken tap mid-sequence" test confirms this is exactly what
+  happens by design: an invalid tap during a forced continuation is a silent no-op with no
+  sound or visual feedback, so it reads as "the piece is stuck" even though the engine is
+  still correctly waiting for the real continuation. Couldn't narrow it further without the
+  user's exact position — noted as the next thing to pin down in `PLAN.md`, along with "add
+  feedback on an invalid tap" as a worthwhile UX fix regardless of which explanation it was.
+- **Game-over overlay**: win/loss/draw previously only changed the status line's text, easy to
+  miss, with no dedicated "the game has ended" visual moment. Added `describeGameOver()` — a
+  pure function (`app.ts`), not just inline template logic, specifically so it's unit-testable
+  without having to actually play a game to completion through the UI (5 new tests: ongoing →
+  null, draw, vs-computer win/loss framed as "you", 1v1 framed by side name) — and a card
+  overlay on top of the board (dimmed backdrop, result title in saffron/muted depending on
+  win/loss, one-line reason, "New game" button), shown via `App`'s `gameOver` computed.
+  Verified the actual rendered CSS (not just the logic) by injecting a forced win state into
+  a live page — first attempt looked broken (unstyled, no overlay positioning) because
+  Angular's emulated view encapsulation only applies component CSS to elements carrying its
+  auto-generated `_ngcontent-*` attribute, which `document.createElement` nodes don't have;
+  copied the real attribute off an existing Angular-rendered element to fix the check. Second
+  issue chasing a "translucent card" look turned out to just be the entrance animation
+  (`opacity`/`scale` over 220ms) caught mid-transition in the screenshot — confirmed by
+  checking computed styles directly (solid white, opacity 1) and by waiting past the
+  animation before re-screenshotting.

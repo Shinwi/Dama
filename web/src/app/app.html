@@ -12,18 +12,35 @@
         <span [class.active-turn]="game.state().toMove === DARK">○ Dark {{ pieceCounts().dark }}</span>
       </p>
 
-      <app-board
-        [board]="game.state().board"
-        [flipped]="flipped()"
-        [selected]="selection().selected"
-        [pathSoFar]="selection().path"
-        [landingDots]="landingDots()"
-        [captureRings]="captureRings()"
-        [compulsoryRings]="selection().compulsorySquares"
-        [lastMove]="game.lastMove()"
-        [updateKind]="game.updateKind()"
-        (squareTap)="onSquareTap($event)"
-      ></app-board>
+      <div class="board-wrap">
+        <app-board
+          [board]="game.state().board"
+          [flipped]="flipped()"
+          [selected]="selection().selected"
+          [pathSoFar]="selection().path"
+          [landingDots]="landingDots()"
+          [captureRings]="captureRings()"
+          [compulsoryRings]="selection().compulsorySquares"
+          [lastMove]="game.lastMove()"
+          [updateKind]="game.updateKind()"
+          (squareTap)="onSquareTap($event)"
+        ></app-board>
+
+        @if (gameOver(); as result) {
+          <div
+            class="game-over"
+            [class.win]="result.variant === 'win'"
+            [class.loss]="result.variant === 'loss'"
+            data-testid="game-over"
+          >
+            <div class="game-over-card">
+              <p class="game-over-title">{{ result.title }}</p>
+              <p class="game-over-subtitle">{{ result.subtitle }}</p>
+              <button type="button" (click)="newGame()">New game</button>
+            </div>
+          </div>
+        }
+      </div>
     </div>
 
     <aside class="sidebar">

@@ -45,24 +45,38 @@ the historical record of what actually happened and why.
     Hit one real bug building this: the reconciliation `effect()` read and wrote the same
     signal, which made it re-trigger itself forever (froze the page on the first real move,
     no console error — just a livelock). Fixed with `untracked()`.
+14. ✅ Per-situation capture sounds (count, king involvement) and a distinct capture timbre —
+    see `CHANGELOG.md` for the detail, including the engine's new `Move.capturedKing` field.
+15. ✅ Deployed to GitHub Pages via `.github/workflows/deploy.yml` — live and confirmed working
+    by the user. Phase 1's "deployed, real people played it" condition is met.
+16. ✅ Game-over overlay. Previously a win/loss/draw only changed the status line's text —
+    easy to miss. Added `describeGameOver()` (pure function in `app.ts`, exported and unit
+    tested on its own — win/loss/draw text, vs-computer "you" framing vs 1v1 naming the side)
+    and a card overlay on top of the board (dimmed backdrop, result title, one-line reason,
+    "New game" button), driven by it.
+17. ✅ Closed a real test-coverage gap found while investigating a user bug report:
+    `GameController` (the tap-by-tap multi-jump selection logic) had zero tests. Added
+    `game-controller.spec.ts` — stepwise multi-jump tapping, tap-straight-to-the-end,
+    a mistaken tap mid-sequence, two independently-capturing pieces, strict mode. All passed
+    first try — see `CHANGELOG.md` for what this means for the bug report itself.
 
-Phase 1 is functionally complete, animated, responsive, and all tests are green.
+Phase 1 is functionally complete, animated, responsive, deployed, and all tests are green.
 
 ## Next, in order
 
-14. **Try it for real** — run `npm start` in `web/`, play a full game on a phone and on a
-    desktop browser, both colours, both modes, with sound and music on. This session's
-    Playwright suite checks interaction but nobody has actually looked at it yet.
-15. **Actually deploy somewhere** — so phase 1's "deployed, real people played it" exit
-    condition can be met. Two options are wired up, neither live yet:
-    - `.github/workflows/deploy.yml` (GitHub Actions → GitHub Pages) builds and deploys
-      automatically on push to `master`. **Needs a one-time manual step the user has to do**:
-      repo → Settings → Pages → Source → "GitHub Actions" (`web/README.md` has the details).
-      Can't be done from here — it's a GitHub web UI setting, no API access to flip it.
-    - Cloudflare Pages via `.gitlab-ci.yml`'s `pages-deploy` job (manual trigger on `main`),
-      needs a Cloudflare account/API token as CI/CD variables — only relevant if this repo
-      also lives on GitLab.
-16. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
+18. **Nail down the capture bug** — user reported sometimes being unable to continue a
+    multi-jump ("eat the first, then can't eat the second, piece looks blocked"). The new
+    `game-controller.spec.ts` tests prove the tap-sequencing logic itself is correct, so this
+    is one of: (a) two *separate* pieces could each capture independently, the user played
+    one and expected to also play the other same turn (correct dama rules, just surprising),
+    or (b) a mistaken/imprecise tap during a forced continuation silently no-ops with zero
+    feedback, which looks exactly like "blocked". Need the user's exact position (or to
+    reproduce it together) to know which. Either way, (b) is worth fixing regardless: add a
+    sound/visual cue on an invalid tap during a compulsory sequence, instead of silence.
+19. **Try it for real, more** — now that it's deployed, keep playing it (phone + desktop,
+    both colours, both modes, sound/music on) and note anything else that feels off, the way
+    the capture bug above got found.
+20. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
     (*nfakh*, a move list, installable PWA).
 
 ## Open items / decisions to revisit
