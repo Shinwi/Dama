@@ -53,6 +53,10 @@ export class Board {
 
   private readonly pieceStates = signal<PieceState[]>([]);
   private animationToken = 0;
+  /** True while `reconcile()` is still replaying a move hop by hop. */
+  private animating = false;
+  /** The board the latest `reconcile()` is heading for — what the pieces show once it's done. */
+  private targetBoard: BoardArray | null = null;
 
   readonly cells = computed<CellView[]>(() => {
     const board = this.board();
@@ -146,13 +150,25 @@ export class Board {
    * passed, since every hop's landing square is in a straight diagonal line through the
    * captured square — a plain position transition already reads as "jumping over it"). A
    * 'reset' (new game / undo) snaps straight to the new board with no animation.
+   *
+   * A move can arrive while the previous one is still sliding (the computer's reply comes
+   * after ~200ms, a multi-jump takes 210ms per hop). The interrupted animation is cancelled
+   * mid-path, so first snap the pieces to the board it was heading for — otherwise the piece
+   * is left drawn on an intermediate square and the pieces it hadn't reached yet stay drawn.
    */
   private async reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): Promise<void> {
     const token = ++this.animationToken;
+    const interrupted = this.animating ? this.targetBoard : null;
+    this.animating = false;
+    this.targetBoard = board;
 
     if (kind !== 'move' || !move || this.reducedMotion()) {
       this.pieceStates.set(this.freshPieces(board));
       return;
+    }
+
+    if (interrupted) {
+      this.pieceStates.set(this.freshPieces(interrupted));
     }
 
     const moverId = this.pieceStates().find((p) => p.square === move.from && !p.captured)?.id;
@@ -162,6 +178,7 @@ export class Board {
       return;
     }
 
+    this.animating = true;
     const isCapture = move.captures.length > 0;
     const hopDuration = isCapture ? CAPTURE_HOP_MS : MOVE_HOP_MS;
 
@@ -195,6 +212,7 @@ export class Board {
     if (move.promotes) {
       this.pieceStates.update((list) => list.map((p) => (p.id === moverId ? { ...p, king: true } : p)));
     }
+    this.animating = false;
   }
 }
 
