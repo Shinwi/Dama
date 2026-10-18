@@ -21,6 +21,7 @@ function farRow(side: Side): number {
 interface Hop {
   to: number;
   captured: number;
+  capturedWasKing: boolean;
 }
 
 /** One-hop captures available from `square`, given pieces already captured this turn. */
@@ -51,7 +52,7 @@ function captureHops(
         !capturedSet.has(enemySquare) &&
         board[landSquare] === 0
       ) {
-        hops.push({ to: landSquare, captured: enemySquare });
+        hops.push({ to: landSquare, captured: enemySquare, capturedWasKing: isKing(occupant) });
       }
     } else {
       let r = row + dr;
@@ -67,7 +68,7 @@ function captureHops(
         let lr = r + dr;
         let lc = c + dc;
         while (isOnBoard(lr, lc) && board[squareIndex(lr, lc)] === 0) {
-          hops.push({ to: squareIndex(lr, lc), captured: blockerSquare });
+          hops.push({ to: squareIndex(lr, lc), captured: blockerSquare, capturedWasKing: isKing(occupant) });
           lr += dr;
           lc += dc;
         }
@@ -77,11 +78,17 @@ function captureHops(
   return hops;
 }
 
-function buildMove(from: number, path: number[], captures: number[], piece: Cell): Move {
+function buildMove(
+  from: number,
+  path: number[],
+  captures: number[],
+  capturedKing: boolean,
+  piece: Cell,
+): Move {
   const to = path[path.length - 1];
   const side = Math.sign(piece) as Side;
   const promotes = !isKing(piece) && rowOf(to) === farRow(side);
-  return { from, to, path, captures, piece, promotes };
+  return { from, to, path, captures, capturedKing, piece, promotes };
 }
 
 /** Every maximal capture sequence (a complete move) starting at `from`. */
@@ -94,13 +101,14 @@ export function captureSequencesFrom(board: BoardArray, from: number, side: Side
     current: number,
     path: number[],
     captures: number[],
+    capturedKing: boolean,
     capturedSet: ReadonlySet<number>,
     workingBoard: BoardArray,
   ): void {
     const hops = captureHops(workingBoard, current, side, pieceIsKing, capturedSet);
     if (hops.length === 0) {
       if (captures.length > 0) {
-        complete.push(buildMove(from, path, captures, piece));
+        complete.push(buildMove(from, path, captures, capturedKing, piece));
       }
       return;
     }
@@ -110,11 +118,18 @@ export function captureSequencesFrom(board: BoardArray, from: number, side: Side
       nextBoard[hop.to] = piece;
       const nextCapturedSet = new Set(capturedSet);
       nextCapturedSet.add(hop.captured);
-      dfs(hop.to, [...path, hop.to], [...captures, hop.captured], nextCapturedSet, nextBoard);
+      dfs(
+        hop.to,
+        [...path, hop.to],
+        [...captures, hop.captured],
+        capturedKing || hop.capturedWasKing,
+        nextCapturedSet,
+        nextBoard,
+      );
     }
   }
 
-  dfs(from, [from], [], new Set(), board);
+  dfs(from, [from], [], false, new Set(), board);
   return complete;
 }
 
@@ -132,13 +147,13 @@ export function simpleMovesFrom(board: BoardArray, from: number, side: Side): Mo
       const r = row + dr;
       const c = col + dc;
       if (isOnBoard(r, c) && board[squareIndex(r, c)] === 0) {
-        moves.push(buildMove(from, [from, squareIndex(r, c)], [], piece));
+        moves.push(buildMove(from, [from, squareIndex(r, c)], [], false, piece));
       }
     } else {
       let r = row + dr;
       let c = col + dc;
       while (isOnBoard(r, c) && board[squareIndex(r, c)] === 0) {
-        moves.push(buildMove(from, [from, squareIndex(r, c)], [], piece));
+        moves.push(buildMove(from, [from, squareIndex(r, c)], [], false, piece));
         r += dr;
         c += dc;
       }

@@ -64,9 +64,34 @@ export class SoundEngine {
     this.woodTap(ctx, ctx.currentTime, 0.5);
   }
 
-  playCapture(): void {
+  /** A man's capture. `count` is how many pieces this one move took (2+ = multi-jump). */
+  playCapture(count: number): void {
     const ctx = this.ensureContext();
-    this.woodTap(ctx, ctx.currentTime, 1);
+    this.captureCombo(ctx, ctx.currentTime, count, false);
+  }
+
+  /** A king's capture — heavier, with a low sub-thump under each hit. */
+  playKingCapture(count: number): void {
+    const ctx = this.ensureContext();
+    this.captureCombo(ctx, ctx.currentTime, count, true);
+  }
+
+  /** A king (anyone's) was just captured — layers alongside the capture sound itself. */
+  playKingCaptured(): void {
+    const ctx = this.ensureContext();
+    const start = ctx.currentTime;
+    [659.25, 987.77].forEach((freq, i) => {
+      this.tone(ctx, freq, 0.14, 'triangle', 0.14, start + i * 0.07);
+    });
+  }
+
+  /** Your own king was just captured by the opponent — a short, ominous drop. */
+  playKingLost(): void {
+    const ctx = this.ensureContext();
+    const start = ctx.currentTime;
+    [220, 185, 146.83].forEach((freq, i) => {
+      this.tone(ctx, freq, 0.2, 'sawtooth', 0.1, start + i * 0.1);
+    });
   }
 
   playPromotion(): void {
@@ -112,6 +137,70 @@ export class SoundEngine {
     gain.connect(this.masterGain!);
     osc.start(startTime);
     osc.stop(startTime + duration + 0.02);
+  }
+
+  /**
+   * A rapid burst of `count` capture hits (one per captured piece), each a touch punchier
+   * than the last — a double/triple capture reads as a quick rhythmic combo rather than one
+   * generic clack. A king's capture layers a low sub-thump under every hit.
+   */
+  private captureCombo(ctx: AudioContext, startTime: number, count: number, isKing: boolean): void {
+    const hits = Math.max(1, count);
+    const stagger = 0.065;
+    for (let i = 0; i < hits; i++) {
+      const time = startTime + i * stagger;
+      this.captureHit(ctx, time, 1 + i * 0.18);
+      if (isKing) this.subThump(ctx, time, 0.4 + i * 0.05);
+    }
+  }
+
+  /**
+   * A capture's "clack" — a short filtered noise crack (the impact) layered over a punchy
+   * square-wave thud (the body). This is a genuinely different timbre from `woodTap`'s soft
+   * triangle-wave move tap, not just a louder/higher version of the same sound, so a capture
+   * is unmistakable even at a glance of attention.
+   */
+  private captureHit(ctx: AudioContext, startTime: number, intensity: number): void {
+    const noise = this.noiseBurst(ctx, 0.035);
+    const noiseFilter = ctx.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.value = 2200;
+    noiseFilter.Q.value = 1.1;
+    const noiseGain = ctx.createGain();
+    noiseGain.gain.setValueAtTime(0.5 * intensity, startTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.045);
+    noise.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(this.masterGain!);
+    noise.start(startTime);
+    noise.stop(startTime + 0.05);
+
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(180 * intensity + 90, startTime);
+    osc.frequency.exponentialRampToValueAtTime(55, startTime + 0.1);
+    gain.gain.setValueAtTime(0.0001, startTime);
+    gain.gain.linearRampToValueAtTime(0.24 * intensity + 0.08, startTime + 0.006);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18);
+    osc.connect(gain);
+    gain.connect(this.masterGain!);
+    osc.start(startTime);
+    osc.stop(startTime + 0.2);
+  }
+
+  private subThump(ctx: AudioContext, startTime: number, gainValue: number): void {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(90, startTime);
+    osc.frequency.exponentialRampToValueAtTime(40, startTime + 0.14);
+    gain.gain.setValueAtTime(gainValue, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.0001, startTime + 0.18);
+    osc.connect(gain);
+    gain.connect(this.masterGain!);
+    osc.start(startTime);
+    osc.stop(startTime + 0.2);
   }
 
   private woodTap(ctx: AudioContext, startTime: number, intensity: number): void {

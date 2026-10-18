@@ -1,6 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
+import { isKing } from '../../engine/board';
 import { DARK, LIGHT, Move, Outcome } from '../../engine/types';
 import { defaultSettings, GameController, Settings } from './game-controller';
 
@@ -96,11 +97,10 @@ export class GameService {
 
     effect(() => {
       const move = this.lastMove();
+      const settings = this.settings();
       if (move && move !== this.lastAnnouncedMove) {
         this.lastAnnouncedMove = move;
-        if (move.captures.length > 0) this.audio.capture();
-        else this.audio.moveTap();
-        if (move.promotes) this.audio.promotion();
+        this.announceMove(move, settings);
       }
     });
 
@@ -172,6 +172,31 @@ export class GameService {
       this.updateKindValue = 'move';
       this.bump();
     }
+  }
+
+  /**
+   * Picks which sound(s) a just-played move gets: a capture plays a hit per piece taken
+   * (louder/heavier if the mover is a king), and a captured king additionally layers a
+   * triumphant or ominous cue on top, depending on whether the move was ours or the
+   * opponent's (in vs-computer mode; there's no "ours" in 1v1, so it stays neutral there).
+   */
+  private announceMove(move: Move, settings: Settings): void {
+    if (move.captures.length === 0) {
+      this.audio.moveTap();
+    } else if (isKing(move.piece)) {
+      this.audio.kingCapture(move.captures.length);
+    } else {
+      this.audio.capture(move.captures.length);
+    }
+
+    if (move.capturedKing) {
+      const moverSide = Math.sign(move.piece);
+      const moveWasOpponents = settings.mode === 'computer' && moverSide !== settings.playerSide;
+      if (moveWasOpponents) this.audio.kingLost();
+      else this.audio.kingCaptured();
+    }
+
+    if (move.promotes) this.audio.promotion();
   }
 
   private bump(): void {

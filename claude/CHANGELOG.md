@@ -146,3 +146,22 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   temp files I viewed myself, not shared). Lesson for future sessions: when verification
   implies the user should be able to look at something themselves, leave a server running and
   say the URL explicitly, rather than only reporting "I verified it."
+- **Per-situation capture sounds**, at the user's request: distinguished simple moves,
+  single/double/triple captures, king captures, and "a king was just captured" (framed as
+  triumphant vs ominous depending on whose king it was, in vs-computer mode only — no
+  "yours/theirs" distinction makes sense in 1v1). Required teaching the engine something it
+  didn't track before: `Move` only recorded *which squares* were captured, not *what was on
+  them*, so a king-capture couldn't be told apart from a regular one. Added a `capturedKing:
+  boolean` field to `Move`, computed in `moves.ts`'s capture search, with 4 new engine tests
+  (including a king captured mid-multi-jump, not just on the first hop) — 33/33 engine tests
+  green. `GameService.announceMove()` now picks the sound(s) per move based on
+  `captures.length`, whether the mover is a king, and `capturedKing`.
+  **Follow-up**: the user flagged the capture sound was too similar to the plain move tap —
+  both were the same `woodTap` function, just scaled by intensity (louder/higher pitch), which
+  isn't perceptually distinct enough. Replaced the capture sound with a genuinely different
+  timbre: a short filtered noise "crack" (the impact) layered over a punchier square-wave thud
+  (triangle wave felt softer than square), instead of a louder version of the same triangle
+  wave. Verified live (not just by reading the code) by auto-playing real captures against a
+  running dev server and checking for runtime errors, and by directly exercising the new
+  oscillator/noise patterns against a real browser `AudioContext`, since jsdom (what `ng test`
+  uses) has no Web Audio implementation to catch this kind of bug.

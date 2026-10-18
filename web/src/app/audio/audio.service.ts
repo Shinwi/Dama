@@ -36,8 +36,20 @@ export class AudioService {
     if (this.soundOn) this.engine?.playMoveTap();
   }
 
-  capture(): void {
-    if (this.soundOn) this.engine?.playCapture();
+  capture(count: number): void {
+    if (this.soundOn) this.engine?.playCapture(count);
+  }
+
+  kingCapture(count: number): void {
+    if (this.soundOn) this.engine?.playKingCapture(count);
+  }
+
+  kingCaptured(): void {
+    if (this.soundOn) this.engine?.playKingCaptured();
+  }
+
+  kingLost(): void {
+    if (this.soundOn) this.engine?.playKingLost();
   }
 
   promotion(): void {

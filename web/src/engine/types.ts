@@ -17,6 +17,8 @@ export interface Move {
   path: number[];
   /** Squares of captured enemy pieces, in the order they were jumped. Empty for a simple move. */
   captures: number[];
+  /** True if any captured piece was a king. */
+  capturedKing: boolean;
   /** The moving piece's value at `from`, before promotion. */
   piece: Cell;
   /** True if the piece becomes a king on this move (ends on the far row). */

@@ -64,6 +64,33 @@ describe('promotion', () => {
   });
 });
 
+describe('capturedKing', () => {
+  it('is false for a move that captures nothing', () => {
+    const [move] = generateLegalMoves(boardFrom({ light: ['e5'] }), LIGHT, false);
+    expect(move.capturedKing).toBe(false);
+  });
+
+  it('is false when the captured piece is a man', () => {
+    const [move] = generateLegalMoves(boardFrom({ light: ['c3'], dark: ['d4'] }), LIGHT, false);
+    expect(move.capturedKing).toBe(false);
+  });
+
+  it('is true when the captured piece is a king', () => {
+    const [move] = generateLegalMoves(boardFrom({ light: ['c3'], darkKings: ['d4'] }), LIGHT, false);
+    expect(move.capturedKing).toBe(true);
+  });
+
+  it('is true if any piece in a multi-jump is a king, even if not the first', () => {
+    const [move] = generateLegalMoves(
+      boardFrom({ light: ['c3'], dark: ['d4'], darkKings: ['f6'] }),
+      LIGHT,
+      false,
+    );
+    expect(move.captures.length).toBe(2);
+    expect(move.capturedKing).toBe(true);
+  });
+});
+
 describe('applyMove', () => {
   it('removes all captured pieces at once and does not mutate its input', () => {
     const board = boardFrom({ light: ['c3'], dark: ['d4', 'f6'] });
