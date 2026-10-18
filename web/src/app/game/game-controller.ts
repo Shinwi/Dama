@@ -105,12 +105,9 @@ export class GameController {
       return false;
     }
 
-    const finishers = this.selection.candidateMoves.filter((m) => m.to === square);
-    if (finishers.length === 1) {
-      this.commitMove(finishers[0]);
-      return true;
-    }
-
+    // The next hop wins over the "tap straight to the end" shortcut below: with kings, the
+    // next hop of one sequence can be the final square of another, and tapping hop by hop
+    // must always play exactly the path tapped.
     const nextStepIndex = this.selection.path.length;
     const advancing = this.selection.candidateMoves.filter((m) => m.path[nextStepIndex] === square);
     if (advancing.length > 0) {
@@ -121,6 +118,12 @@ export class GameController {
       }
       this.selection = { ...this.selection, path, candidateMoves: advancing };
       return false;
+    }
+
+    const finishers = this.selection.candidateMoves.filter((m) => m.to === square);
+    if (finishers.length === 1) {
+      this.commitMove(finishers[0]);
+      return true;
     }
 
     if (this.selection.path.length === 1) {

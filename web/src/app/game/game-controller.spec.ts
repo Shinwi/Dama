@@ -1,4 +1,5 @@
 import { boardFrom, parseSquare } from '../../engine/board';
+import { moveNotation, sortedNotations } from '../../engine/moves';
 import { LIGHT } from '../../engine/types';
 import { defaultSettings, GameController } from './game-controller';
 
@@ -94,5 +95,39 @@ describe('GameController multi-jump tap sequencing', () => {
     expect(controller.selectionInfo.compulsorySquares).toEqual([parseSquare('c3')]);
     expect(controller.tapSquare(parseSquare('g1'))).toBe(false);
     expect(controller.selectionInfo.selected).toBeNull();
+  });
+
+  it('plays the path tapped hop by hop, even when that hop is where another sequence ends', () => {
+    // King j2 can go round the h4/h6/h8/f8 diamond either way: j2xg5xi7xg9xe7 or
+    // j2xe7xg9xi7xg5. g5 is the first hop of one and the final square of the other.
+    const controller = controllerAt({ lightKings: ['j2'], dark: ['h4', 'h6', 'h8', 'f8'] });
+    expect(sortedNotations(controller.legalMoves)).toContain('j2xe7xg9xi7xg5');
+
+    controller.tapSquare(parseSquare('j2'));
+    // Tapping g5 is the first hop of j2xg5x…, not a shortcut to the end of j2xe7x…xg5.
+    expect(controller.tapSquare(parseSquare('g5'))).toBe(false);
+    expect(controller.selectionInfo.path).toEqual([parseSquare('j2'), parseSquare('g5')]);
+
+    for (const square of ['i7', 'g9']) {
+      expect(controller.tapSquare(parseSquare(square))).toBe(false);
+    }
+    expect(controller.tapSquare(parseSquare('e7'))).toBe(true);
+    expect(moveNotation(controller.lastMove!)).toBe('j2xg5xi7xg9xe7');
+  });
+
+  it('every legal move can be played by tapping its path square by square', () => {
+    const positions = [
+      chain,
+      { light: ['c3', 'g1'], dark: ['d4', 'f6', 'h2'] },
+      { lightKings: ['j2'], dark: ['h4', 'h6', 'h8', 'f8'] },
+    ];
+    for (const pieces of positions) {
+      for (const move of controllerAt(pieces).legalMoves) {
+        const controller = controllerAt(pieces);
+        const results = move.path.map((square) => controller.tapSquare(square));
+        expect(results).toEqual([...move.path.slice(1).map(() => false), true]);
+        expect(moveNotation(controller.lastMove!)).toBe(moveNotation(move));
+      }
+    }
   });
 });
