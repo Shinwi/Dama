@@ -154,14 +154,14 @@ app-board {
   font-size: 0.92rem;
 }
 
-/* Wide viewports (desktop, tablets, and phones turned sideways): board on the
-   left with the lion's share of the width, settings in a fixed-width sidebar
-   on the right instead of stacked underneath. */
-@media (min-width: 680px) {
-  .page {
-    padding-top: 28px;
-  }
-
+/* Wide viewports (desktop, tablets) AND any landscape phone (detected by its
+   short height, since a sideways phone can be narrower than a tablet) get the
+   same treatment: board on the left with the lion's share of the width,
+   settings in a sidebar on the right instead of stacked underneath. The
+   columns use flex-grow ratios rather than a fixed sidebar width so this also
+   degrades gracefully on a narrow landscape phone instead of needing its own
+   breakpoint. */
+@media (min-width: 680px), (orientation: landscape) and (max-height: 520px) {
   .header {
     text-align: left;
   }
@@ -169,22 +169,67 @@ app-board {
   .layout {
     flex-direction: row;
     align-items: flex-start;
-    gap: 32px;
+    gap: clamp(16px, 4vw, 32px);
   }
 
   .board-column {
-    flex: 1 1 auto;
+    flex: 3 1 420px;
     min-width: 0;
   }
 
   .sidebar {
-    flex: 0 0 280px;
-    position: sticky;
-    top: 28px;
+    flex: 1 1 220px;
+    max-width: 280px;
+    min-width: 180px;
   }
 
   .controls,
   .actions {
     justify-content: flex-start;
+  }
+}
+
+@media (min-width: 680px) {
+  .page {
+    padding-top: 28px;
+  }
+
+  .sidebar {
+    position: sticky;
+    top: 28px;
+  }
+}
+
+/* Landscape phone: vertical space is the scarce resource, so trim padding,
+   shrink the header, and let the board's width/height clamp (board.css) use
+   a much smaller reserve now that the chrome above it is this compact — the
+   board was previously being capped far smaller than the screen allowed,
+   leaving tiles too small to tap comfortably. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .page {
+    padding-top: 10px;
+    padding-bottom: 16px;
+    --board-vh-reserve: 118px;
+  }
+
+  .title {
+    margin: 0 0 6px;
+    font-size: 1.4rem;
+  }
+
+  .layout {
+    gap: 16px;
+  }
+
+  .board-column {
+    flex: 4 1 440px;
+    gap: 6px;
+  }
+
+  .sidebar {
+    flex: 1 1 160px;
+    max-width: 230px;
+    min-width: 150px;
+    gap: 8px;
   }
 }
