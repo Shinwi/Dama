@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { chooseMove } from './ai';
 import { boardFrom, createInitialBoard, mirrorBoard, parseSquare } from './board';
 import { generateLegalMoves } from './moves';
-import { Difficulty, LIGHT } from './types';
+import { Difficulty } from './ai';
+import { LIGHT } from './types';
 
 function fixedRng(values: number[]): () => number {
   let i = 0;

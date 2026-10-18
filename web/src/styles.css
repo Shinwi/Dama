@@ -1,1 +1,81 @@
-/* You can add global styles to this file, and also import other style files */
+:root {
+  /* Brand */
+  --color-accent: #4a3fc4;
+  --color-accent-contrast: #ffffff;
+  --color-saffron: #e0a21c;
+
+  /* Board */
+  --board-light-square: #ecdcbc;
+  --board-dark-square: #8c5b3c;
+  --board-frame: #5a3622;
+
+  /* Pieces */
+  --piece-light-fill: #f6ecd9;
+  --piece-light-rim: #d9c79e;
+  --piece-dark-fill: #23247a;
+  --piece-dark-rim: #141548;
+  --piece-shadow: rgba(0, 0, 0, 0.35);
+
+  /* Surfaces */
+  --color-bg: #f6f1e7;
+  --color-surface: #ffffff;
+  --color-text: #221a10;
+  --color-text-muted: #6b5f4d;
+  --color-border: #ddd0b8;
+
+  --font-title: 'Reem Kufi', 'Segoe UI', sans-serif;
+  --font-body: 'Figtree', 'Segoe UI', sans-serif;
+
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-accent: #8a80ff;
+    --color-accent-contrast: #15132b;
+
+    --board-light-square: #cdb186;
+    --board-dark-square: #5c3a26;
+    --board-frame: #2c1b12;
+
+    --piece-light-fill: #efe3c8;
+    --piece-light-rim: #c8b685;
+    --piece-dark-fill: #2a2d7a;
+    --piece-dark-rim: #191a4a;
+
+    --color-bg: #15121b;
+    --color-surface: #211c2b;
+    --color-text: #efe9f5;
+    --color-text-muted: #ad9fc2;
+    --color-border: #3a3348;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  overflow-x: hidden;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-title);
+}
+
+button {
+  font-family: inherit;
+}

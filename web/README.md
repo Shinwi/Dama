@@ -1,59 +1,38 @@
-# Web
+# Dama — web app
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 20.3.40.
+Moroccan checkers, phase 1: a static Angular SPA (vs computer + local 1v1), no backend. See
+the repo root `CLAUDE.md` for project context, `docs/RULES.md` for the rules, and
+`claude/PLAN.md` for what's next.
 
-## Development server
-
-To start a local development server, run:
-
-```bash
-ng serve
-```
-
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
-
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
+## Commands
 
 ```bash
-ng generate component component-name
+npm install
+
+npm start              # dev server at http://localhost:4200
+npm run build          # production build -> dist/web/browser
+
+npm run test:engine    # pure rules/AI engine tests (Vitest)
+npm test               # Angular component tests (ng test, Vitest runner)
+npm run e2e            # Playwright e2e (starts its own dev server on :4300)
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+## Project layout
 
-```bash
-ng generate --help
-```
+- `src/engine/` — pure TypeScript rules engine and AI. No Angular. `npm run test:engine`.
+- `src/app/game/` — framework-free `GameController` + the signals-based `GameService` that
+  wraps it and orchestrates the computer's turn.
+- `src/app/board/` — the board component (presentational: data in via inputs, taps out via
+  an output).
+- `src/app/ai/` — the AI web worker and its client, with a main-thread fallback.
+- `src/app/audio/` — synthesized sound effects and background music (Web Audio, no files).
+- `e2e/` — Playwright tests, run against Desktop Chrome and a Pixel 7 profile.
 
-## Building
+## Deploying to Cloudflare Pages
 
-To build the project run:
-
-```bash
-ng build
-```
-
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
-
-## Running unit tests
-
-To execute unit tests with the [Karma](https://karma-runner.github.io) test runner, use the following command:
-
-```bash
-ng test
-```
-
-## Running end-to-end tests
-
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+1. Build: `npm run build`. Output is `dist/web/browser`.
+2. `npx wrangler pages deploy dist/web/browser --project-name=dama`, or connect the Git repo
+   in the Cloudflare Pages dashboard with build command `npm run build` and output directory
+   `web/dist/web/browser`.
+3. In CI, the `pages-deploy` job in `.gitlab-ci.yml` does this on `main` (manual trigger),
+   and needs `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` set as CI/CD variables.

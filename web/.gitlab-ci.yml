@@ -1,0 +1,63 @@
+stages:
+  - test
+  - build
+  - e2e
+  - deploy
+
+default:
+  image: node:22-bookworm
+  cache:
+    key:
+      files:
+        - web/package-lock.json
+    paths:
+      - web/node_modules
+  before_script:
+    - cd web
+    - npm ci
+
+engine-tests:
+  stage: test
+  script:
+    - npm run test:engine
+
+component-tests:
+  stage: test
+  script:
+    - npx ng test
+
+build:
+  stage: build
+  script:
+    - npx ng build
+  artifacts:
+    paths:
+      - web/dist/web/browser
+    expire_in: 1 day
+
+e2e:
+  stage: e2e
+  image: mcr.microsoft.com/playwright:v1.56.0-noble
+  needs:
+    - build
+  script:
+    - npx playwright test
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - web/test-results
+    reports:
+      junit: web/test-results/junit.xml
+
+pages-deploy:
+  stage: deploy
+  needs:
+    - build
+    - e2e
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main"'
+      when: manual
+  script:
+    # Requires CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as masked CI/CD variables.
+    - npx wrangler pages deploy dist/web/browser --project-name=dama --branch=main
