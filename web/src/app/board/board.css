@@ -2,7 +2,7 @@
   display: grid;
   grid-template-columns: repeat(10, 1fr);
   grid-template-rows: repeat(10, 1fr);
-  width: min(100%, 560px);
+  width: min(100%, 560px, calc(100vh - 170px));
   aspect-ratio: 1;
   margin-inline: auto;
   border: min(2.5vw, 10px) solid var(--board-frame);
