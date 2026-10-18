@@ -64,15 +64,10 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 
 ## Next, in order
 
-18. **Nail down the capture bug** — user reported sometimes being unable to continue a
-    multi-jump ("eat the first, then can't eat the second, piece looks blocked"). The new
-    `game-controller.spec.ts` tests prove the tap-sequencing logic itself is correct, so this
-    is one of: (a) two *separate* pieces could each capture independently, the user played
-    one and expected to also play the other same turn (correct dama rules, just surprising),
-    or (b) a mistaken/imprecise tap during a forced continuation silently no-ops with zero
-    feedback, which looks exactly like "blocked". Need the user's exact position (or to
-    reproduce it together) to know which. Either way, (b) is worth fixing regardless: add a
-    sound/visual cue on an invalid tap during a compulsory sequence, instead of silence.
+18. ✅ **Capture bug** — found and fixed: the board animation was cut short when the
+    computer replied mid multi-jump (see `CHANGELOG.md`), plus a king-loop tap-sequencing
+    bug found along the way. Still worth doing: a sound/visual cue on an invalid tap during
+    a forced continuation, instead of silence.
 19. **Try it for real, more** — now that it's deployed, keep playing it (phone + desktop,
     both colours, both modes, sound/music on) and note anything else that feels off, the way
     the capture bug above got found.

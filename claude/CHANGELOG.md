@@ -205,6 +205,23 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   still correctly waiting for the real continuation. Couldn't narrow it further without the
   user's exact position — noted as the next thing to pin down in `PLAN.md`, along with "add
   feedback on an invalid tap" as a worthwhile UX fix regardless of which explanation it was.
+- **Capture bug found and fixed** (follow-up to the report above). Reproduced it in a new
+  `board.spec.ts`: the engine and `GameController` were right all along, but the **board's
+  animation layer** went out of sync with them. `Board.reconcile()` cancels a running
+  hop-by-hop slide (via `animationToken`) as soon as the next move arrives, without ever
+  finishing it, and the computer's reply arrives after `MIN_THINK_MS` = 200ms while each
+  capture hop takes 210ms. So in vs-computer mode, a 2+ hop capture was often cut short
+  after its first hop: the piece stayed drawn on the first landing square, the later
+  captured men stayed drawn, and tapping the piece did nothing, because in the engine it
+  was already on its real final square. It stayed wrong until Undo/New game. Fix: an
+  interrupted animation now snaps to the board it was heading for before the next move is
+  animated. While fuzzing `tapSquare` (every legal move in 15k random positions, played by
+  tapping its path) I also found a second, rarer bug: the "tap straight to the final
+  square" shortcut was checked before the next-hop match, so with king loops (j2xg5x…xe7 vs
+  j2xe7x…xg5) tapping a first hop could commit a different sequence that happened to end
+  there. The next hop now takes priority. Regression tests were added for both bugs. The
+  GitHub issue couldn't be created from the session (the integration got a 403), so the
+  write-up went to the user to file by hand.
 - **Game-over overlay**: win/loss/draw previously only changed the status line's text, easy to
   miss, with no dedicated "the game has ended" visual moment. Added `describeGameOver()` — a
   pure function (`app.ts`), not just inline template logic, specifically so it's unit-testable
