@@ -140,7 +140,7 @@ export function chooseMove(board: BoardArray, side: Side, options: AiOptions): M
       return pickWithNoise(results, 40, rng);
     }
     case 'very-good': {
-      const budget = options.timeBudgetMs ?? 1500;
+      const budget = options.timeBudgetMs ?? 300;
       const deadline = now() + budget;
       let best = moves[0];
       let depth = 1;

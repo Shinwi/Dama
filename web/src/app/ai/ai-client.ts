@@ -2,12 +2,14 @@ import { chooseMove } from '../../engine/ai';
 import { Move } from '../../engine/types';
 import { AiRequest, AiResponse } from './ai-protocol';
 
-const MIN_THINK_MS = 450;
+/** Floor on how long a reply takes to feel like a deliberate beat, not an instant reflex. */
+const MIN_THINK_MS = 200;
 
 /**
  * Runs the AI in a Web Worker so the page never freezes during a deep search, falling back
- * to the main thread if the worker can't be created or throws. Also enforces a minimum
- * "thinking" pause so instant replies don't feel robotic.
+ * to the main thread if the worker can't be created or throws. Also enforces MIN_THINK_MS
+ * as a floor (not an added delay) so a near-instant reply (e.g. Beginner) still feels
+ * considered, without slowing down replies that already take real compute time.
  */
 export class AiClient {
   private worker: Worker | null = null;
