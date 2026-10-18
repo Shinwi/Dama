@@ -5,7 +5,7 @@ deployed and real people have played it.
 
 | # | Phase | Start when | Time | Tools |
 |---|---|---|---|---|
-| **1** | **Offline game (current):** vs computer (3 levels), 1v1 same device, undo, sound/music, deployed | Now | 3–4 weeks | Angular, Vitest, Playwright, Cloudflare Pages |
+| **1** | **Offline game (current):** vs computer (3 levels), 1v1 same device, undo, sound/music, deployed | Now | 3–4 weeks | Angular, Vitest, Playwright, Cloudflare Pages / GitHub Pages |
 | 2 | Polish & offline: *nfakh* option, move list, installable PWA | Friends played phase 1, rules feel right | 1–2 weeks | `ng add @angular/pwa` |
 | 3 | Online rooms with friends: create room → share code → friend joins → live play, reconnect | Phase 2 stable | 3–4 weeks | Node.js + TypeScript, Socket.IO (or Colyseus), shared engine validates every move, `shared/protocol.md`, Docker, Fly.io/Render/Railway in an EU region, always-on |
 | 4 | Random opponent: matchmaking queue, move clocks, resign/draw | Rooms reliable | 2–3 weeks | Same server; in-memory queue, Redis only if >1 instance |

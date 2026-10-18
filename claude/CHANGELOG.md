@@ -165,3 +165,17 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   running dev server and checking for runtime errors, and by directly exercising the new
   oscillator/noise patterns against a real browser `AudioContext`, since jsdom (what `ng test`
   uses) has no Web Audio implementation to catch this kind of bug.
+- **GitHub Actions deploy to GitHub Pages**: `.github/workflows/deploy.yml`, builds and
+  deploys on every push to `master` touching `web/` (plus manual `workflow_dispatch`).
+  Discovered along the way that this repo already has a GitHub remote
+  (`github.com/Shinwi/Dama`, `master`, already in sync with local) — hadn't been mentioned
+  before this. Used `actions/configure-pages` to read the real Pages base path at build time
+  (`--base-href`) rather than hardcoding `/Dama/`, so it keeps working if the repo is ever
+  renamed or forked. **Needs a one-time manual step the user has to do themselves**: repo →
+  Settings → Pages → Source → "GitHub Actions" — no API access to flip that setting from here.
+  Verified the build step for real: ran `ng build --base-href "/Dama/"` locally and confirmed
+  `index.html` got the right `<base href>` — first attempt showed `<base
+  href="C:/Program Files/Git/Dama/">`, which looked alarming, but turned out to be Git Bash's
+  MSYS path-mangling auto-converting the leading-slash argument (a Windows-local quirk,
+  confirmed by rerunning with `MSYS_NO_PATHCONV=1` and getting the correct `/Dama/` — GitHub's
+  actual Linux runners won't hit this at all).

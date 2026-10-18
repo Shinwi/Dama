@@ -36,3 +36,19 @@ npm run e2e            # Playwright e2e (starts its own dev server on :4300)
    `web/dist/web/browser`.
 3. In CI, the `pages-deploy` job in `.gitlab-ci.yml` does this on `main` (manual trigger),
    and needs `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` set as CI/CD variables.
+
+## Deploying to GitHub Pages
+
+`.github/workflows/deploy.yml` builds and deploys automatically on every push to `master`
+that touches `web/`. **One-time setup required** (GitHub Actions can't do this part — it's a
+repo setting):
+
+1. On GitHub: repo → **Settings → Pages → Build and deployment → Source**, set it to
+   **"GitHub Actions"** (not "Deploy from a branch").
+2. Push to `master` (or run the workflow manually from the **Actions** tab —
+   `workflow_dispatch` is enabled). The site publishes to
+   `https://<owner>.github.io/<repo>/` — the build step reads the actual base path from the
+   Pages settings via `actions/configure-pages`, so it's correct whether this ends up on a
+   project page (`/Dama/`) or a user/org root page.
+3. Check the **Actions** tab for build/deploy logs and the live URL in the `deploy` job's
+   summary.

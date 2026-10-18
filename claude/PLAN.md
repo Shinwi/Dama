@@ -53,10 +53,15 @@ Phase 1 is functionally complete, animated, responsive, and all tests are green.
 14. **Try it for real** — run `npm start` in `web/`, play a full game on a phone and on a
     desktop browser, both colours, both modes, with sound and music on. This session's
     Playwright suite checks interaction but nobody has actually looked at it yet.
-15. **Cloudflare Pages deploy** — actually create the Pages project and run the first deploy
-    (`web/README.md` has the command), so phase 1's "deployed, real people played it" exit
-    condition can actually be met. Needs a Cloudflare account/API token, which is the user's
-    to set up.
+15. **Actually deploy somewhere** — so phase 1's "deployed, real people played it" exit
+    condition can be met. Two options are wired up, neither live yet:
+    - `.github/workflows/deploy.yml` (GitHub Actions → GitHub Pages) builds and deploys
+      automatically on push to `master`. **Needs a one-time manual step the user has to do**:
+      repo → Settings → Pages → Source → "GitHub Actions" (`web/README.md` has the details).
+      Can't be done from here — it's a GitHub web UI setting, no API access to flip it.
+    - Cloudflare Pages via `.gitlab-ci.yml`'s `pages-deploy` job (manual trigger on `main`),
+      needs a Cloudflare account/API token as CI/CD variables — only relevant if this repo
+      also lives on GitLab.
 16. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
     (*nfakh*, a move list, installable PWA).
 
