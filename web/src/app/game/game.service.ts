@@ -42,6 +42,7 @@ export class GameService {
 
   private lastAnnouncedMove: Move | null = null;
   private lastAnnouncedOutcome: Outcome | null = null;
+  private updateKindValue: 'reset' | 'move' = 'reset';
 
   readonly thinking = signal(false);
 
@@ -56,6 +57,15 @@ export class GameService {
   readonly lastMove = computed(() => {
     this.version();
     return this.controller.lastMove;
+  });
+  /**
+   * Tells Board whether the latest `state()` is reachable from the previous one by playing
+   * `lastMove()` (so it can slide the piece hop by hop), or is an unrelated jump — new game
+   * or undo — that should just snap to the new position with no animation.
+   */
+  readonly updateKind = computed(() => {
+    this.version();
+    return this.updateKindValue;
   });
   readonly selection = computed(() => {
     this.version();
@@ -111,6 +121,7 @@ export class GameService {
   tapSquare(square: number): void {
     if (this.thinking() || !this.isHumanTurn()) return;
     const completed = this.controller.tapSquare(square);
+    if (completed) this.updateKindValue = 'move';
     this.bump();
     if (completed) void this.maybeTriggerComputer();
   }
@@ -118,11 +129,13 @@ export class GameService {
   undo(): void {
     if (this.thinking()) return;
     this.controller.undo();
+    this.updateKindValue = 'reset';
     this.bump();
   }
 
   newGame(partial?: Partial<Settings>): void {
     this.controller.newGame(partial);
+    this.updateKindValue = 'reset';
     this.bump();
     saveSettings(this.controller.settings);
     void this.maybeTriggerComputer();
@@ -156,6 +169,7 @@ export class GameService {
 
     if (move) {
       this.controller.applyExternalMove(move);
+      this.updateKindValue = 'move';
       this.bump();
     }
   }

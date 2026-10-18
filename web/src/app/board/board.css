@@ -1,7 +1,5 @@
 .board {
-  display: grid;
-  grid-template-columns: repeat(10, 1fr);
-  grid-template-rows: repeat(10, 1fr);
+  position: relative;
   width: min(100%, 560px, calc(100vh - var(--board-vh-reserve, 170px)));
   aspect-ratio: 1;
   margin-inline: auto;
@@ -10,6 +8,14 @@
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   touch-action: manipulation;
+}
+
+.squares {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  grid-template-rows: repeat(10, 1fr);
+  width: 100%;
+  height: 100%;
 }
 
 .square {
@@ -79,7 +85,40 @@
   }
 }
 
+/* Pieces live in their own absolutely-positioned layer on top of the squares grid (not
+   nested inside a square button) so a piece can be a single, stable DOM element that slides
+   smoothly from square to square — including hopping over a captured piece mid-multi-jump —
+   instead of being destroyed and recreated each time it changes cell. The layer itself
+   ignores pointer events so taps still land on the square buttons underneath. */
+.pieces-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
 .piece {
+  position: absolute;
+  width: 10%;
+  height: 10%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    top 170ms ease,
+    left 170ms ease;
+}
+
+.piece.captured {
+  transition:
+    top 210ms ease,
+    left 210ms ease,
+    opacity 210ms ease,
+    transform 210ms ease;
+  opacity: 0;
+  transform: scale(0.35);
+}
+
+.piece-disc {
   position: relative;
   width: 78%;
   height: 78%;
@@ -87,14 +126,9 @@
   box-shadow:
     0 3px 6px var(--piece-shadow),
     inset 0 1px 2px rgba(255, 255, 255, 0.2);
-  transition: transform 150ms ease;
 }
 
-.square:not(.filler):hover .piece {
-  transform: scale(1.04);
-}
-
-.piece[data-color='light'] {
+.piece-disc[data-color='light'] {
   background: repeating-conic-gradient(
     from 0deg,
     var(--piece-light-rim) 0deg 9deg,
@@ -102,7 +136,7 @@
   );
 }
 
-.piece[data-color='dark'] {
+.piece-disc[data-color='dark'] {
   background: repeating-conic-gradient(
     from 0deg,
     var(--piece-dark-rim) 0deg 9deg,
@@ -110,20 +144,20 @@
   );
 }
 
-.piece::before {
+.piece-disc::before {
   content: '';
   position: absolute;
   inset: 14%;
   border-radius: 50%;
 }
 
-.piece[data-color='light']::before {
+.piece-disc[data-color='light']::before {
   background:
     radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
     var(--piece-light-fill);
 }
 
-.piece[data-color='dark']::before {
+.piece-disc[data-color='dark']::before {
   background:
     radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 55%),
     var(--piece-dark-fill);
@@ -149,6 +183,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .piece,
+  .piece.captured,
   .compulsory-ring {
     transition: none;
     animation: none;

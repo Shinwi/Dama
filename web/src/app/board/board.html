@@ -1,42 +1,51 @@
 <div class="board" role="grid" aria-label="Dama board">
-  @for (cell of cells(); track cell.key) {
-    @if (cell.playable) {
-      <button
-        type="button"
-        class="square"
-        [class.selected]="cell.selected"
-        [class.on-path]="cell.onPath"
-        [class.last-move]="cell.isLastMove"
-        [attr.data-square]="cell.name"
-        [attr.aria-label]="'Square ' + cell.name"
-        (click)="tap(cell)"
-      >
-        @if (cell.isCompulsoryRing) {
-          <span class="ring compulsory-ring" aria-hidden="true"></span>
-        }
-        @if (cell.isCaptureRing) {
-          <span class="ring capture-ring" aria-hidden="true"></span>
-        }
-        @if (cell.isLandingDot) {
-          <span class="dot" aria-hidden="true"></span>
-        }
-        @if (cell.value !== 0) {
-          <span
-            class="piece"
-            data-testid="piece"
-            [class.king]="cell.value === 2 || cell.value === -2"
-            [attr.data-square]="cell.name"
-            [attr.data-color]="cell.value > 0 ? 'light' : 'dark'"
-            [attr.data-king]="(cell.value === 2 || cell.value === -2) ? 'true' : 'false'"
-          >
-            @if (cell.value === 2 || cell.value === -2) {
-              <span class="king-star" aria-hidden="true"></span>
-            }
-          </span>
-        }
-      </button>
-    } @else {
-      <div class="square filler" aria-hidden="true"></div>
+  <div class="squares">
+    @for (cell of cells(); track cell.key) {
+      @if (cell.playable) {
+        <button
+          type="button"
+          class="square"
+          [class.selected]="cell.selected"
+          [class.on-path]="cell.onPath"
+          [class.last-move]="cell.isLastMove"
+          [attr.data-square]="cell.name"
+          [attr.aria-label]="'Square ' + cell.name"
+          (click)="tap(cell)"
+        >
+          @if (cell.isCompulsoryRing) {
+            <span class="ring compulsory-ring" aria-hidden="true"></span>
+          }
+          @if (cell.isCaptureRing) {
+            <span class="ring capture-ring" aria-hidden="true"></span>
+          }
+          @if (cell.isLandingDot) {
+            <span class="dot" aria-hidden="true"></span>
+          }
+        </button>
+      } @else {
+        <div class="square filler" aria-hidden="true"></div>
+      }
     }
-  }
+  </div>
+
+  <div class="pieces-layer" aria-hidden="true">
+    @for (piece of pieces(); track piece.id) {
+      <span
+        class="piece"
+        [class.captured]="piece.captured"
+        [style.top.%]="piece.top"
+        [style.left.%]="piece.left"
+        data-testid="piece"
+        [attr.data-square]="squareNameFor(piece.square)"
+        [attr.data-color]="piece.color"
+        [attr.data-king]="piece.king ? 'true' : 'false'"
+      >
+        <span class="piece-disc" [attr.data-color]="piece.color">
+          @if (piece.king) {
+            <span class="king-star" aria-hidden="true"></span>
+          }
+        </span>
+      </span>
+    }
+  </div>
 </div>

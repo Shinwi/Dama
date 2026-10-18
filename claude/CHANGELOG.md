@@ -96,3 +96,53 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
     directly — the Playwright run against a real headless Chromium is the verification).
   - Removed one piece of dead code (`app.ts` had an unused `rulesOpen` computed left over
     from an earlier draft — the Rules section uses a plain `<details>` instead).
+- **AI reply timing tuned** at the user's request: `ai.ts`'s "very-good" iterative-deepening
+  budget dropped from 1.5s to 300ms, and `AiClient`'s minimum-thinking-pause floor was restored
+  (it had been removed at some point outside this session) at 200ms instead of the original
+  450ms — applied as `max(actualTime, 200ms)`, not an added delay, so it only pads near-instant
+  replies (Beginner) without slowing down Novice/Very-good.
+- **Responsive two-column layout**, per the user's request ("use the width to your advantage
+  — board on the left, options on the right"): `app.html`/`app.css` restructured into a
+  `.board-column` + `.sidebar`, row layout from 680px wide. Then widened to also cover
+  landscape phones specifically, since the width breakpoint alone missed narrower ones (an
+  iPhone SE at 667×375 landscape stayed stacked) — added
+  `(orientation: landscape) and (max-height: 520px)` as an OR condition, with flexible
+  (not fixed-width) columns so it degrades gracefully. Then the user flagged the board itself
+  was too small to tap comfortably in that mode: its size was clamped via a hardcoded
+  `calc(100vh - 170px)` in `board.css`, calibrated for the old taller header — turned that into
+  a CSS custom property (`--board-vh-reserve`) that the landscape media query overrides to
+  118px (measured off real `getBoundingClientRect()` output in a browser, not guessed),
+  growing the board from ~205px to 242–294px per side across tested viewports with 12–13px to
+  spare (no clipping). Verified all of this with Playwright screenshots and direct DOM
+  measurements at 5+ viewport sizes, not just by reasoning about the CSS.
+- **Piece-slide animation, including captures** (user: "show that the tile goes over the
+  other one... should be natural and the user should not be confused about what tile is
+  lost"). The engine only exposes flat `Int8Array` board snapshots with no piece identity, so
+  added a small reconciliation layer inside `Board`: it tracks pieces by a stable id, and
+  `GameService` now tags every update as `'move'` (play `lastMove.path` hop by hop, animating
+  each landing square) or `'reset'` (new game/undo — snap instantly, no history to animate
+  from). A captured piece is marked `.captured` (CSS fade + shrink) at the exact moment the
+  capturing piece's hop toward it starts, so the two transitions run concurrently and the
+  piece visibly disappears as the capturer passes over it — multi-jumps repeat this hop by
+  hop automatically since `lastMove` already lists every landing square and every captured
+  piece in order. Pieces moved out of the square buttons into their own absolutely-positioned
+  layer (`pointer-events: none`) so one DOM element can slide between squares instead of being
+  destroyed and recreated. Respects `prefers-reduced-motion`; guards overlapping animations
+  (e.g. Undo mid-slide) with a token check.
+  **Bug hit and fixed**: the reconciliation `effect()` read `board()`/`updateKind()`/
+  `lastMove()` but `reconcile()` also read-then-wrote the `pieceStates` signal it's driven
+  by, synchronously, before any `await` — Angular's effect dependency tracking picked that up
+  as a self-dependency, so the write re-dirtied the effect and it kept re-triggering itself.
+  No thrown error, just a livelock: the page froze (unresponsive, but the HTTP server kept
+  serving fine) on the very first real move. Found it by bisecting with a Playwright script
+  that captured console/page errors and timings, not by guessing; fixed by wrapping the
+  `reconcile()` call in `untracked()`. Verified correct with a quantitative check (piece count
+  40 → still 40 at 80ms into a capture hop → 39 at 600ms, i.e. the captured piece stays
+  visible through the hop and is removed right after its fade completes), not just a visual
+  screenshot.
+- Also: cleared up a mid-session mix-up where the user asked why the site "still wasn't
+  loading" — there was never a server left running for them to check (I'd been starting and
+  killing temporary `ng serve` instances for my own testing each time, and screenshots were
+  temp files I viewed myself, not shared). Lesson for future sessions: when verification
+  implies the user should be able to look at something themselves, leave a server running and
+  say the URL explicitly, rather than only reporting "I verified it."

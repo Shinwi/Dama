@@ -30,8 +30,6 @@ export class App {
   protected readonly landingDots = computed(() => this.nextSquares(false));
   protected readonly captureRings = computed(() => this.nextSquares(true));
 
-  protected readonly lastMovePath = computed(() => this.game.lastMove()?.path ?? []);
-
   protected readonly statusText = computed(() => {
     const settings = this.game.settings();
     const state = this.game.state();

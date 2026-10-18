@@ -20,7 +20,8 @@
         [landingDots]="landingDots()"
         [captureRings]="captureRings()"
         [compulsoryRings]="selection().compulsorySquares"
-        [lastMovePath]="lastMovePath()"
+        [lastMove]="game.lastMove()"
+        [updateKind]="game.updateKind()"
         (squareTap)="onSquareTap($event)"
       ></app-board>
     </div>

@@ -29,30 +29,35 @@ the historical record of what actually happened and why.
 11. ✅ Manually verified by running the dev server + the full Playwright suite against it end
     to end (1v1 play, vs-computer play with a reply, undo, Dark-opens all work in a real
     browser).
+12. ✅ Responsive two-column layout: board + status in a left column, settings in a right
+    sidebar, on desktop, tablets, and phones turned sideways (landscape phones matched by
+    short height, not just width, so a narrower phone like an iPhone SE still gets it). Board
+    also widened in landscape mode — its size was being clamped far smaller than the screen
+    actually allowed.
+13. ✅ Piece-slide animation, including captures. `Board` now tracks pieces by a stable id
+    across renders (the engine's board is just an `Int8Array` snapshot with no identity of
+    its own, so this lives in `Board`, driven by `GameService.updateKind()` — `'move'` replays
+    `lastMove.path` hop by hop; `'reset'`, i.e. new game/undo, snaps instantly, no animation).
+    A captured piece fades out at the same moment the capturing piece's hop passes over it
+    (both hop and fade run concurrently on CSS transitions), so a multi-jump reads as the
+    piece hopping over each piece it eats in turn. Respects `prefers-reduced-motion`; guards
+    against overlapping animations (e.g. Undo clicked mid-slide) with a token check.
+    Hit one real bug building this: the reconciliation `effect()` read and wrote the same
+    signal, which made it re-trigger itself forever (froze the page on the first real move,
+    no console error — just a livelock). Fixed with `untracked()`.
 
-Phase 1 is functionally complete and all tests are green. What's left below is animation
-polish and things nobody has pushed on yet.
+Phase 1 is functionally complete, animated, responsive, and all tests are green.
 
 ## Next, in order
 
-12. **Animation.** Pieces currently jump to their new square instantly — there's no slide
-    yet. Doing this properly needs persistent piece identity across board snapshots (the
-    engine's `Int8Array` has none — a move changes array contents, not object identity), so
-    `Board`/`GameService` need a small piece-id layer: assign each of the 40 starting pieces a
-    stable id, track it across moves (including which piece got captured, which piece slides
-    through several hops of a multi-jump), and `@for (track pieceId)` so Angular animates the
-    DOM node moving rather than recreating it. ~170ms per hop / ~210ms per capture hop, respect
-    `prefers-reduced-motion` (CSS already has a reduced-motion override for the pieces that
-    exist now; extend it to whatever the slide transition becomes).
-13. **Try it for real** — run `npm start` in `web/`, play a full game on a phone and on a
+14. **Try it for real** — run `npm start` in `web/`, play a full game on a phone and on a
     desktop browser, both colours, both modes, with sound and music on. This session's
-    Playwright suite checks interaction but nobody has actually looked at it. Worth doing
-    before investing in animation, in case something about the feel needs to change first.
-14. **Cloudflare Pages deploy** — actually create the Pages project and run the first deploy
+    Playwright suite checks interaction but nobody has actually looked at it yet.
+15. **Cloudflare Pages deploy** — actually create the Pages project and run the first deploy
     (`web/README.md` has the command), so phase 1's "deployed, real people played it" exit
     condition can actually be met. Needs a Cloudflare account/API token, which is the user's
     to set up.
-15. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
+16. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
     (*nfakh*, a move list, installable PWA).
 
 ## Open items / decisions to revisit

@@ -1,13 +1,12 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
-import { squareName } from '../../engine/board';
-import { BoardArray } from '../../engine/types';
+import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
+import { colOf, rowOf, squareName } from '../../engine/board';
+import { BoardArray, Move } from '../../engine/types';
 
 interface CellView {
   key: number;
   square: number;
   playable: boolean;
   name: string;
-  value: number;
   selected: boolean;
   onPath: boolean;
   isLandingDot: boolean;
@@ -15,6 +14,22 @@ interface CellView {
   isCompulsoryRing: boolean;
   isLastMove: boolean;
 }
+
+interface PieceState {
+  id: string;
+  square: number;
+  color: 'light' | 'dark';
+  king: boolean;
+  captured: boolean;
+}
+
+interface PieceView extends PieceState {
+  top: number;
+  left: number;
+}
+
+const MOVE_HOP_MS = 170;
+const CAPTURE_HOP_MS = 210;
 
 @Component({
   selector: 'app-board',
@@ -30,9 +45,14 @@ export class Board {
   readonly landingDots = input<number[]>([]);
   readonly captureRings = input<number[]>([]);
   readonly compulsoryRings = input<number[]>([]);
-  readonly lastMovePath = input<number[]>([]);
+  readonly lastMove = input<Move | null>(null);
+  /** 'move' animates `lastMove` hop by hop; 'reset' (new game / undo) snaps instantly. */
+  readonly updateKind = input<'reset' | 'move'>('reset');
 
   readonly squareTap = output<number>();
+
+  private readonly pieceStates = signal<PieceState[]>([]);
+  private animationToken = 0;
 
   readonly cells = computed<CellView[]>(() => {
     const board = this.board();
@@ -42,7 +62,7 @@ export class Board {
     const dots = new Set(this.landingDots());
     const rings = new Set(this.captureRings());
     const compulsory = new Set(this.compulsoryRings());
-    const lastMove = new Set(this.lastMovePath());
+    const lastMoveSquares = new Set(this.lastMove()?.path ?? []);
 
     const result: CellView[] = [];
     for (let visualRow = 0; visualRow < 10; visualRow++) {
@@ -56,21 +76,128 @@ export class Board {
           square,
           playable,
           name: playable ? squareName(square) : '',
-          value: playable ? board[square] : 0,
           selected: playable && selected === square,
           onPath: playable && path.has(square),
           isLandingDot: playable && dots.has(square),
           isCaptureRing: playable && rings.has(square),
           isCompulsoryRing: playable && compulsory.has(square),
-          isLastMove: playable && lastMove.has(square),
+          isLastMove: playable && lastMoveSquares.has(square),
         });
       }
     }
     return result;
   });
 
+  readonly pieces = computed<PieceView[]>(() => {
+    const flipped = this.flipped();
+    return this.pieceStates().map((piece) => {
+      const row = rowOf(piece.square);
+      const col = colOf(piece.square);
+      const visualRow = flipped ? row : 9 - row;
+      const visualCol = flipped ? 9 - col : col;
+      return { ...piece, top: visualRow * 10, left: visualCol * 10 };
+    });
+  });
+
+  constructor() {
+    effect(() => {
+      const board = this.board();
+      const kind = this.updateKind();
+      const move = this.lastMove();
+      // reconcile() reads and writes `pieceStates` itself; keep that untracked so this
+      // effect depends only on the inputs above, not on the piece state it's updating
+      // (otherwise the write re-dirties the effect's own dependency and it reruns forever).
+      untracked(() => void this.reconcile(board, kind, move));
+    });
+  }
+
   tap(cell: CellView): void {
     if (!cell.playable) return;
     this.squareTap.emit(cell.square);
   }
+
+  squareNameFor(square: number): string {
+    return squareName(square);
+  }
+
+  private reducedMotion(): boolean {
+    return typeof matchMedia !== 'undefined' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+
+  private freshPieces(board: BoardArray): PieceState[] {
+    const pieces: PieceState[] = [];
+    for (let square = 0; square < board.length; square++) {
+      const cell = board[square];
+      if (cell === 0) continue;
+      pieces.push({
+        id: `p${square}`,
+        square,
+        color: cell > 0 ? 'light' : 'dark',
+        king: Math.abs(cell) === 2,
+        captured: false,
+      });
+    }
+    return pieces;
+  }
+
+  /**
+   * Reconciles the tracked piece list against a new board snapshot. A 'move' update replays
+   * `move`'s path hop by hop (sliding the mover and fading out each captured piece as it's
+   * passed, since every hop's landing square is in a straight diagonal line through the
+   * captured square — a plain position transition already reads as "jumping over it"). A
+   * 'reset' (new game / undo) snaps straight to the new board with no animation.
+   */
+  private async reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): Promise<void> {
+    const token = ++this.animationToken;
+
+    if (kind !== 'move' || !move || this.reducedMotion()) {
+      this.pieceStates.set(this.freshPieces(board));
+      return;
+    }
+
+    const moverId = this.pieceStates().find((p) => p.square === move.from && !p.captured)?.id;
+    if (!moverId) {
+      // Nothing to animate from (e.g. first render raced with a move) — just snap.
+      this.pieceStates.set(this.freshPieces(board));
+      return;
+    }
+
+    const isCapture = move.captures.length > 0;
+    const hopDuration = isCapture ? CAPTURE_HOP_MS : MOVE_HOP_MS;
+
+    for (let i = 1; i < move.path.length; i++) {
+      if (token !== this.animationToken) return;
+      const to = move.path[i];
+      const capturedSquare = isCapture ? move.captures[i - 1] : null;
+
+      this.pieceStates.update((list) =>
+        list.map((p) => {
+          if (p.id === moverId) return { ...p, square: to };
+          if (capturedSquare !== null && p.square === capturedSquare) return { ...p, captured: true };
+          return p;
+        }),
+      );
+
+      if (capturedSquare !== null) {
+        // Let the captured piece's fade-out finish on its own clock, in step with the hop
+        // that passes over it, without holding up the next hop of a multi-jump.
+        const sq = capturedSquare;
+        void delay(hopDuration).then(() => {
+          if (token !== this.animationToken) return;
+          this.pieceStates.update((list) => list.filter((p) => !(p.square === sq && p.captured)));
+        });
+      }
+
+      await delay(hopDuration);
+      if (token !== this.animationToken) return;
+    }
+
+    if (move.promotes) {
+      this.pieceStates.update((list) => list.map((p) => (p.id === moverId ? { ...p, king: true } : p)));
+    }
+  }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
