@@ -220,8 +220,7 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   square" shortcut was checked before the next-hop match, so with king loops (j2xg5x…xe7 vs
   j2xe7x…xg5) tapping a first hop could commit a different sequence that happened to end
   there. The next hop now takes priority. Regression tests were added for both bugs. The
-  GitHub issue couldn't be created from the session (the integration got a 403), so the
-  write-up went to the user to file by hand.
+  fix is tracked as GitHub issue #1.
 - **Game-over overlay**: win/loss/draw previously only changed the status line's text, easy to
   miss, with no dedicated "the game has ended" visual moment. Added `describeGameOver()` — a
   pure function (`app.ts`), not just inline template logic, specifically so it's unit-testable
