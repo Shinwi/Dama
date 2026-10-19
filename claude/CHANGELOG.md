@@ -221,6 +221,15 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   j2xe7x…xg5) tapping a first hop could commit a different sequence that happened to end
   there. The next hop now takes priority. Regression tests were added for both bugs. The
   fix is tracked as GitHub issue #1.
+  **Second round**: the user tested the PR preview and still hit it with a 3+ man chain.
+  The animation fix held up in a browser fuzz (random 3+ capture chains vs the computer,
+  drawn board compared to the engine after every move: no mismatches), so I looked at what
+  the board shows mid-chain instead. Until the last hop is tapped nothing has been played,
+  so the piece stayed drawn on its starting square and the men it had jumped stayed drawn.
+  The only feedback was a thin outline on the landing square. That *is* "stuck after eating
+  the first man": tapping the piece does nothing, and the chain only continues from a small
+  ring on an empty square. Board now draws the in-progress jump (piece on the square it has
+  reached, jumped men fading out), and the final slide picks up from there.
 - **Game-over overlay**: win/loss/draw previously only changed the status line's text, easy to
   miss, with no dedicated "the game has ended" visual moment. Added `describeGameOver()` — a
   pure function (`app.ts`), not just inline template logic, specifically so it's unit-testable
