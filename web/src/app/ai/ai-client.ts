@@ -12,20 +12,17 @@ const MIN_THINK_MS = 200;
  * considered, without slowing down replies that already take real compute time.
  */
 export class AiClient {
-  private worker: Worker | null = null;
+  private worker: Worker | null;
+  private nextId = 1;
 
-  constructor() {
-    if (typeof Worker === 'undefined') return;
-    try {
-      this.worker = new Worker(new URL('./ai.worker', import.meta.url), { type: 'module' });
-    } catch {
-      this.worker = null;
-    }
+  /** `worker` is injectable for tests; by default the real AI worker (null if unavailable). */
+  constructor(worker: Worker | null = createWorker()) {
+    this.worker = worker;
   }
 
-  async chooseMove(request: AiRequest): Promise<Move | null> {
+  async chooseMove(question: Omit<AiRequest, 'id'>): Promise<Move | null> {
     const start = Date.now();
-    const move = await this.runWorkerOrFallback(request);
+    const move = await this.runWorkerOrFallback({ ...question, id: this.nextId++ });
     const elapsed = Date.now() - start;
     if (elapsed < MIN_THINK_MS) {
       await delay(MIN_THINK_MS - elapsed);
@@ -49,6 +46,9 @@ export class AiClient {
   private runOnWorker(worker: Worker, request: AiRequest): Promise<Move | null> {
     return new Promise((resolve, reject) => {
       const onMessage = (event: MessageEvent<AiResponse>) => {
+        // The worker answers requests one at a time, and every pending request listens: only
+        // take the reply to this one (an abandoned earlier request may still be answered first).
+        if (event.data.id !== request.id) return;
         cleanup();
         resolve(event.data.move);
       };
@@ -69,6 +69,15 @@ export class AiClient {
   dispose(): void {
     this.worker?.terminate();
     this.worker = null;
+  }
+}
+
+function createWorker(): Worker | null {
+  if (typeof Worker === 'undefined') return null;
+  try {
+    return new Worker(new URL('./ai.worker', import.meta.url), { type: 'module' });
+  } catch {
+    return null;
   }
 }
 
