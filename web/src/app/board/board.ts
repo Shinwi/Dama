@@ -32,14 +32,10 @@ interface PieceView extends PieceState {
   left: number;
 }
 
-const MOVE_HOP_MS = 300;
-const CAPTURE_HOP_MS = 380;
+const MOVE_HOP_MS = 170;
+const CAPTURE_HOP_MS = 210;
 /** How long a jumped piece takes to fade out, starting as the mover passes over it. */
-const CAPTURE_FADE_MS = 300;
-/** Beat between one move finishing and a move queued behind it (the computer's reply) starting. */
-const BETWEEN_MOVES_MS = 250;
-/** The piece is picked up this long before it starts to slide. */
-const LIFT_MS = 90;
+const CAPTURE_FADE_MS = 210;
 
 @Component({
   selector: 'app-board',
@@ -62,6 +58,11 @@ export class Board {
   readonly updateKind = input<'reset' | 'move'>('reset');
 
   readonly squareTap = output<number>();
+  /**
+   * A move has finished playing out and the pieces are on their real squares. The game
+   * waits for this before the other side (the computer, or the other player) can move.
+   */
+  readonly settled = output<void>();
 
   private readonly pieceStates = signal<PieceState[]>([]);
   /** Bumped by every snap (new game / undo): animations queued before it are dropped. */
@@ -201,8 +202,8 @@ export class Board {
    * captured piece fades out as the mover passes over it. A 'reset' (new game / undo) snaps
    * straight to the new board with no animation.
    *
-   * Moves never cut each other short. The computer's reply usually arrives while the
-   * player's move is still sliding, so it waits its turn in `queue`, then plays after a beat.
+   * Moves never cut each other short: one that arrives while another is still playing waits
+   * its turn in `queue`. (GameService already holds the next move back until `settled`.)
    */
   private reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): void {
     const shownPath = this.shownPath;
@@ -214,22 +215,21 @@ export class Board {
       this.pending = 0;
       this.pieceStates.set(this.freshPieces(board));
       this.releaseHeldTaps();
+      if (kind === 'move' && move) this.settled.emit();
       return;
     }
 
     const generation = this.generation;
-    const waitsForAnother = this.pending > 0;
     this.pending++;
     this.queue = this.queue
-      .then(async () => {
-        if (waitsForAnother) await delay(BETWEEN_MOVES_MS);
-        if (generation !== this.generation) return;
-        await this.animate(board, move, shownPath, generation);
-      })
+      .then(() => (generation === this.generation ? this.animate(board, move, shownPath, generation) : undefined))
       .finally(() => {
         if (generation !== this.generation) return;
         this.pending--;
-        if (this.pending === 0) this.releaseHeldTaps();
+        if (this.pending === 0) {
+          this.settled.emit();
+          this.releaseHeldTaps();
+        }
       });
   }
 
@@ -255,9 +255,6 @@ export class Board {
         .filter((p) => p.id === moverId || !jumpedAlready.has(p.square))
         .map((p) => (p.id === moverId ? { ...p, square: move.path[hopsShown], lifted: true, hopMs } : p)),
     );
-
-    await delay(LIFT_MS);
-    if (stale()) return;
 
     for (let i = hopsShown + 1; i < move.path.length; i++) {
       const to = move.path[i];

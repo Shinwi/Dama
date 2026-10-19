@@ -61,24 +61,29 @@ describe('Board move animation', () => {
     const afterCapture = applyMove(start, capture);
     await show(afterCapture, 'move', capture);
 
-    // The computer's reply lands ~200ms later, long before the 2-hop slide is done.
-    await wait(200);
+    // The reply lands ~100ms later, while the capture is still on its first hop.
+    await wait(100);
     const reply = onlyMove(afterCapture, DARK, 'j10xi9');
     const afterReply = applyMove(afterCapture, reply);
     await show(afterReply, 'move', reply);
 
-    // Still sliding the capture: the piece hasn't been teleported, the reply hasn't started.
-    await wait(100);
-    await fixture.whenStable();
-    expect(renderedPieces(fixture)).toEqual(['e5:light', 'f6:dark', 'j10:dark']);
+    // Watch the board play out: the capture must reach g7 before the reply leaves j10.
+    const frames: string[][] = [];
+    for (let t = 0; t < 1000; t += 20) {
+      await wait(20);
+      await fixture.whenStable();
+      frames.push(renderedPieces(fixture));
+    }
+    const captureLanded = frames.findIndex((f) => f.includes('g7:light'));
+    const replyStarted = frames.findIndex((f) => !f.includes('j10:dark'));
+    expect(captureLanded).toBeGreaterThanOrEqual(0);
+    expect(replyStarted).toBeGreaterThan(captureLanded);
+    // …and the piece was never drawn anywhere it shouldn't be on the way.
+    for (const f of frames) {
+      const light = f.find((p) => p.endsWith(':light'));
+      expect(['e5:light', 'g7:light']).toContain(light);
+    }
 
-    // Capture done (~850ms in), reply not started yet (it waits a beat after the capture).
-    await wait(650);
-    await fixture.whenStable();
-    expect(renderedPieces(fixture)).toEqual(['g7:light', 'j10:dark']);
-
-    await wait(1200);
-    await fixture.whenStable();
     expect(renderedPieces(fixture)).toEqual(expectedPieces(afterReply));
     expect(afterReply[parseSquare('g7')]).toBe(1);
   });
@@ -133,11 +138,25 @@ describe('Board move animation', () => {
     await show(afterCapture, 'move', capture);
 
     // Only the last hop is left to slide: the piece never jumps back to c3.
-    await wait(150);
+    await wait(40);
     await fixture.whenStable();
     expect(renderedPieces(fixture)).toEqual(['e9:light', 'f8:dark', 'j10:dark']);
     await wait(1000);
     await fixture.whenStable();
     expect(renderedPieces(fixture)).toEqual(expectedPieces(afterCapture));
+  });
+
+  it('reports the board settled once, after the move has finished playing', async () => {
+    const start = boardFrom({ light: ['c3'], dark: ['d4', 'f6', 'j10'] });
+    await show(start, 'reset', null);
+    let settled = 0;
+    fixture.componentInstance.settled.subscribe(() => settled++);
+
+    const capture = onlyMove(start, LIGHT, 'c3xe5xg7');
+    await show(applyMove(start, capture), 'move', capture);
+    await wait(200);
+    expect(settled).toBe(0); // second hop still to go
+    await wait(400);
+    expect(settled).toBe(1);
   });
 });

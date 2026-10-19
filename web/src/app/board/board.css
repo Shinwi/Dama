@@ -106,8 +106,8 @@
   /* Duration is set inline per move (Board's MOVE_HOP_MS / CAPTURE_HOP_MS); this is the
      fallback, e.g. for the in-progress drawing of a multi-jump. */
   transition:
-    top 300ms cubic-bezier(0.45, 0, 0.25, 1),
-    left 300ms cubic-bezier(0.45, 0, 0.25, 1);
+    top 170ms ease,
+    left 170ms ease;
 }
 
 /* Picked up while moving: above the other pieces, a little bigger, a deeper shadow. */
@@ -124,8 +124,8 @@
 
 .piece.captured {
   transition:
-    opacity 300ms ease,
-    transform 300ms ease;
+    opacity 210ms ease,
+    transform 210ms ease;
   opacity: 0;
   transform: scale(0.35);
 }
