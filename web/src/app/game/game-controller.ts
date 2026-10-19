@@ -153,6 +153,17 @@ export class GameController {
     this.resetSelection();
   }
 
+  /**
+   * Starts play from an arbitrary position (a test scenario). Clears the history, so undo
+   * rewinds to this position at most. Strict mode comes from settings, not the position.
+   */
+  loadPosition(state: GameState): void {
+    this.state = { ...state, board: new Int8Array(state.board), strictMode: this.settings.strictMode };
+    this.lastMove = null;
+    this.history = [];
+    this.resetSelection();
+  }
+
   updateSettings(partial: Partial<Settings>): void {
     this.settings = { ...this.settings, ...partial };
     if (partial.strictMode !== undefined) {

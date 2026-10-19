@@ -66,8 +66,8 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 
 18. **Position editor (issue #4)**, dev-only test tool to set up any position, in 4 steps:
     1. ✅ Engine position codes (`src/engine/position.ts` + tests).
-    2. `GameController.loadPosition` + dev-only `?position=` deep link (reload restarts the
-       scenario) + e2e.
+    2. ✅ `GameController.loadPosition` + dev-only `?position=` deep link (reload restarts the
+       scenario) + e2e (`e2e/scenario.spec.ts`).
     3. Dev-only setup-mode UI (palette, side to move, Play, Copy link) + component/e2e tests.
     4. Docs: CLAUDE.md test hooks, `web/README.md` "how to write a scenario".
     Once step 2 lands, use it to build a reproducer for the capture bug below.

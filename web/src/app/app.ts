@@ -78,17 +78,17 @@ export class App {
 
   setMode(mode: GameMode): void {
     this.audio.unlock();
-    this.game.newGame({ mode });
+    this.game.restart({ mode });
   }
 
   setDifficulty(difficulty: Difficulty): void {
     this.audio.unlock();
-    this.game.newGame({ difficulty });
+    this.game.restart({ difficulty });
   }
 
   setPlayerSide(playerSide: typeof LIGHT | typeof DARK): void {
     this.audio.unlock();
-    this.game.newGame({ playerSide });
+    this.game.restart({ playerSide });
   }
 
   newGame(): void {

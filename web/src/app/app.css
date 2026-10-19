@@ -82,6 +82,22 @@
   min-height: 1.4em;
 }
 
+.scenario-note {
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.scenario-note.error {
+  border-style: solid;
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
 .piece-counts {
   display: flex;
   justify-content: center;

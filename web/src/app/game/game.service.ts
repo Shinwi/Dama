@@ -1,9 +1,11 @@
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, isDevMode, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
 import { isKing } from '../../engine/board';
-import { DARK, LIGHT, Move, Outcome } from '../../engine/types';
+import { decodePosition } from '../../engine/position';
+import { DARK, GameState, LIGHT, Move, Outcome } from '../../engine/types';
 import { defaultSettings, GameController, Settings } from './game-controller';
+import { readPositionParam, withoutPositionParam } from './scenario-url';
 
 const STORAGE_KEY = 'dama.settings.v1';
 
@@ -44,8 +46,17 @@ export class GameService {
   private lastAnnouncedMove: Move | null = null;
   private lastAnnouncedOutcome: Outcome | null = null;
   private updateKindValue: 'reset' | 'move' = 'reset';
+  /** Dev-only test scenario loaded from `?position=`; games restart from it instead of the opening. */
+  private scenario: GameState | null = null;
 
   readonly thinking = signal(false);
+  /** Why a `?position=` code couldn't be loaded, or null. */
+  readonly scenarioError = signal<string | null>(null);
+
+  readonly inScenario = computed(() => {
+    this.version();
+    return this.scenario !== null;
+  });
 
   readonly settings = computed(() => {
     this.version();
@@ -115,6 +126,7 @@ export class GameService {
       }
     });
 
+    if (isDevMode()) this.loadScenarioFromUrl();
     void this.maybeTriggerComputer();
   }
 
@@ -133,8 +145,21 @@ export class GameService {
     this.bump();
   }
 
+  /** Leaves any test scenario and starts from the standard opening. */
   newGame(partial?: Partial<Settings>): void {
+    this.scenario = null;
+    this.scenarioError.set(null);
+    clearPositionParam();
+    this.restart(partial);
+  }
+
+  /**
+   * For settings that need a fresh game (mode, difficulty, colour): starts over from the
+   * test scenario if one is loaded, otherwise from the standard opening.
+   */
+  restart(partial?: Partial<Settings>): void {
     this.controller.newGame(partial);
+    if (this.scenario) this.controller.loadPosition(this.scenario);
     this.updateKindValue = 'reset';
     this.bump();
     saveSettings(this.controller.settings);
@@ -151,6 +176,20 @@ export class GameService {
     const settings = this.controller.settings;
     if (settings.mode === 'pvp') return true;
     return this.controller.state.toMove === settings.playerSide;
+  }
+
+  private loadScenarioFromUrl(): void {
+    if (typeof location === 'undefined') return;
+    const code = readPositionParam(location.search);
+    if (code === null) return;
+    const result = decodePosition(code, this.controller.settings.strictMode);
+    if (!result.ok) {
+      this.scenarioError.set(result.errors.join('; '));
+      return;
+    }
+    this.scenario = result.state;
+    this.controller.loadPosition(result.state);
+    this.bump();
   }
 
   private async maybeTriggerComputer(): Promise<void> {
@@ -205,3 +244,8 @@ export class GameService {
 }
 
 export { DARK, LIGHT };
+
+function clearPositionParam(): void {
+  if (typeof location === 'undefined' || readPositionParam(location.search) === null) return;
+  history.replaceState(history.state, '', withoutPositionParam(location.href));
+}

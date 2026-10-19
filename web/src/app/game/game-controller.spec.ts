@@ -96,3 +96,53 @@ describe('GameController multi-jump tap sequencing', () => {
     expect(controller.selectionInfo.selected).toBeNull();
   });
 });
+
+describe('GameController.loadPosition', () => {
+  // Same chain position as above, loaded the way a ?position= test scenario is.
+  const scenario = () => ({
+    board: boardFrom({ light: ['c3'], dark: ['d4', 'f6'] }),
+    toMove: LIGHT,
+    strictMode: false,
+    quietMoves: 0,
+  });
+
+  it('starts play from the loaded position, with compulsory captures worked out', () => {
+    const controller = new GameController({ ...defaultSettings(), mode: 'pvp' });
+    controller.loadPosition(scenario());
+
+    expect(controller.state.board).toEqual(scenario().board);
+    expect(controller.lastMove).toBeNull();
+    expect(controller.canUndo()).toBe(false);
+    expect(controller.selectionInfo.compulsorySquares).toEqual([parseSquare('c3')]);
+  });
+
+  it('undo rewinds to the loaded position, never to the standard opening', () => {
+    const controller = new GameController({ ...defaultSettings(), mode: 'pvp' });
+    controller.loadPosition(scenario());
+    controller.tapSquare(parseSquare('c3'));
+    expect(controller.tapSquare(parseSquare('g7'))).toBe(true);
+
+    controller.undo();
+    expect(controller.state.board).toEqual(scenario().board);
+    expect(controller.state.toMove).toBe(LIGHT);
+    expect(controller.canUndo()).toBe(false);
+
+    controller.undo(); // nothing left to undo — a no-op
+    expect(controller.state.board).toEqual(scenario().board);
+  });
+
+  it('takes strict mode from settings, not from the loaded state', () => {
+    const controller = new GameController({ ...defaultSettings(), strictMode: true });
+    controller.loadPosition(scenario());
+    expect(controller.state.strictMode).toBe(true);
+  });
+
+  it("doesn't share the board array with the caller", () => {
+    const controller = new GameController(defaultSettings());
+    const state = scenario();
+    controller.loadPosition(state);
+    controller.tapSquare(parseSquare('c3'));
+    controller.tapSquare(parseSquare('g7'));
+    expect(state.board[parseSquare('c3')]).toBe(1);
+  });
+});

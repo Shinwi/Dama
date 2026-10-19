@@ -5,6 +5,20 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
 ## 2026-10-19
 
+- **Position editor, step 2 of 4: `?position=` deep links.** `GameController.loadPosition()`
+  starts play from any position and clears the history, so Undo stops at the scenario.
+  `GameService` reads `?position=` on startup, but only when `isDevMode()` is true. Checked
+  against a real production build served locally: the param is ignored there (40 pieces, no
+  banner). An invalid code shows a visible error line and falls back to the opening.
+  Decided along the way: the mode/difficulty/colour buttons used to call `newGame()`, which
+  would have thrown the scenario away. They now call a new `restart()` that replays the
+  scenario if one is loaded. Only the New game button (and the game-over overlay's) leaves
+  the scenario and removes the param from the URL (`history.replaceState`). New
+  `scenario-url.ts` (pure URL helpers), `game.service.spec.ts` (drives the service through a
+  real jsdom URL), 4 `loadPosition` controller tests, and `e2e/scenario.spec.ts` (8 tests ×
+  2 projects). Noticed but not fixed: when the computer moves first (playing Dark, or a
+  scenario with `t:D`), undoing back to the start leaves it the computer's turn with nothing
+  triggering its move. This was already true before scenarios existed.
 - **Position editor, step 1 of 4 (issue #4): engine position codes.** The user (QA) wants to
   set up specific scenarios without playing a whole game to reach them. Planned in GitHub
   issue #4. Decisions: the editor and `?position=` deep links are **dev-builds only**

@@ -5,6 +5,13 @@
 
   <div class="layout">
     <div class="board-column">
+      @if (game.scenarioError(); as error) {
+        <p class="scenario-note error" role="alert" data-testid="scenario-error">Couldn't load ?position=: {{ error }}</p>
+      }
+      @if (game.inScenario()) {
+        <p class="scenario-note" data-testid="scenario-banner">Test scenario. Reload to restart it, New game to leave it.</p>
+      }
+
       <p class="status" data-testid="status">{{ statusText() }}</p>
 
       <p class="piece-counts">

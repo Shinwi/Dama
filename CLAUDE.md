@@ -58,4 +58,8 @@ dama/
 - Testability hooks for Playwright: squares are buttons with `data-square="b4"`; pieces have
   `data-testid="piece"`, `data-square`, `data-color="light|dark"`, `data-king`; status line has
   `data-testid="status"`.
+- Test scenarios (dev builds only, `isDevMode()`): `/?position=<code>` starts from any position,
+  e.g. `/?position=L:c3,Ke5;D:d4,f6;t:L` (format in `src/engine/position.ts`). Reload restarts
+  it, mode/difficulty/colour changes replay it, New game leaves it. Hooks:
+  `data-testid="scenario-banner"`, `data-testid="scenario-error"`. Examples: `web/e2e/scenario.spec.ts`.
 - Settings (mode, difficulty, colour, sound/music, strict mode) persist to `localStorage`.
