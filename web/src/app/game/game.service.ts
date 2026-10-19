@@ -2,7 +2,7 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
 import { isKing } from '../../engine/board';
-import { DARK, LIGHT, Move, Outcome } from '../../engine/types';
+import { DARK, LIGHT, Move } from '../../engine/types';
 import { defaultSettings, GameController, Settings } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
@@ -44,7 +44,8 @@ export class GameService {
   private readonly version = signal(0);
 
   private lastAnnouncedMove: Move | null = null;
-  private lastAnnouncedOutcome: Outcome | null = null;
+  /** Whether the game was already over at the last update, so the result is announced once. */
+  private wasOver = false;
   private updateKindValue: 'reset' | 'move' = 'reset';
 
   readonly thinking = signal(false);
@@ -114,8 +115,11 @@ export class GameService {
     effect(() => {
       const outcome = this.outcome();
       const settings = this.settings();
-      if (outcome.kind === 'win' && outcome !== this.lastAnnouncedOutcome) {
-        this.lastAnnouncedOutcome = outcome;
+      // `outcome()` is a fresh object on every update, so compare what it says, not identity:
+      // only the move that ends the game plays the jingle, not every tap or toggle after it.
+      const justEnded = outcome.kind !== 'ongoing' && !this.wasOver;
+      this.wasOver = outcome.kind !== 'ongoing';
+      if (justEnded && outcome.kind === 'win') {
         const playerLost = settings.mode === 'computer' && outcome.winner !== settings.playerSide;
         if (playerLost) this.audio.loss();
         else this.audio.win();
