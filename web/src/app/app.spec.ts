@@ -27,6 +27,27 @@ describe('App', () => {
     expect(status.textContent).toContain('Your move.');
   });
 
+  it('offers Undo vs the computer but not in 1v1', () => {
+    const undoButton = (fixture: ReturnType<typeof TestBed.createComponent<App>>) =>
+      [...fixture.nativeElement.querySelectorAll('button')].find(
+        (b: HTMLButtonElement) => b.textContent?.trim() === 'Undo',
+      );
+
+    const vsComputer = TestBed.createComponent(App);
+    vsComputer.detectChanges();
+    expect(undoButton(vsComputer)).toBeDefined();
+
+    localStorage.setItem('dama.settings.v1', JSON.stringify({ mode: 'pvp' }));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      imports: [App],
+      providers: [provideZonelessChangeDetection()],
+    });
+    const pvp = TestBed.createComponent(App);
+    pvp.detectChanges();
+    expect(undoButton(pvp)).toBeUndefined();
+  });
+
   it('does not show the game-over overlay while a game is ongoing', () => {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();

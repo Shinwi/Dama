@@ -1,6 +1,6 @@
 import { boardFrom, parseSquare, squareName } from '../../engine/board';
 import { moveNotation } from '../../engine/moves';
-import { LIGHT } from '../../engine/types';
+import { DARK, LIGHT } from '../../engine/types';
 import { defaultSettings, GameController } from './game-controller';
 
 /** Builds a controller, then swaps in a custom board/side-to-move for the test. */
@@ -124,5 +124,77 @@ describe('GameController multi-jump tap sequencing', () => {
         expect(moveNotation(controller.lastMove!)).toBe(moveNotation(move));
       }
     }
+  });
+});
+
+describe('GameController undo (vs computer)', () => {
+  function vsComputer(playerSide: typeof LIGHT | typeof DARK) {
+    return new GameController({ ...defaultSettings(), mode: 'computer', playerSide });
+  }
+  // Which move doesn't matter here, only whose turn it is.
+  const playAny = (c: GameController) => c.applyExternalMove(c.legalMoves[0]);
+  const play = (c: GameController, from: string, to: string) => {
+    const move = c.legalMoves.find((m) => squareName(m.from) === from && squareName(m.to) === to);
+    if (!move) throw new Error(`no move ${from}-${to}`);
+    c.applyExternalMove(move);
+  };
+
+  it('takes back the player move and the computer reply to it', () => {
+    const c = vsComputer(LIGHT);
+    playAny(c); // player
+    playAny(c); // computer
+    const beforeSecond = c.state;
+    playAny(c); // player
+    playAny(c); // computer
+
+    expect(c.canUndo()).toBe(true);
+    c.undo();
+    expect(c.state).toBe(beforeSecond);
+    expect(c.state.toMove).toBe(LIGHT);
+  });
+
+  it('before the computer has replied, only takes back the player move', () => {
+    const c = vsComputer(LIGHT);
+    playAny(c); // player
+    playAny(c); // computer
+    const beforeSecond = c.state;
+    playAny(c); // player; the computer hasn't answered yet
+
+    c.undo();
+    expect(c.state).toBe(beforeSecond); // the computer's earlier reply is still on the board
+    expect(c.state.toMove).toBe(LIGHT);
+  });
+
+  it("never undoes the computer's opening when the player is Dark", () => {
+    const c = vsComputer(DARK);
+    playAny(c); // computer opens as Light
+    const afterOpening = c.state;
+
+    expect(c.canUndo()).toBe(false);
+    c.undo();
+    expect(c.state).toBe(afterOpening);
+    expect(c.state.toMove).toBe(DARK);
+  });
+
+  it('takes back a winning move', () => {
+    const c = vsComputer(LIGHT);
+    c.state = { ...c.state, board: boardFrom({ light: ['c3'], dark: ['d4'] }) };
+    const before = c.state;
+    play(c, 'c3', 'e5');
+    expect(c.outcome.kind).toBe('win');
+
+    c.undo();
+    expect(c.state).toBe(before);
+    expect(c.outcome.kind).toBe('ongoing');
+  });
+
+  it('is not available in 1v1', () => {
+    const c = new GameController({ ...defaultSettings(), mode: 'pvp' });
+    playAny(c);
+    playAny(c);
+    expect(c.canUndo()).toBe(false);
+    const state = c.state;
+    c.undo();
+    expect(c.state).toBe(state);
   });
 });

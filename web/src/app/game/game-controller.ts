@@ -88,8 +88,9 @@ export class GameController {
     return this.selection;
   }
 
+  /** Undo is a vs-computer feature, and needs a move of the player's to take back. */
   canUndo(): boolean {
-    return this.history.length > 0;
+    return this.lastPlayerMoveIndex() >= 0;
   }
 
   resetSelection(): void {
@@ -169,15 +170,28 @@ export class GameController {
     this.commitMove(move);
   }
 
-  /** Vs computer: undoes the player's move and the computer's reply together. 1v1: one move. */
+  /**
+   * Takes back the player's last move, along with the computer's reply to it if one has been
+   * played, so it's the player's turn again. Never undoes a computer move that came before
+   * it, such as the computer's opening when the player is Dark. Vs computer only.
+   */
   undo(): void {
-    const steps = this.settings.mode === 'computer' ? 2 : 1;
-    for (let i = 0; i < steps && this.history.length > 0; i++) {
-      const previous = this.history.pop()!;
-      this.state = previous.state;
-      this.lastMove = previous.lastMove;
-    }
+    const index = this.lastPlayerMoveIndex();
+    if (index < 0) return;
+    const previous = this.history[index];
+    this.history = this.history.slice(0, index);
+    this.state = previous.state;
+    this.lastMove = previous.lastMove;
     this.resetSelection();
+  }
+
+  /** History index of the position just before the player's latest move, or -1 if none. */
+  private lastPlayerMoveIndex(): number {
+    if (this.settings.mode !== 'computer') return -1;
+    for (let i = this.history.length - 1; i >= 0; i--) {
+      if (this.history[i].state.toMove === this.settings.playerSide) return i;
+    }
+    return -1;
   }
 
   newGame(partial?: Partial<Settings>): void {
