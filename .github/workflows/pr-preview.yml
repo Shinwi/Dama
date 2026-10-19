@@ -1,0 +1,53 @@
+name: PR preview
+
+# Builds every pull request into its own folder on gh-pages,
+# https://<owner>.github.io/<repo>/pr-preview/pr-<number>/, and comments the link on the PR.
+# The preview is updated on each push to the PR and removed when the PR is closed or merged.
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+    paths:
+      - "web/**"
+      - ".github/workflows/pr-preview.yml"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: pr-preview-${{ github.event.number }}
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        if: github.event.action != 'closed'
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - run: npm ci
+        if: github.event.action != 'closed'
+
+      - name: Build
+        if: github.event.action != 'closed'
+        run: npx ng build --base-href "/${{ github.event.repository.name }}/pr-preview/pr-${{ github.event.number }}/"
+
+      - run: touch dist/web/browser/.nojekyll
+        if: github.event.action != 'closed'
+
+      # Deploys on opened/reopened/synchronize, removes the preview on closed.
+      - uses: rossjrw/pr-preview-action@v1
+        with:
+          source-dir: web/dist/web/browser
+          preview-branch: gh-pages
+          umbrella-dir: pr-preview
+          action: auto

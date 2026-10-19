@@ -8,18 +8,17 @@ on:
       - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
+# Pushes the build to the gh-pages branch, which needs write access to the repo contents.
 permissions:
-  contents: read
-  pages: write
-  id-token: write
+  contents: write
 
-# Only one deploy at a time; a newer push supersedes one still in flight.
+# Only one master deploy at a time; a newer push supersedes one still in flight.
 concurrency:
-  group: pages
+  group: pages-master
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -35,26 +34,18 @@ jobs:
 
       - run: npm ci
 
-      # Reads the Pages source settings for this repo (requires Pages to already be enabled
-      # with source = "GitHub Actions" — see web/README.md) and gives us the right base path:
-      # "/Dama" for a project page, "" for a user/org root page or a custom domain.
-      - name: Configure GitHub Pages
-        id: pages
-        uses: actions/configure-pages@v5
-
+      # Served from https://<owner>.github.io/<repo>/, so the base path is the repo name.
       - name: Build
-        run: npx ng build --base-href "${{ steps.pages.outputs.base_path }}/"
+        run: npx ng build --base-href "/${{ github.event.repository.name }}/"
 
-      - uses: actions/upload-pages-artifact@v3
+      # Without this, GitHub Pages runs the site through Jekyll, which drops files starting
+      # with an underscore.
+      - run: touch dist/web/browser/.nojekyll
+
+      # Replaces the root of gh-pages with the new build, but leaves pr-preview/ (the
+      # per-PR previews from pr-preview.yml) untouched.
+      - uses: JamesIves/github-pages-deploy-action@v4
         with:
-          path: web/dist/web/browser
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+          folder: web/dist/web/browser
+          branch: gh-pages
+          clean-exclude: pr-preview/

@@ -39,16 +39,18 @@ npm run e2e            # Playwright e2e (starts its own dev server on :4300)
 
 ## Deploying to GitHub Pages
 
-`.github/workflows/deploy.yml` builds and deploys automatically on every push to `master`
-that touches `web/`. **One-time setup required** (GitHub Actions can't do this part — it's a
-repo setting):
+Everything is published from the `gh-pages` branch:
 
-1. On GitHub: repo → **Settings → Pages → Build and deployment → Source**, set it to
-   **"GitHub Actions"** (not "Deploy from a branch").
-2. Push to `master` (or run the workflow manually from the **Actions** tab —
-   `workflow_dispatch` is enabled). The site publishes to
-   `https://<owner>.github.io/<repo>/` — the build step reads the actual base path from the
-   Pages settings via `actions/configure-pages`, so it's correct whether this ends up on a
-   project page (`/Dama/`) or a user/org root page.
-3. Check the **Actions** tab for build/deploy logs and the live URL in the `deploy` job's
-   summary.
+- **`master`**: `.github/workflows/deploy.yml` builds and publishes on every push to `master`
+  that touches `web/`, to `https://<owner>.github.io/<repo>/`.
+- **Pull requests**: `.github/workflows/pr-preview.yml` builds every PR into its own folder,
+  `https://<owner>.github.io/<repo>/pr-preview/pr-<number>/`, and posts the link as a comment
+  on the PR. Each push to the PR updates the preview, and closing or merging the PR deletes it.
+
+**One-time setup** (a repo setting GitHub Actions can't change): once `deploy.yml` has run at
+least once and created the `gh-pages` branch, go to repo → **Settings → Pages → Build and
+deployment → Source**, choose **"Deploy from a branch"**, then branch **`gh-pages`**, folder
+**`/ (root)`**.
+
+PRs from forks don't get a preview, because their workflow token can't write to the repo.
+
