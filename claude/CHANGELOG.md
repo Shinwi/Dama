@@ -230,6 +230,17 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   the first man": tapping the piece does nothing, and the chain only continues from a small
   ring on an empty square. Board now draws the in-progress jump (piece on the square it has
   reached, jumped men fading out), and the final slide picks up from there.
+  **Third round**: the user found the preview too fast, then (after a slowdown) too slow,
+  and laid out the flow they wanted: tap the piece, tap where it ends up, animate it
+  through the whole route, check it has landed, and only then let the other side move.
+  That's what it does now. A move is two taps: selecting a piece marks the squares its moves
+  *end* on, not the next hop. Only when two capture routes end on the same square does the
+  player pick one, by tapping where the routes split. Speed is back to 170/210ms per hop.
+  `Board` emits `settled` once a move has played out, and `GameService` holds everything
+  until then (`moving`): the computer only starts thinking after the player's piece has
+  landed, and taps are ignored meanwhile. A 5s timeout covers the board never reporting.
+  Checked by playing all 122k legal moves of 15k random positions with the two-tap flow,
+  plus a browser fuzz that the computer's piece never moves before the player's lands.
 - **Game-over overlay**: win/loss/draw previously only changed the status line's text, easy to
   miss, with no dedicated "the game has ended" visual moment. Added `describeGameOver()` — a
   pure function (`app.ts`), not just inline template logic, specifically so it's unit-testable
