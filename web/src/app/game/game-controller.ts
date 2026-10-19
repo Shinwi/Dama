@@ -25,6 +25,11 @@ export interface SelectionInfo {
   path: number[];
   /** Full legal moves still consistent with `path`. */
   candidateMoves: Move[];
+  /**
+   * Set when the tapped destination can be reached by more than one capture route: the
+   * player then picks the route by tapping where the routes split. Null otherwise.
+   */
+  target: number | null;
   /** Squares with a piece that must move this turn, because capture is compulsory. */
   compulsorySquares: number[];
 }
@@ -44,6 +49,7 @@ const EMPTY_SELECTION: SelectionInfo = {
   selected: null,
   path: [],
   candidateMoves: [],
+  target: null,
   compulsorySquares: [],
 };
 
@@ -91,7 +97,13 @@ export class GameController {
     this.selection = { ...EMPTY_SELECTION, compulsorySquares: compulsorySquaresFor(moves) };
   }
 
-  /** Handles a tap on a board square. Returns true if it completed a full move. */
+  /**
+   * Handles a tap on a board square. Returns true if it completed a full move.
+   *
+   * A move is two taps: the piece, then where it ends up, even for a multi-jump (the board
+   * then animates it through every square on the way). Only when two capture routes end on
+   * the same square does the player have to say which, by tapping where the routes split.
+   */
   tapSquare(square: number): boolean {
     if (this.outcome.kind !== 'ongoing') return false;
 
@@ -100,36 +112,56 @@ export class GameController {
       return false;
     }
 
-    if (square === this.selection.selected && this.selection.path.length === 1) {
-      this.resetSelection();
-      return false;
-    }
+    const { selected, path, candidateMoves, target } = this.selection;
 
-    // The next hop wins over the "tap straight to the end" shortcut below: with kings, the
-    // next hop of one sequence can be the final square of another, and tapping hop by hop
-    // must always play exactly the path tapped.
-    const nextStepIndex = this.selection.path.length;
-    const advancing = this.selection.candidateMoves.filter((m) => m.path[nextStepIndex] === square);
-    if (advancing.length > 0) {
-      const path = [...this.selection.path, square];
-      if (advancing.length === 1 && advancing[0].path.length === path.length) {
-        this.commitMove(advancing[0]);
+    if (target === null) {
+      const ending = candidateMoves.filter((m) => m.to === square);
+      if (ending.length === 1) {
+        this.commitMove(ending[0]);
         return true;
       }
-      this.selection = { ...this.selection, path, candidateMoves: advancing };
+      if (ending.length > 1) {
+        this.chooseRoute(path, ending, square);
+        return false;
+      }
+      if (square === selected) {
+        this.resetSelection();
+      } else {
+        this.trySelect(square);
+      }
       return false;
     }
 
-    const finishers = this.selection.candidateMoves.filter((m) => m.to === square);
-    if (finishers.length === 1) {
-      this.commitMove(finishers[0]);
+    // A king's route can pass through its destination and come back to it later; the route
+    // that stops there the first time is played by tapping the destination again.
+    const stopsHere = candidateMoves.find((m) => m.path.length === path.length);
+    if (square === target && stopsHere) {
+      this.commitMove(stopsHere);
       return true;
     }
-
-    if (this.selection.path.length === 1) {
-      this.trySelect(square);
+    const routes = candidateMoves.filter((m) => m.path[path.length] === square);
+    if (routes.length === 1) {
+      this.commitMove(routes[0]);
+      return true;
+    }
+    if (routes.length > 1) {
+      this.chooseRoute([...path, square], routes, target);
+    } else if (square === selected) {
+      // Changed their mind: put the piece back down. (A route can also pass back through the
+      // starting square, so that's checked first.)
+      this.resetSelection();
     }
     return false;
+  }
+
+  /** Narrows to `routes` and follows them as far as they agree, up to where they split. */
+  private chooseRoute(path: number[], routes: Move[], target: number): void {
+    const shared = [...path];
+    const shortest = Math.min(...routes.map((m) => m.path.length));
+    while (shared.length < shortest && routes.every((m) => m.path[shared.length] === routes[0].path[shared.length])) {
+      shared.push(routes[0].path[shared.length]);
+    }
+    this.selection = { ...this.selection, path: shared, candidateMoves: routes, target };
   }
 
   /** Applies a move chosen by the AI (or anything outside tap-to-move). */
@@ -175,7 +207,7 @@ export class GameController {
       this.selection = { ...EMPTY_SELECTION, compulsorySquares: compulsory };
       return;
     }
-    this.selection = { selected: square, path: [square], candidateMoves, compulsorySquares: compulsory };
+    this.selection = { ...EMPTY_SELECTION, selected: square, path: [square], candidateMoves, compulsorySquares: compulsory };
   }
 
   private commitMove(move: Move): void {

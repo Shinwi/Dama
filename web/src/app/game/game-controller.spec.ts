@@ -1,5 +1,5 @@
-import { boardFrom, parseSquare } from '../../engine/board';
-import { moveNotation, sortedNotations } from '../../engine/moves';
+import { boardFrom, parseSquare, squareName } from '../../engine/board';
+import { moveNotation } from '../../engine/moves';
 import { LIGHT } from '../../engine/types';
 import { defaultSettings, GameController } from './game-controller';
 
@@ -15,53 +15,34 @@ describe('GameController multi-jump tap sequencing', () => {
   // light c3; dark d4, f6 -> the only legal move is the chain c3xe5xg7 (see rules-cases.json).
   const chain = { light: ['c3'], dark: ['d4', 'f6'] };
 
-  it('completes a two-hop capture by tapping each landing square in turn', () => {
+  it('plays a multi-jump with two taps: the piece, then where it ends up', () => {
     const controller = controllerAt(chain);
 
     expect(controller.tapSquare(parseSquare('c3'))).toBe(false);
     expect(controller.selectionInfo.selected).toBe(parseSquare('c3'));
-    expect(controller.selectionInfo.path).toEqual([parseSquare('c3')]);
+    expect(controller.selectionInfo.candidateMoves.map((m) => m.to)).toEqual([parseSquare('g7')]);
 
-    // First hop: lands on e5, but must keep jumping — not a complete move yet.
-    expect(controller.tapSquare(parseSquare('e5'))).toBe(false);
-    expect(controller.selectionInfo.path).toEqual([parseSquare('c3'), parseSquare('e5')]);
-    expect(controller.selectionInfo.candidateMoves).toHaveLength(1);
-
-    // Second hop: lands on g7, completing the move.
     expect(controller.tapSquare(parseSquare('g7'))).toBe(true);
     expect(controller.state.board[parseSquare('c3')]).toBe(0);
     expect(controller.state.board[parseSquare('d4')]).toBe(0);
     expect(controller.state.board[parseSquare('f6')]).toBe(0);
     expect(controller.state.board[parseSquare('g7')]).toBe(1);
+    expect(moveNotation(controller.lastMove!)).toBe('c3xe5xg7');
     expect(controller.state.toMove).toBe(-1); // turn passes to Dark
     expect(controller.selectionInfo.selected).toBeNull();
   });
 
-  it('also completes a two-hop capture by tapping straight to the final square', () => {
+  it('a tap on a square the piece cannot end on plays nothing', () => {
     const controller = controllerAt(chain);
 
     controller.tapSquare(parseSquare('c3'));
-    expect(controller.tapSquare(parseSquare('g7'))).toBe(true);
+    // e5 is only a stop on the way, not where the move ends.
+    expect(controller.tapSquare(parseSquare('e5'))).toBe(false);
+    expect(controller.state.board[parseSquare('d4')]).toBe(-1); // nothing captured
+    expect(controller.state.toMove).toBe(LIGHT);
 
-    expect(controller.state.board[parseSquare('g7')]).toBe(1);
-    expect(controller.state.board[parseSquare('d4')]).toBe(0);
-    expect(controller.state.board[parseSquare('f6')]).toBe(0);
-  });
-
-  it('does not abandon a forced continuation on a mistaken tap mid-sequence', () => {
-    const controller = controllerAt(chain);
-
+    // The piece can still be picked up and played.
     controller.tapSquare(parseSquare('c3'));
-    controller.tapSquare(parseSquare('e5'));
-    const beforeMistap = controller.selectionInfo;
-
-    // Tap something irrelevant — this must not complete the move, reset the selection, or
-    // silently let the piece stop short of the forced second hop.
-    expect(controller.tapSquare(parseSquare('a1'))).toBe(false);
-    expect(controller.selectionInfo).toEqual(beforeMistap);
-    expect(controller.state.board[parseSquare('d4')]).toBe(-1); // nothing captured yet
-
-    // The real continuation still works after the mistake.
     expect(controller.tapSquare(parseSquare('g7'))).toBe(true);
   });
 
@@ -97,35 +78,49 @@ describe('GameController multi-jump tap sequencing', () => {
     expect(controller.selectionInfo.selected).toBeNull();
   });
 
-  it('plays the path tapped hop by hop, even when that hop is where another sequence ends', () => {
+  it('tapping a destination plays the move that ends there, not one passing through it', () => {
     // King j2 can go round the h4/h6/h8/f8 diamond either way: j2xg5xi7xg9xe7 or
-    // j2xe7xg9xi7xg5. g5 is the first hop of one and the final square of the other.
+    // j2xe7xg9xi7xg5. g5 is the first stop of one and the end of the other.
     const controller = controllerAt({ lightKings: ['j2'], dark: ['h4', 'h6', 'h8', 'f8'] });
-    expect(sortedNotations(controller.legalMoves)).toContain('j2xe7xg9xi7xg5');
 
     controller.tapSquare(parseSquare('j2'));
-    // Tapping g5 is the first hop of j2xg5x…, not a shortcut to the end of j2xe7x…xg5.
-    expect(controller.tapSquare(parseSquare('g5'))).toBe(false);
-    expect(controller.selectionInfo.path).toEqual([parseSquare('j2'), parseSquare('g5')]);
-
-    for (const square of ['i7', 'g9']) {
-      expect(controller.tapSquare(parseSquare(square))).toBe(false);
-    }
-    expect(controller.tapSquare(parseSquare('e7'))).toBe(true);
-    expect(moveNotation(controller.lastMove!)).toBe('j2xg5xi7xg9xe7');
+    expect(controller.tapSquare(parseSquare('g5'))).toBe(true);
+    expect(moveNotation(controller.lastMove!)).toBe('j2xe7xg9xi7xg5');
   });
 
-  it('every legal move can be played by tapping its path square by square', () => {
+  it('asks which way to go when two capture routes end on the same square', () => {
+    // Man c3 can take d4, d6, b6 and b4 going round the diamond either way, ending back on
+    // c3 both times: c3xe5xc7xa5xc3 or c3xa5xc7xe5xc3.
+    const controller = controllerAt({ light: ['c3'], dark: ['d4', 'b4', 'b6', 'd6'] });
+    const backToC3 = controller.legalMoves.filter((m) => squareName(m.to) === 'c3');
+    expect(backToC3).toHaveLength(2);
+
+    controller.tapSquare(parseSquare('c3'));
+    expect(controller.tapSquare(parseSquare('c3'))).toBe(false);
+    expect(controller.selectionInfo.target).toBe(parseSquare('c3'));
+
+    // Pick the route through a5.
+    expect(controller.tapSquare(parseSquare('a5'))).toBe(true);
+    expect(moveNotation(controller.lastMove!)).toBe('c3xa5xc7xe5xc3');
+  });
+
+  it('every legal move can be played: piece, destination, then the way if asked', () => {
     const positions = [
       chain,
       { light: ['c3', 'g1'], dark: ['d4', 'f6', 'h2'] },
       { lightKings: ['j2'], dark: ['h4', 'h6', 'h8', 'f8'] },
+      { light: ['c3'], dark: ['d4', 'b4', 'b6', 'd6'] },
     ];
     for (const pieces of positions) {
       for (const move of controllerAt(pieces).legalMoves) {
         const controller = controllerAt(pieces);
-        const results = move.path.map((square) => controller.tapSquare(square));
-        expect(results).toEqual([...move.path.slice(1).map(() => false), true]);
+        controller.tapSquare(move.from);
+        let done = controller.tapSquare(move.to);
+        while (!done && controller.selectionInfo.target !== null) {
+          const { path } = controller.selectionInfo;
+          done = controller.tapSquare(move.path[path.length] ?? move.to);
+        }
+        expect(done).toBe(true);
         expect(moveNotation(controller.lastMove!)).toBe(moveNotation(move));
       }
     }
