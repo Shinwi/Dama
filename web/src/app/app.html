@@ -68,7 +68,9 @@
 
       <section class="actions">
         <button type="button" (click)="newGame()">New game</button>
-        <button type="button" (click)="undo()" [disabled]="!game.canUndo() || game.thinking()">Undo</button>
+        @if (game.settings().mode === 'computer') {
+          <button type="button" (click)="undo()" [disabled]="!game.canUndo() || game.thinking()">Undo</button>
+        }
         <button type="button" [attr.aria-pressed]="game.settings().soundOn" (click)="toggleSound()">🔊 Sound</button>
         <button type="button" [attr.aria-pressed]="game.settings().musicOn" (click)="toggleMusic()">🎵 Music</button>
       </section>
