@@ -103,9 +103,11 @@ export class GameService {
     effect(() => {
       const move = this.lastMove();
       const settings = this.settings();
+      // Undo brings back an older `lastMove`, but nothing was just played: no sound for it.
+      const justPlayed = this.updateKind() === 'move';
       if (move && move !== this.lastAnnouncedMove) {
         this.lastAnnouncedMove = move;
-        this.announceMove(move, settings);
+        if (justPlayed) this.announceMove(move, settings);
       }
     });
 
