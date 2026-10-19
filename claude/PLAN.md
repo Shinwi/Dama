@@ -64,7 +64,14 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 
 ## Next, in order
 
-18. **Nail down the capture bug** — user reported sometimes being unable to continue a
+18. **Position editor (issue #4)**, dev-only test tool to set up any position, in 4 steps:
+    1. ✅ Engine position codes (`src/engine/position.ts` + tests).
+    2. `GameController.loadPosition` + dev-only `?position=` deep link (reload restarts the
+       scenario) + e2e.
+    3. Dev-only setup-mode UI (palette, side to move, Play, Copy link) + component/e2e tests.
+    4. Docs: CLAUDE.md test hooks, `web/README.md` "how to write a scenario".
+    Once step 2 lands, use it to build a reproducer for the capture bug below.
+19. **Nail down the capture bug** — user reported sometimes being unable to continue a
     multi-jump ("eat the first, then can't eat the second, piece looks blocked"). The new
     `game-controller.spec.ts` tests prove the tap-sequencing logic itself is correct, so this
     is one of: (a) two *separate* pieces could each capture independently, the user played
@@ -73,10 +80,10 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
     feedback, which looks exactly like "blocked". Need the user's exact position (or to
     reproduce it together) to know which. Either way, (b) is worth fixing regardless: add a
     sound/visual cue on an invalid tap during a compulsory sequence, instead of silence.
-19. **Try it for real, more** — now that it's deployed, keep playing it (phone + desktop,
+20. **Try it for real, more** — now that it's deployed, keep playing it (phone + desktop,
     both colours, both modes, sound/music on) and note anything else that feels off, the way
     the capture bug above got found.
-20. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
+21. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
     (*nfakh*, a move list, installable PWA).
 
 ## Open items / decisions to revisit

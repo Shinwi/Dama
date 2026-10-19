@@ -14,7 +14,7 @@ function forwardDirs(side: Side): readonly Dir[] {
   return side === LIGHT ? [[1, -1], [1, 1]] : [[-1, -1], [-1, 1]];
 }
 
-function farRow(side: Side): number {
+export function farRow(side: Side): number {
   return side === LIGHT ? 9 : 0;
 }
 

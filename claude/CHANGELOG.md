@@ -3,6 +3,24 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-19
+
+- **Position editor, step 1 of 4 (issue #4): engine position codes.** The user (QA) wants to
+  set up specific scenarios without playing a whole game to reach them. Planned in GitHub
+  issue #4. Decisions: the editor and `?position=` deep links are **dev-builds only**
+  (`isDevMode()`, so `ng serve` and Playwright have them, the live site and PR previews
+  don't); reloading restarts the scenario (the code stays in the URL); a man placed on its
+  own promotion row becomes a king.
+  Added `src/engine/position.ts`: `encodePosition`, `decodePosition`, `validatePosition`,
+  `normalizeCell`. Format `L:b4,c3,Ke5;D:f6,Kh8;t:L;q:0`, using the same square names as
+  `rules-cases.json`. Strict mode is not in the code (it comes from the normal setting).
+  Decoding tolerates whitespace and letter case and collects every error instead of
+  stopping at the first. A position with no legal moves for the side to move is valid (it
+  starts as a finished game, useful for testing the game-over overlay). Exported the
+  existing `farRow()` from `moves.ts` so the promotion row is defined in one place.
+  `position.spec.ts` has 40 tests, including an encode → decode round trip over every
+  `rules-cases.json` case that also checks the decoded position yields the same legal moves.
+
 ## 2026-10-18
 
 - Read `dama-claude-code-prompt.md` (the original spec) and started building phase 1: a
