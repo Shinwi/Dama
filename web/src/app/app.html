@@ -25,6 +25,7 @@
           [lastMove]="game.lastMove()"
           [updateKind]="game.updateKind()"
           (squareTap)="onSquareTap($event)"
+          (settled)="game.boardSettled()"
         ></app-board>
 
         @if (gameOver(); as result) {

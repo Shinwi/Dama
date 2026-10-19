@@ -6,6 +6,8 @@ import { DARK, LIGHT, Move, Outcome } from '../../engine/types';
 import { defaultSettings, GameController, Settings } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
+/** Backstop in case the board never reports a move as settled: no animation is this long. */
+const SETTLE_TIMEOUT_MS = 5000;
 
 function loadSettings(): Settings {
   const fallback = defaultSettings();
@@ -46,6 +48,9 @@ export class GameService {
   private updateKindValue: 'reset' | 'move' = 'reset';
 
   readonly thinking = signal(false);
+  /** A move is still playing out on the board: nobody can move until it has landed. */
+  readonly moving = signal(false);
+  private settleTimer: ReturnType<typeof setTimeout> | null = null;
 
   readonly settings = computed(() => {
     this.version();
@@ -119,22 +124,33 @@ export class GameService {
   }
 
   tapSquare(square: number): void {
-    if (this.thinking() || !this.isHumanTurn()) return;
+    if (this.thinking() || this.moving() || !this.isHumanTurn()) return;
     const completed = this.controller.tapSquare(square);
-    if (completed) this.updateKindValue = 'move';
+    if (completed) this.startMove();
     this.bump();
-    if (completed) void this.maybeTriggerComputer();
+  }
+
+  /**
+   * Called by the board once a move has finished playing out. Only now does the turn really
+   * pass: the computer starts thinking, or the other player's taps are accepted.
+   */
+  boardSettled(): void {
+    if (!this.moving()) return;
+    this.stopMoving();
+    void this.maybeTriggerComputer();
   }
 
   undo(): void {
     if (this.thinking()) return;
     this.controller.undo();
+    this.stopMoving();
     this.updateKindValue = 'reset';
     this.bump();
   }
 
   newGame(partial?: Partial<Settings>): void {
     this.controller.newGame(partial);
+    this.stopMoving();
     this.updateKindValue = 'reset';
     this.bump();
     saveSettings(this.controller.settings);
@@ -158,6 +174,7 @@ export class GameService {
     if (settings.mode !== 'computer') return;
     if (this.controller.outcome.kind !== 'ongoing') return;
     if (this.controller.state.toMove === settings.playerSide) return;
+    if (this.thinking() || this.moving()) return;
 
     this.thinking.set(true);
     const move = await this.ai.chooseMove({
@@ -169,9 +186,22 @@ export class GameService {
 
     if (move) {
       this.controller.applyExternalMove(move);
-      this.updateKindValue = 'move';
+      this.startMove();
       this.bump();
     }
+  }
+
+  private startMove(): void {
+    this.updateKindValue = 'move';
+    this.moving.set(true);
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer);
+    this.settleTimer = setTimeout(() => this.boardSettled(), SETTLE_TIMEOUT_MS);
+  }
+
+  private stopMoving(): void {
+    this.moving.set(false);
+    if (this.settleTimer !== null) clearTimeout(this.settleTimer);
+    this.settleTimer = null;
   }
 
   /**
