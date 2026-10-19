@@ -51,6 +51,8 @@ export class GameService {
   /** A move is still playing out on the board: nobody can move until it has landed. */
   readonly moving = signal(false);
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Bumped for every question put to the computer, and to abandon the one in flight. */
+  private aiRequest = 0;
 
   readonly settings = computed(() => {
     this.version();
@@ -143,6 +145,7 @@ export class GameService {
   undo(): void {
     if (this.thinking()) return;
     this.controller.undo();
+    this.abandonComputerMove();
     this.stopMoving();
     this.updateKindValue = 'reset';
     this.bump();
@@ -150,6 +153,7 @@ export class GameService {
 
   newGame(partial?: Partial<Settings>): void {
     this.controller.newGame(partial);
+    this.abandonComputerMove();
     this.stopMoving();
     this.updateKindValue = 'reset';
     this.bump();
@@ -161,6 +165,11 @@ export class GameService {
     this.controller.updateSettings(partial);
     this.bump();
     saveSettings(this.controller.settings);
+    // A reply being worked out under the old strict-mode setting may not be legal any more.
+    if (partial.strictMode !== undefined && this.thinking()) {
+      this.abandonComputerMove();
+      void this.maybeTriggerComputer();
+    }
   }
 
   isHumanTurn(): boolean {
@@ -176,19 +185,31 @@ export class GameService {
     if (this.controller.state.toMove === settings.playerSide) return;
     if (this.thinking() || this.moving()) return;
 
+    const request = ++this.aiRequest;
     this.thinking.set(true);
-    const move = await this.ai.chooseMove({
+    const reply = await this.ai.chooseMove({
       board: this.controller.state.board,
       side: this.controller.state.toMove,
       options: { difficulty: settings.difficulty, strictMode: settings.strictMode },
     });
+    // New game, undo or a strict-mode change while it was thinking: this reply belongs to a
+    // position that's gone, and the new one has already been dealt with.
+    if (request !== this.aiRequest) return;
     this.thinking.set(false);
 
+    // Only ever play a move that's legal in the current position.
+    const move = reply && this.controller.legalMoves.find((m) => sameMove(m, reply));
     if (move) {
       this.controller.applyExternalMove(move);
       this.startMove();
       this.bump();
     }
+  }
+
+  /** Forgets the computer's reply still being worked out, if any: it will be ignored. */
+  private abandonComputerMove(): void {
+    this.aiRequest++;
+    this.thinking.set(false);
   }
 
   private startMove(): void {
@@ -232,6 +253,15 @@ export class GameService {
   private bump(): void {
     this.version.update((v) => v + 1);
   }
+}
+
+function sameMove(a: Move, b: Move): boolean {
+  return (
+    a.path.length === b.path.length &&
+    a.path.every((square, i) => square === b.path[i]) &&
+    a.captures.length === b.captures.length &&
+    a.captures.every((square, i) => square === b.captures[i])
+  );
 }
 
 export { DARK, LIGHT };
