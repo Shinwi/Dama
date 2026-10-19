@@ -65,4 +65,34 @@ describe('chooseMove', () => {
       expect(move?.to).toBe(parseSquare('e6'));
     });
   }
+
+  // Flying kings make each extra search depth very expensive: before the clock was checked
+  // inside the search, this position took ~1.7s against a 300ms budget.
+  it('very-good stays close to its time budget, even with many kings', () => {
+    const board = boardFrom({
+      lightKings: ['a1', 'c1', 'e1', 'g1'],
+      darkKings: ['b10', 'd10', 'f10', 'h10'],
+    });
+    const start = Date.now();
+    const move = chooseMove(board, LIGHT, {
+      difficulty: 'very-good',
+      strictMode: false,
+      timeBudgetMs: 300,
+    });
+    const elapsed = Date.now() - start;
+
+    expect(generateLegalMoves(board, LIGHT, false)).toContainEqual(move);
+    expect(elapsed).toBeLessThan(450);
+  });
+
+  it('very-good still searches past depth 1 when there is time', () => {
+    // With a generous budget it must find the safe move that needs a deeper look (see above).
+    const board = boardFrom({ light: ['e5'], dark: ['c7'] });
+    const move = chooseMove(board, LIGHT, {
+      difficulty: 'very-good',
+      strictMode: false,
+      timeBudgetMs: 1000,
+    });
+    expect(move?.to).toBe(parseSquare('f6'));
+  });
 });

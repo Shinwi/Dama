@@ -52,6 +52,28 @@ function orderMoves(moves: Move[]): Move[] {
 }
 
 /**
+ * Lets a timed search give up part-way: it checks the clock every so many positions and,
+ * once past the deadline, sets `timedOut` and unwinds. A search that timed out has no
+ * usable result.
+ */
+interface SearchClock {
+  deadline: number;
+  now: () => number;
+  nodes: number;
+  timedOut: boolean;
+}
+
+/** Positions searched between clock checks: often enough to stop promptly, cheap enough. */
+const CLOCK_CHECK_INTERVAL = 256;
+
+function outOfTime(clock: SearchClock | undefined): boolean {
+  if (!clock) return false;
+  const checkNow = ++clock.nodes % CLOCK_CHECK_INTERVAL === 0;
+  if (!clock.timedOut && checkNow && clock.now() >= clock.deadline) clock.timedOut = true;
+  return clock.timedOut;
+}
+
+/**
  * Negamax with alpha-beta pruning. Quiescence: once depth reaches 0, keep searching
  * while the side to move is in a forced-capture position, so the search never stops
  * mid-exchange.
@@ -63,7 +85,9 @@ function negamax(
   alpha: number,
   beta: number,
   strictMode: boolean,
+  clock?: SearchClock,
 ): number {
+  if (outOfTime(clock)) return 0;
   const moves = generateLegalMoves(board, side, strictMode);
   if (moves.length === 0) {
     return -WIN_SCORE;
@@ -77,7 +101,7 @@ function negamax(
   let best = -Infinity;
   for (const move of orderMoves(moves)) {
     const nextBoard = applyMove(board, move);
-    const value = -negamax(nextBoard, (-side) as Side, depth - 1, -beta, -alpha, strictMode);
+    const value = -negamax(nextBoard, (-side) as Side, depth - 1, -beta, -alpha, strictMode, clock);
     if (value > best) best = value;
     if (best > alpha) alpha = best;
     if (alpha >= beta) break;
@@ -91,11 +115,21 @@ function searchRoot(
   depth: number,
   strictMode: boolean,
   moves: Move[],
+  clock?: SearchClock,
 ): { move: Move; score: number }[] {
   const results: { move: Move; score: number }[] = [];
   for (const move of orderMoves(moves)) {
     const nextBoard = applyMove(board, move);
-    const score = -negamax(nextBoard, (-side) as Side, depth - 1, -Infinity, Infinity, strictMode);
+    const score = -negamax(
+      nextBoard,
+      (-side) as Side,
+      depth - 1,
+      -Infinity,
+      Infinity,
+      strictMode,
+      clock,
+    );
+    if (clock?.timedOut) break;
     results.push({ move, score });
   }
   return results;
@@ -140,16 +174,20 @@ export function chooseMove(board: BoardArray, side: Side, options: AiOptions): M
       return pickWithNoise(results, 40, rng);
     }
     case 'very-good': {
+      // Iterative deepening within the time budget. The clock is checked inside the search,
+      // not just between depths, so a deep search that runs out of time is abandoned (and
+      // the previous depth's answer kept) instead of overrunning the budget many times over.
       const budget = options.timeBudgetMs ?? 300;
-      const deadline = now() + budget;
+      const clock: SearchClock = { deadline: now() + budget, now, nodes: 0, timedOut: false };
       let best = moves[0];
-      let depth = 1;
-      while (now() < deadline && depth <= 12) {
-        const results = searchRoot(board, side, depth, options.strictMode, moves);
+      for (let depth = 1; depth <= 12; depth++) {
+        // Depth 1 always runs to completion, so there's always a searched move to play.
+        const timed = depth > 1 ? clock : undefined;
+        const results = searchRoot(board, side, depth, options.strictMode, moves, timed);
+        if (clock.timedOut) break;
         results.sort((a, b) => b.score - a.score);
         best = results[0].move;
-        if (Math.abs(results[0].score) >= WIN_SCORE - 100) break;
-        depth++;
+        if (Math.abs(results[0].score) >= WIN_SCORE - 100 || now() >= clock.deadline) break;
       }
       return best;
     }
