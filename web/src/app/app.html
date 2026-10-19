@@ -18,12 +18,14 @@
           [flipped]="flipped()"
           [selected]="selection().selected"
           [pathSoFar]="selection().path"
+          [capturedSoFar]="capturedSoFar()"
           [landingDots]="landingDots()"
           [captureRings]="captureRings()"
-          [compulsoryRings]="selection().compulsorySquares"
+          [compulsoryRings]="selection().path.length > 1 ? [] : selection().compulsorySquares"
           [lastMove]="game.lastMove()"
           [updateKind]="game.updateKind()"
           (squareTap)="onSquareTap($event)"
+          (settled)="game.boardSettled()"
         ></app-board>
 
         @if (gameOver(); as result) {

@@ -27,6 +27,13 @@ export class App {
 
   protected readonly selection = computed(() => this.game.selection());
 
+  /** Pieces jumped so far by a multi-jump that's still being tapped out, hop by hop. */
+  protected readonly capturedSoFar = computed(() => {
+    const { path, candidateMoves } = this.game.selection();
+    if (path.length < 2 || candidateMoves.length === 0) return [];
+    return candidateMoves[0].captures.slice(0, path.length - 1);
+  });
+
   protected readonly landingDots = computed(() => this.nextSquares(false));
   protected readonly captureRings = computed(() => this.nextSquares(true));
 
@@ -45,6 +52,7 @@ export class App {
     if (outcome.kind === 'draw') return 'Draw — 50 moves with no capture.';
 
     if (this.game.thinking()) return 'Computer is thinking…';
+    if (this.game.selection().target !== null) return 'More than one way to get there: tap the way to go.';
 
     if (settings.mode === 'computer') {
       if (state.toMove === settings.playerSide) {
@@ -61,13 +69,21 @@ export class App {
 
   protected readonly gameOver = computed(() => describeGameOver(this.game.outcome(), this.game.settings()));
 
+  /**
+   * Where the selected piece can be sent: the square each move ends on, however many jumps
+   * it takes to get there. While choosing between routes to the same square, the squares
+   * where the routes split instead.
+   */
   private nextSquares(wantCaptures: boolean): number[] {
     const selection = this.game.selection();
     if (selection.candidateMoves.length === 0) return [];
     const isCapture = selection.candidateMoves[0].captures.length > 0;
     if (isCapture !== wantCaptures) return [];
+    if (selection.target === null) {
+      return [...new Set(selection.candidateMoves.map((m) => m.to))];
+    }
     const nextIndex = selection.path.length;
-    const squares = selection.candidateMoves.map((m) => m.path[nextIndex]).filter((s) => s !== undefined);
+    const squares = selection.candidateMoves.map((m) => m.path[nextIndex] ?? m.to);
     return [...new Set(squares)];
   }
 

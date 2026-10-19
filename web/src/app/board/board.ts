@@ -21,6 +21,10 @@ interface PieceState {
   color: 'light' | 'dark';
   king: boolean;
   captured: boolean;
+  /** Picked up off the board while it moves: drawn slightly larger, with a deeper shadow. */
+  lifted?: boolean;
+  /** How long this piece's slide to its next square takes, while it's the one moving. */
+  hopMs?: number;
 }
 
 interface PieceView extends PieceState {
@@ -30,6 +34,8 @@ interface PieceView extends PieceState {
 
 const MOVE_HOP_MS = 170;
 const CAPTURE_HOP_MS = 210;
+/** How long a jumped piece takes to fade out, starting as the mover passes over it. */
+const CAPTURE_FADE_MS = 210;
 
 @Component({
   selector: 'app-board',
@@ -42,6 +48,8 @@ export class Board {
   readonly flipped = input(false);
   readonly selected = input<number | null>(null);
   readonly pathSoFar = input<number[]>([]);
+  /** Pieces already jumped by the multi-jump in progress (one per hop of `pathSoFar`). */
+  readonly capturedSoFar = input<number[]>([]);
   readonly landingDots = input<number[]>([]);
   readonly captureRings = input<number[]>([]);
   readonly compulsoryRings = input<number[]>([]);
@@ -50,9 +58,22 @@ export class Board {
   readonly updateKind = input<'reset' | 'move'>('reset');
 
   readonly squareTap = output<number>();
+  /**
+   * A move has finished playing out and the pieces are on their real squares. The game
+   * waits for this before the other side (the computer, or the other player) can move.
+   */
+  readonly settled = output<void>();
 
   private readonly pieceStates = signal<PieceState[]>([]);
-  private animationToken = 0;
+  /** Bumped by every snap (new game / undo): animations queued before it are dropped. */
+  private generation = 0;
+  /** Moves play one after another: each animation waits for the one before it. */
+  private queue: Promise<void> = Promise.resolve();
+  /** Animations queued or playing. While any are, taps are held back (see `tap()`). */
+  private pending = 0;
+  private heldTaps: number[] = [];
+  /** The last in-progress multi-jump path drawn, so its move's slide can pick up from there. */
+  private shownPath: number[] = [];
 
   readonly cells = computed<CellView[]>(() => {
     const board = this.board();
@@ -88,9 +109,23 @@ export class Board {
     return result;
   });
 
+  /**
+   * The tracked pieces, plus a multi-jump in progress: until the last hop is tapped nothing
+   * has been played, but the moving piece is drawn on the square it has reached and the
+   * pieces it has jumped fade out, so each tap visibly does something.
+   */
   readonly pieces = computed<PieceView[]>(() => {
     const flipped = this.flipped();
-    return this.pieceStates().map((piece) => {
+    const path = this.pathSoFar();
+    const jumping = path.length > 1;
+    const captured = new Set(this.capturedSoFar());
+    return this.pieceStates().map((state) => {
+      let piece = state;
+      if (jumping && piece.square === path[0] && !piece.captured) {
+        piece = { ...piece, square: path[path.length - 1] };
+      } else if (jumping && captured.has(piece.square)) {
+        piece = { ...piece, captured: true };
+      }
       const row = rowOf(piece.square);
       const col = colOf(piece.square);
       const visualRow = flipped ? row : 9 - row;
@@ -100,6 +135,13 @@ export class Board {
   });
 
   constructor() {
+    effect(() => {
+      const path = this.pathSoFar();
+      // Not cleared when the selection empties: that's also what happens when the move is
+      // committed, and reconcile() needs the path then. A fresh selection clears it instead.
+      if (path.length > 1) this.shownPath = path;
+      else if (path.length === 1) this.shownPath = [];
+    });
     effect(() => {
       const board = this.board();
       const kind = this.updateKind();
@@ -111,9 +153,23 @@ export class Board {
     });
   }
 
+  /**
+   * Taps made while a move is still playing out are held back and delivered once it has
+   * finished, so nothing gets picked up or captured on a board that hasn't caught up yet.
+   */
   tap(cell: CellView): void {
     if (!cell.playable) return;
+    if (this.pending > 0) {
+      this.heldTaps.push(cell.square);
+      return;
+    }
     this.squareTap.emit(cell.square);
+  }
+
+  private releaseHeldTaps(): void {
+    const taps = this.heldTaps;
+    this.heldTaps = [];
+    for (const square of taps) this.squareTap.emit(square);
   }
 
   squareNameFor(square: number): string {
@@ -142,19 +198,43 @@ export class Board {
 
   /**
    * Reconciles the tracked piece list against a new board snapshot. A 'move' update replays
-   * `move`'s path hop by hop (sliding the mover and fading out each captured piece as it's
-   * passed, since every hop's landing square is in a straight diagonal line through the
-   * captured square — a plain position transition already reads as "jumping over it"). A
-   * 'reset' (new game / undo) snaps straight to the new board with no animation.
+   * `move`'s path hop by hop: the mover is picked up, slides from square to square, and each
+   * captured piece fades out as the mover passes over it. A 'reset' (new game / undo) snaps
+   * straight to the new board with no animation.
+   *
+   * Moves never cut each other short: one that arrives while another is still playing waits
+   * its turn in `queue`. (GameService already holds the next move back until `settled`.)
    */
-  private async reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): Promise<void> {
-    const token = ++this.animationToken;
+  private reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): void {
+    const shownPath = this.shownPath;
+    this.shownPath = [];
 
     if (kind !== 'move' || !move || this.reducedMotion()) {
+      this.generation++;
+      this.queue = Promise.resolve();
+      this.pending = 0;
       this.pieceStates.set(this.freshPieces(board));
+      this.releaseHeldTaps();
+      if (kind === 'move' && move) this.settled.emit();
       return;
     }
 
+    const generation = this.generation;
+    this.pending++;
+    this.queue = this.queue
+      .then(() => (generation === this.generation ? this.animate(board, move, shownPath, generation) : undefined))
+      .finally(() => {
+        if (generation !== this.generation) return;
+        this.pending--;
+        if (this.pending === 0) {
+          this.settled.emit();
+          this.releaseHeldTaps();
+        }
+      });
+  }
+
+  private async animate(board: BoardArray, move: Move, shownPath: number[], generation: number): Promise<void> {
+    const stale = () => generation !== this.generation;
     const moverId = this.pieceStates().find((p) => p.square === move.from && !p.captured)?.id;
     if (!moverId) {
       // Nothing to animate from (e.g. first render raced with a move) — just snap.
@@ -163,38 +243,57 @@ export class Board {
     }
 
     const isCapture = move.captures.length > 0;
-    const hopDuration = isCapture ? CAPTURE_HOP_MS : MOVE_HOP_MS;
+    const hopMs = isCapture ? CAPTURE_HOP_MS : MOVE_HOP_MS;
 
-    for (let i = 1; i < move.path.length; i++) {
-      if (token !== this.animationToken) return;
+    // Hops already drawn while the multi-jump was being tapped out: start from there rather
+    // than sliding the piece back to where it started.
+    const continuesShown = shownPath.length > 1 && shownPath.every((sq, i) => move.path[i] === sq);
+    const hopsShown = continuesShown ? shownPath.length - 1 : 0;
+    const jumpedAlready = new Set(move.captures.slice(0, hopsShown));
+    this.pieceStates.update((list) =>
+      list
+        .filter((p) => p.id === moverId || !jumpedAlready.has(p.square))
+        .map((p) => (p.id === moverId ? { ...p, square: move.path[hopsShown], lifted: true, hopMs } : p)),
+    );
+
+    for (let i = hopsShown + 1; i < move.path.length; i++) {
       const to = move.path[i];
-      const capturedSquare = isCapture ? move.captures[i - 1] : null;
+      this.pieceStates.update((list) => list.map((p) => (p.id === moverId ? { ...p, square: to } : p)));
 
-      this.pieceStates.update((list) =>
-        list.map((p) => {
-          if (p.id === moverId) return { ...p, square: to };
-          if (capturedSquare !== null && p.square === capturedSquare) return { ...p, captured: true };
-          return p;
-        }),
-      );
-
-      if (capturedSquare !== null) {
-        // Let the captured piece's fade-out finish on its own clock, in step with the hop
-        // that passes over it, without holding up the next hop of a multi-jump.
-        const sq = capturedSquare;
-        void delay(hopDuration).then(() => {
-          if (token !== this.animationToken) return;
-          this.pieceStates.update((list) => list.filter((p) => !(p.square === sq && p.captured)));
+      if (isCapture) {
+        // The jumped piece starts fading as the mover passes over it, halfway through the hop.
+        const jumped = move.captures[i - 1];
+        void delay(hopMs / 2).then(() => {
+          if (stale()) return;
+          this.pieceStates.update((list) =>
+            list.map((p) => (p.square === jumped && p.id !== moverId ? { ...p, captured: true } : p)),
+          );
+        });
+        void delay(hopMs / 2 + CAPTURE_FADE_MS).then(() => {
+          if (stale()) return;
+          this.pieceStates.update((list) => list.filter((p) => !(p.square === jumped && p.captured)));
         });
       }
 
-      await delay(hopDuration);
-      if (token !== this.animationToken) return;
+      await delay(hopMs);
+      if (stale()) return;
     }
 
-    if (move.promotes) {
-      this.pieceStates.update((list) => list.map((p) => (p.id === moverId ? { ...p, king: true } : p)));
-    }
+    this.pieceStates.update((list) =>
+      list.map((p) => (p.id === moverId ? { ...p, lifted: false, hopMs: undefined, king: p.king || move.promotes } : p)),
+    );
+
+    // Whatever happened along the way, end up showing exactly the real board.
+    const shown = this.pieceStates()
+      .filter((p) => !p.captured)
+      .map((p) => `${p.square}:${p.color}:${p.king}`)
+      .sort()
+      .join();
+    const real = this.freshPieces(board)
+      .map((p) => `${p.square}:${p.color}:${p.king}`)
+      .sort()
+      .join();
+    if (shown !== real) this.pieceStates.set(this.freshPieces(board));
   }
 }
 

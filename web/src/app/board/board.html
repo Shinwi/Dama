@@ -33,6 +33,8 @@
       <span
         class="piece"
         [class.captured]="piece.captured"
+        [class.lifted]="piece.lifted"
+        [style.transition-duration.ms]="piece.hopMs ?? null"
         [style.top.%]="piece.top"
         [style.left.%]="piece.left"
         data-testid="piece"
