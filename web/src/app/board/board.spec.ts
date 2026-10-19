@@ -85,4 +85,47 @@ describe('Board move animation', () => {
     await fixture.whenStable();
     expect(renderedPieces(fixture)).toEqual(expectedPieces(afterCapture));
   });
+
+  it('draws a multi-jump in progress on the square it has reached, minus what it jumped', async () => {
+    const start = boardFrom({ light: ['c3'], dark: ['d4', 'f6', 'f8', 'j10'] });
+    await show(start, 'reset', null);
+
+    // c3 → e5 tapped, c3xe5xg7xe9 not finished yet: nothing has been played.
+    fixture.componentRef.setInput('pathSoFar', [parseSquare('c3'), parseSquare('e5')]);
+    fixture.componentRef.setInput('capturedSoFar', [parseSquare('d4')]);
+    await fixture.whenStable();
+    expect(renderedPieces(fixture)).toEqual(['e5:light', 'f6:dark', 'f8:dark', 'j10:dark']);
+
+    // The selection is dropped without a move (e.g. strict mode toggled): back to the board.
+    fixture.componentRef.setInput('pathSoFar', []);
+    fixture.componentRef.setInput('capturedSoFar', []);
+    await fixture.whenStable();
+    expect(renderedPieces(fixture)).toEqual(expectedPieces(start));
+  });
+
+  it('finishes a multi-jump from where the in-progress drawing left the piece', async () => {
+    const start = boardFrom({ light: ['c3'], dark: ['d4', 'f6', 'f8', 'j10'] });
+    await show(start, 'reset', null);
+
+    fixture.componentRef.setInput('pathSoFar', [
+      parseSquare('c3'),
+      parseSquare('e5'),
+      parseSquare('g7'),
+    ]);
+    fixture.componentRef.setInput('capturedSoFar', [parseSquare('d4'), parseSquare('f6')]);
+    await fixture.whenStable();
+
+    // Last hop tapped: the move is played and the selection cleared in the same update.
+    const capture = onlyMove(start, LIGHT, 'c3xe5xg7xe9');
+    const afterCapture = applyMove(start, capture);
+    fixture.componentRef.setInput('pathSoFar', []);
+    fixture.componentRef.setInput('capturedSoFar', []);
+    await show(afterCapture, 'move', capture);
+
+    // Only the last hop (over f8, now fading) is left to slide: the piece never jumps back to c3.
+    expect(renderedPieces(fixture)).toEqual(['e9:light', 'j10:dark']);
+    await wait(500);
+    await fixture.whenStable();
+    expect(renderedPieces(fixture)).toEqual(expectedPieces(afterCapture));
+  });
 });

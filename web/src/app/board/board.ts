@@ -42,6 +42,8 @@ export class Board {
   readonly flipped = input(false);
   readonly selected = input<number | null>(null);
   readonly pathSoFar = input<number[]>([]);
+  /** Pieces already jumped by the multi-jump in progress (one per hop of `pathSoFar`). */
+  readonly capturedSoFar = input<number[]>([]);
   readonly landingDots = input<number[]>([]);
   readonly captureRings = input<number[]>([]);
   readonly compulsoryRings = input<number[]>([]);
@@ -57,6 +59,8 @@ export class Board {
   private animating = false;
   /** The board the latest `reconcile()` is heading for — what the pieces show once it's done. */
   private targetBoard: BoardArray | null = null;
+  /** The last in-progress multi-jump path drawn, so its move's slide can pick up from there. */
+  private shownPath: number[] = [];
 
   readonly cells = computed<CellView[]>(() => {
     const board = this.board();
@@ -92,9 +96,23 @@ export class Board {
     return result;
   });
 
+  /**
+   * The tracked pieces, plus a multi-jump in progress: until the last hop is tapped nothing
+   * has been played, but the moving piece is drawn on the square it has reached and the
+   * pieces it has jumped fade out, so each tap visibly does something.
+   */
   readonly pieces = computed<PieceView[]>(() => {
     const flipped = this.flipped();
-    return this.pieceStates().map((piece) => {
+    const path = this.pathSoFar();
+    const jumping = path.length > 1;
+    const captured = new Set(this.capturedSoFar());
+    return this.pieceStates().map((state) => {
+      let piece = state;
+      if (jumping && piece.square === path[0] && !piece.captured) {
+        piece = { ...piece, square: path[path.length - 1] };
+      } else if (jumping && captured.has(piece.square)) {
+        piece = { ...piece, captured: true };
+      }
       const row = rowOf(piece.square);
       const col = colOf(piece.square);
       const visualRow = flipped ? row : 9 - row;
@@ -104,6 +122,13 @@ export class Board {
   });
 
   constructor() {
+    effect(() => {
+      const path = this.pathSoFar();
+      // Not cleared when the selection empties: that's also what happens when the move is
+      // committed, and reconcile() needs the path then. A fresh selection clears it instead.
+      if (path.length > 1) this.shownPath = path;
+      else if (path.length === 1) this.shownPath = [];
+    });
     effect(() => {
       const board = this.board();
       const kind = this.updateKind();
@@ -159,8 +184,10 @@ export class Board {
   private async reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): Promise<void> {
     const token = ++this.animationToken;
     const interrupted = this.animating ? this.targetBoard : null;
+    const shownPath = this.shownPath;
     this.animating = false;
     this.targetBoard = board;
+    this.shownPath = [];
 
     if (kind !== 'move' || !move || this.reducedMotion()) {
       this.pieceStates.set(this.freshPieces(board));
@@ -182,7 +209,20 @@ export class Board {
     const isCapture = move.captures.length > 0;
     const hopDuration = isCapture ? CAPTURE_HOP_MS : MOVE_HOP_MS;
 
-    for (let i = 1; i < move.path.length; i++) {
+    // Hops already drawn while the multi-jump was being tapped out: start from there rather
+    // than sliding the piece back to where it started.
+    const continuesShown = shownPath.length > 1 && shownPath.every((sq, i) => move.path[i] === sq);
+    const hopsShown = continuesShown ? shownPath.length - 1 : 0;
+    if (hopsShown > 0) {
+      const jumped = new Set(move.captures.slice(0, hopsShown));
+      this.pieceStates.update((list) =>
+        list
+          .filter((p) => p.id === moverId || !jumped.has(p.square))
+          .map((p) => (p.id === moverId ? { ...p, square: move.path[hopsShown] } : p)),
+      );
+    }
+
+    for (let i = hopsShown + 1; i < move.path.length; i++) {
       if (token !== this.animationToken) return;
       const to = move.path[i];
       const capturedSquare = isCapture ? move.captures[i - 1] : null;

@@ -27,6 +27,13 @@ export class App {
 
   protected readonly selection = computed(() => this.game.selection());
 
+  /** Pieces jumped so far by a multi-jump that's still being tapped out, hop by hop. */
+  protected readonly capturedSoFar = computed(() => {
+    const { path, candidateMoves } = this.game.selection();
+    if (path.length < 2 || candidateMoves.length === 0) return [];
+    return candidateMoves[0].captures.slice(0, path.length - 1);
+  });
+
   protected readonly landingDots = computed(() => this.nextSquares(false));
   protected readonly captureRings = computed(() => this.nextSquares(true));
 
