@@ -21,9 +21,12 @@
           @if (cell.isLandingDot) {
             <span class="dot" aria-hidden="true"></span>
           }
+          <ng-container *ngTemplateOutlet="coordinates; context: { $implicit: cell }" />
         </button>
       } @else {
-        <div class="square filler" aria-hidden="true"></div>
+        <div class="square filler" aria-hidden="true">
+          <ng-container *ngTemplateOutlet="coordinates; context: { $implicit: cell }" />
+        </div>
       }
     }
   </div>
@@ -51,3 +54,13 @@
     }
   </div>
 </div>
+
+<!-- Rank numbers down the left edge, file letters along the bottom, as the board is drawn. -->
+<ng-template #coordinates let-cell>
+  @if (cell.rankLabel) {
+    <span class="coord coord-rank" aria-hidden="true">{{ cell.rankLabel }}</span>
+  }
+  @if (cell.fileLabel) {
+    <span class="coord coord-file" aria-hidden="true">{{ cell.fileLabel }}</span>
+  }
+</ng-template>

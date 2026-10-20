@@ -160,3 +160,48 @@ describe('Board move animation', () => {
     expect(settled).toBe(1);
   });
 });
+
+describe('Board coordinates', () => {
+  let fixture: ComponentFixture<Board>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(Board);
+    fixture.componentRef.setInput('board', boardFrom({}));
+  });
+
+  const labels = (selector: string): string =>
+    [...fixture.nativeElement.querySelectorAll(selector)]
+      .map((e: Element) => e.textContent?.trim())
+      .join(' ');
+
+  it('labels files a-j along the bottom and ranks 10-1 down the left, playing Light', async () => {
+    await fixture.whenStable();
+    expect(labels('.coord-file')).toBe('a b c d e f g h i j');
+    expect(labels('.coord-rank')).toBe('10 9 8 7 6 5 4 3 2 1');
+    // The bottom-left square is a1, and it carries both labels.
+    const a1 = fixture.nativeElement.querySelector('button[data-square="a1"]');
+    expect(a1.querySelector('.coord-file')?.textContent?.trim()).toBe('a');
+    expect(a1.querySelector('.coord-rank')?.textContent?.trim()).toBe('1');
+  });
+
+  it('follows the board when it is flipped (playing Dark)', async () => {
+    fixture.componentRef.setInput('flipped', true);
+    await fixture.whenStable();
+    expect(labels('.coord-file')).toBe('j i h g f e d c b a');
+    expect(labels('.coord-rank')).toBe('1 2 3 4 5 6 7 8 9 10');
+    const j10 = fixture.nativeElement.querySelector('button[data-square="j10"]');
+    expect(j10.querySelector('.coord-file')?.textContent?.trim()).toBe('j');
+    expect(j10.querySelector('.coord-rank')?.textContent?.trim()).toBe('10');
+  });
+
+  it('keeps the labels out of the way of screen readers and taps', async () => {
+    await fixture.whenStable();
+    const coords = [...fixture.nativeElement.querySelectorAll('.coord')] as HTMLElement[];
+    expect(coords).toHaveLength(20);
+    expect(coords.every((c) => c.getAttribute('aria-hidden') === 'true')).toBe(true);
+  });
+});

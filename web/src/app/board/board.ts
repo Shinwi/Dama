@@ -1,4 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { colOf, rowOf, squareName } from '../../engine/board';
 import { BoardArray, Move } from '../../engine/types';
 
@@ -13,6 +14,10 @@ interface CellView {
   isCaptureRing: boolean;
   isCompulsoryRing: boolean;
   isLastMove: boolean;
+  /** File letter shown in the corner of a bottom-row square, as the board is drawn. */
+  fileLabel: string | null;
+  /** Rank number shown in the corner of a left-column square, as the board is drawn. */
+  rankLabel: string | null;
 }
 
 interface PieceState {
@@ -32,6 +37,8 @@ interface PieceView extends PieceState {
   left: number;
 }
 
+const FILES = 'abcdefghij';
+
 const MOVE_HOP_MS = 170;
 const CAPTURE_HOP_MS = 210;
 /** How long a jumped piece takes to fade out, starting as the mover passes over it. */
@@ -39,6 +46,7 @@ const CAPTURE_FADE_MS = 210;
 
 @Component({
   selector: 'app-board',
+  imports: [NgTemplateOutlet],
   templateUrl: './board.html',
   styleUrl: './board.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -103,6 +111,8 @@ export class Board {
           isCaptureRing: playable && rings.has(square),
           isCompulsoryRing: playable && compulsory.has(square),
           isLastMove: playable && lastMoveSquares.has(square),
+          fileLabel: visualRow === 9 ? FILES[col] : null,
+          rankLabel: visualCol === 0 ? String(row + 1) : null,
         });
       }
     }
