@@ -1,7 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
-import { isKing } from '../../engine/board';
+import { isKing, squareName } from '../../engine/board';
 import { DARK, LIGHT, Move } from '../../engine/types';
 import { defaultSettings, GameController, Settings } from './game-controller';
 
@@ -49,6 +49,8 @@ export class GameService {
   private updateKindValue: 'reset' | 'move' = 'reset';
 
   readonly thinking = signal(false);
+  /** What just happened (a move, Undo, New game) in words, for screen readers to announce. */
+  readonly announcement = signal('');
   /** A move is still playing out on the board: nobody can move until it has landed. */
   readonly moving = signal(false);
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
@@ -110,7 +112,10 @@ export class GameService {
       const justPlayed = this.updateKind() === 'move';
       if (move && move !== this.lastAnnouncedMove) {
         this.lastAnnouncedMove = move;
-        if (justPlayed) this.announceMove(move, settings);
+        if (justPlayed) {
+          this.announceMove(move, settings);
+          this.announcement.set(describeMove(move, settings));
+        }
       }
     });
 
@@ -154,6 +159,7 @@ export class GameService {
     this.abandonComputerMove();
     this.stopMoving();
     this.updateKindValue = 'reset';
+    this.announcement.set('Your last move was taken back.');
     this.bump();
   }
 
@@ -162,6 +168,7 @@ export class GameService {
     this.abandonComputerMove();
     this.stopMoving();
     this.updateKindValue = 'reset';
+    this.announcement.set('New game.');
     this.bump();
     saveSettings(this.controller.settings);
     void this.maybeTriggerComputer();
@@ -259,6 +266,29 @@ export class GameService {
   private bump(): void {
     this.version.update((v) => v + 1);
   }
+}
+
+/**
+ * A move in words, e.g. "Computer played c7 to b6." or "You played c3 takes e5 takes g7,
+ * 2 pieces captured, promoted to king." Vs the computer it says "You"/"Computer"; in 1v1
+ * it names the side.
+ */
+export function describeMove(move: Move, settings: Settings): string {
+  const side = Math.sign(move.piece);
+  const who =
+    settings.mode === 'computer'
+      ? side === settings.playerSide
+        ? 'You'
+        : 'Computer'
+      : side === LIGHT
+        ? 'Light'
+        : 'Dark';
+  const route = move.path.map(squareName).join(move.captures.length > 0 ? ' takes ' : ' to ');
+  const details: string[] = [];
+  if (move.captures.length > 1) details.push(`${move.captures.length} pieces captured`);
+  if (move.capturedKing) details.push('a king captured');
+  if (move.promotes) details.push('promoted to king');
+  return `${who} played ${[route, ...details].join(', ')}.`;
 }
 
 function sameMove(a: Move, b: Move): boolean {

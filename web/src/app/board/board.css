@@ -48,6 +48,12 @@
   cursor: pointer;
 }
 
+/* Keyboard focus: an accent ring inside the square (outside would be clipped by the board). */
+.square:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: -3px;
+}
+
 .square.selected {
   box-shadow: inset 0 0 0 3px var(--color-saffron);
 }

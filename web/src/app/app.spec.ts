@@ -2,6 +2,8 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { App, describeGameOver } from './app';
 import { defaultSettings } from './game/game-controller';
+import { GameService } from './game/game.service';
+import { boardFrom } from '../engine/board';
 import { DARK, LIGHT } from '../engine/types';
 
 describe('App', () => {
@@ -46,6 +48,28 @@ describe('App', () => {
     const pvp = TestBed.createComponent(App);
     pvp.detectChanges();
     expect(undoButton(pvp)).toBeUndefined();
+  });
+
+  it('moves focus to "New game" when the game ends', async () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const game = TestBed.inject(GameService);
+    const controller = game['controller'];
+    // Dark has no pieces left and is to move: Light has won.
+    controller.state = { ...controller.state, board: boardFrom({ light: ['c3'] }), toMove: DARK };
+    game['bump']();
+    await fixture.whenStable();
+
+    const dialog = fixture.nativeElement.querySelector('[role="dialog"]');
+    expect(dialog.getAttribute('aria-labelledby')).toBe('game-over-title');
+    expect(document.activeElement?.textContent?.trim()).toBe('New game');
+  });
+
+  it('has a live region for move announcements', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const region = fixture.nativeElement.querySelector('[data-testid="announcement"]');
+    expect(region.getAttribute('aria-live')).toBe('polite');
   });
 
   it('does not show the game-over overlay while a game is ongoing', () => {

@@ -1,8 +1,20 @@
-import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
-import { colOf, rowOf, squareName } from '../../engine/board';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
+import { colOf, isKing, rowOf, squareName } from '../../engine/board';
 import { BoardArray, Move } from '../../engine/types';
 
 interface CellView {
+  /** Position as drawn: visualRow * 10 + visualCol, top-left first. */
   key: number;
   square: number;
   playable: boolean;
@@ -13,7 +25,14 @@ interface CellView {
   isCaptureRing: boolean;
   isCompulsoryRing: boolean;
   isLastMove: boolean;
+  /** What a screen reader says for the square: its name, what's on it, and its state. */
+  label: string;
+  /** The board is a single Tab stop: only the square that has (or last had) focus is 0. */
+  tabIndex: 0 | -1;
 }
+
+/** The drawn bottom-left square (a1, or j10 when flipped) holds the Tab stop until another is focused. */
+const DEFAULT_FOCUS_KEY = 90;
 
 interface PieceState {
   id: string;
@@ -84,6 +103,7 @@ export class Board {
     const rings = new Set(this.captureRings());
     const compulsory = new Set(this.compulsoryRings());
     const lastMoveSquares = new Set(this.lastMove()?.path ?? []);
+    const focusKey = this.focusKey();
 
     const result: CellView[] = [];
     for (let visualRow = 0; visualRow < 10; visualRow++) {
@@ -92,8 +112,9 @@ export class Board {
         const col = flipped ? 9 - visualCol : visualCol;
         const square = row * 10 + col;
         const playable = (row + col) % 2 === 0;
-        result.push({
-          key: visualRow * 10 + visualCol,
+        const key = visualRow * 10 + visualCol;
+        const cell = {
+          key,
           square,
           playable,
           name: playable ? squareName(square) : '',
@@ -103,11 +124,17 @@ export class Board {
           isCaptureRing: playable && rings.has(square),
           isCompulsoryRing: playable && compulsory.has(square),
           isLastMove: playable && lastMoveSquares.has(square),
-        });
+          tabIndex: key === focusKey ? 0 : -1,
+        } as const;
+        result.push({ ...cell, label: playable ? describeSquare(cell, board[square]) : '' });
       }
     }
     return result;
   });
+
+  /** Drawn position (CellView.key) of the square that is the board's Tab stop. */
+  private readonly focusKey = signal(DEFAULT_FOCUS_KEY);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   /**
    * The tracked pieces, plus a multi-jump in progress: until the last hop is tapped nothing
@@ -164,6 +191,44 @@ export class Board {
       return;
     }
     this.squareTap.emit(cell.square);
+  }
+
+  /** Keeps the Tab stop on whichever square last had focus (by Tab, arrow keys or a tap). */
+  onFocus(cell: CellView): void {
+    this.focusKey.set(cell.key);
+  }
+
+  /**
+   * Arrow keys move focus between playable squares as the board is drawn (so also when it's
+   * flipped): left/right two columns along the row, up/down one row diagonally. Enter and
+   * Space are the button's own click, i.e. a tap.
+   */
+  onKeydown(event: KeyboardEvent, cell: CellView): void {
+    const row = Math.floor(cell.key / 10);
+    const col = cell.key % 10;
+    let target: [number, number];
+    switch (event.key) {
+      case 'ArrowLeft':
+        target = [row, col - 2];
+        break;
+      case 'ArrowRight':
+        target = [row, col + 2];
+        break;
+      case 'ArrowUp':
+        target = [row - 1, col < 9 ? col + 1 : col - 1];
+        break;
+      case 'ArrowDown':
+        target = [row + 1, col > 0 ? col - 1 : col + 1];
+        break;
+      default:
+        return;
+    }
+    event.preventDefault();
+    const [toRow, toCol] = target;
+    if (toRow < 0 || toRow > 9 || toCol < 0 || toCol > 9) return;
+    const key = toRow * 10 + toCol;
+    this.focusKey.set(key);
+    this.host.nativeElement.querySelector<HTMLElement>(`[data-key="${key}"]`)?.focus();
   }
 
   private releaseHeldTaps(): void {
@@ -295,6 +360,20 @@ export class Board {
       .join();
     if (shown !== real) this.pieceStates.set(this.freshPieces(board));
   }
+}
+
+/** E.g. "b4, light man", "c5, empty, you can move here", "a5, light man, must capture". */
+function describeSquare(cell: Omit<CellView, 'label'>, contents: number): string {
+  const parts = [cell.name];
+  if (contents === 0) parts.push('empty');
+  else parts.push(`${contents > 0 ? 'light' : 'dark'} ${isKing(contents) ? 'king' : 'man'}`);
+  if (cell.selected) parts.push('selected');
+  else if (cell.onPath) parts.push('on the chosen route');
+  if (cell.isCompulsoryRing) parts.push('must capture');
+  if (cell.isLandingDot) parts.push('you can move here');
+  if (cell.isCaptureRing) parts.push('you can capture by moving here');
+  if (cell.isLastMove) parts.push('part of the last move');
+  return parts.join(', ');
 }
 
 function delay(ms: number): Promise<void> {

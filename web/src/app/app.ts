@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, viewChild } from '@angular/core';
 import { Board } from './board/board';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
@@ -26,6 +26,14 @@ export class App {
   });
 
   protected readonly selection = computed(() => this.game.selection());
+
+  private readonly gameOverButton = viewChild<ElementRef<HTMLButtonElement>>('gameOverButton');
+
+  constructor() {
+    // When the game-over card appears, move keyboard (and screen reader) focus to its
+    // "New game" button, rather than leaving it on the board behind the card.
+    effect(() => this.gameOverButton()?.nativeElement.focus());
+  }
 
   /** Pieces jumped so far by a multi-jump that's still being tapped out, hop by hop. */
   protected readonly capturedSoFar = computed(() => {
