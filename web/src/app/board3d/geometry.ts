@@ -111,14 +111,29 @@ export function shortestTurn(from: number, to: number): number {
   return delta;
 }
 
+/** 0 for a square or wide view, rising to 1 for a phone held upright (full screen). */
+function tallness(aspect: number): number {
+  return Math.min(1, Math.max(0, (1 - aspect) / 0.5));
+}
+
 /**
  * How far away the camera has to be for the board and the captured piles beside it to fit
- * the view, for a vertical field of view of `fovDeg` and a width/height `aspect`.
+ * the view, for a vertical field of view of `fovDeg` and a width/height `aspect`. On a tall
+ * view, only the board itself has to fit across: the piles may be cut off at the sides.
  */
 export function fitDistance(fovDeg: number, aspect: number): number {
   const halfV = (fovDeg * Math.PI) / 360;
   const halfH = Math.atan(Math.tan(halfV) * aspect);
-  return Math.max(8.6 / Math.tan(halfH), 6.9 / Math.tan(halfV));
+  const across = 8.6 - 2.1 * tallness(aspect);
+  return Math.max(across / Math.tan(halfH), 6.9 / Math.tan(halfV));
+}
+
+/**
+ * The camera's angle from straight down, at rest. On a tall view it looks down more steeply,
+ * so the board fills the height instead of sitting in a band across the middle.
+ */
+export function cameraTilt(aspect: number): number {
+  return 0.92 - 0.36 * tallness(aspect);
 }
 
 export function easeInOutCubic(t: number): number {

@@ -1,6 +1,6 @@
 import { createInitialBoard, parseSquare } from '../../engine/board';
 import { DARK, LIGHT } from '../../engine/types';
-import { capturedDiscs, fitDistance, hopDurations, pileSlot, shortestTurn, squareToWorld, worldToSquare } from './geometry';
+import { cameraTilt, capturedDiscs, fitDistance, hopDurations, pileSlot, shortestTurn, squareToWorld, worldToSquare } from './geometry';
 
 describe('3D board geometry', () => {
   it('puts a1 at the near left corner and j10 at the far right, as Light sees it', () => {
@@ -57,5 +57,11 @@ describe('3D board geometry', () => {
 
   it('backs the camera off further on a narrow screen', () => {
     expect(fitDistance(38, 0.6)).toBeGreaterThan(fitDistance(38, 1));
+  });
+
+  it('looks down more steeply on a tall (full-screen phone) view', () => {
+    expect(cameraTilt(1)).toBeCloseTo(0.92);
+    expect(cameraTilt(1.6)).toBeCloseTo(0.92);
+    expect(cameraTilt(0.5)).toBeLessThan(cameraTilt(0.8));
   });
 });

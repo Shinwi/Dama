@@ -60,6 +60,7 @@ function saveTurnTable(turnTable: boolean): void {
   templateUrl: './board3d.html',
   styleUrl: './board3d.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { '[class.fill]': 'fullscreen()' },
 })
 export class Board3d {
   readonly board = input.required<BoardArray>();
@@ -77,9 +78,13 @@ export class Board3d {
   /** 1v1 on one device: "Turn the table" is offered. */
   readonly pvp = input(false);
   readonly mood = input<Mood>(null);
+  /** Shown full screen: the board fills its container instead of being a square. */
+  readonly fullscreen = input(false);
 
   readonly squareTap = output<number>();
   readonly settled = output<void>();
+  /** The full-screen button: the app decides what goes full screen (the board and its status line). */
+  readonly fullscreenToggle = output<void>();
 
   readonly unavailable = signal(false);
   readonly turnTable = signal(loadTurnTable());

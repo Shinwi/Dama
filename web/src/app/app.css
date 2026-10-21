@@ -130,6 +130,29 @@
   border-radius: var(--radius-lg);
 }
 
+/* The 3D board in full screen: the status line and piece counts on top, the board filling
+   the rest. `fill-window` is the fallback where real full screen isn't allowed. */
+.board-column.fullscreen {
+  --color-text: #f6e9cc;
+  --color-text-muted: #b9a988;
+  gap: 4px;
+  padding: 8px 8px env(safe-area-inset-bottom, 0);
+  background: #07050f;
+  color: var(--color-text);
+}
+
+.board-column.fill-window {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+}
+
+.board-column.fullscreen .board-wrap.three-d {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+}
+
 .board-3d-loading {
   display: grid;
   place-items: center;

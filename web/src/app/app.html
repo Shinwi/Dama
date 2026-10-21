@@ -4,7 +4,12 @@
   </header>
 
   <div class="layout">
-    <div class="board-column">
+    <div
+      class="board-column"
+      #boardColumn
+      [class.fullscreen]="fullscreen() !== 'off'"
+      [class.fill-window]="fullscreen() === 'window'"
+    >
       <p class="status" data-testid="status" aria-live="polite">{{ statusText() }}</p>
       <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
 
@@ -30,6 +35,8 @@
               [turnSide]="game.state().toMove"
               [pvp]="game.settings().mode === 'pvp'"
               [mood]="mood()"
+              [fullscreen]="fullscreen() !== 'off'"
+              (fullscreenToggle)="toggleFullscreen()"
               (squareTap)="onSquareTap($event)"
               (settled)="game.boardSettled()"
             ></app-board-3d>

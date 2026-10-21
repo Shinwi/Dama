@@ -11,6 +11,7 @@ import {
   capturedDiscs,
   easeInOutCubic,
   easeOutBack,
+  cameraTilt,
   fitDistance,
   hopDurations,
   hopHeight,
@@ -87,8 +88,6 @@ interface Petal {
 
 const LANTERN = new THREE.Vector3(-7.4, 5.4, -1.2);
 const CAMERA_FOV = 38;
-/** Angle from straight down to the camera, at rest. */
-const CAMERA_TILT = 0.92;
 const TARGET = new THREE.Vector3(0, -0.35, 0);
 const PETAL_COUNT = 240;
 /** In low-power mode, how often to draw a frame while nothing is moving. */
@@ -376,14 +375,14 @@ export class DamaScene {
 
   /** Back to the view from the current side, after the player has orbited or zoomed. */
   resetView(): void {
-    void this.sweep({ theta: this.restTheta(), phi: CAMERA_TILT, radius: this.fit() }, 900);
+    void this.sweep({ theta: this.restTheta(), phi: this.tilt(), radius: this.fit() }, 900);
   }
 
   /** The camera swoops down onto the table from high above. */
   intro(): void {
     const theta = this.restTheta();
     this.placeCamera(theta - 1.25, 0.12, this.fit() * 1.75);
-    void this.sweep({ theta, phi: CAMERA_TILT, radius: this.fit() }, 2600);
+    void this.sweep({ theta, phi: this.tilt(), radius: this.fit() }, 2600);
   }
 
   setMood(mood: Mood): void {
@@ -1168,6 +1167,10 @@ export class DamaScene {
     return fitDistance(CAMERA_FOV, Math.max(0.5, this.camera.aspect));
   }
 
+  private tilt(): number {
+    return cameraTilt(this.camera.aspect);
+  }
+
   private placeCamera(theta: number, phi: number, radius: number): void {
     const offset = new THREE.Vector3().setFromSphericalCoords(radius, phi, theta);
     this.camera.position.copy(TARGET).add(offset);
@@ -1201,7 +1204,7 @@ export class DamaScene {
     const fit = this.fit();
     this.controls.minDistance = fit * 0.55;
     this.controls.maxDistance = fit * 1.4;
-    if (!this.sweeping) this.placeCamera(new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(TARGET)).theta, CAMERA_TILT, fit);
+    if (!this.sweeping) this.placeCamera(new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(TARGET)).theta, this.tilt(), fit);
     const scale = this.renderer.getDrawingBufferSize(new THREE.Vector2()).y / (2 * Math.tan((CAMERA_FOV * Math.PI) / 360));
     this.sparks.setScale(scale);
     this.dust.setScale(scale);

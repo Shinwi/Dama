@@ -54,3 +54,38 @@ test('switching back to 2D keeps the position', async ({ page }) => {
   await expect(page.getByTestId('board-3d-canvas')).toHaveCount(0);
   await expect(page.locator('[data-testid="piece"][data-square="a5"][data-color="light"]')).toBeVisible();
 });
+
+test('full screen shows the board and its status line, and moves still play', async ({ page }) => {
+  await open3d(page);
+  await page.getByRole('button', { name: 'Full screen' }).click();
+
+  const column = page.locator('.board-column');
+  await expect(column).toHaveClass(/fullscreen/);
+  // The 3D board fills (nearly) the whole screen width; the status line is still there.
+  const viewport = page.viewportSize()!;
+  const canvas = await page.getByTestId('board-3d-canvas').boundingBox();
+  expect(canvas!.width).toBeGreaterThan(viewport.width * 0.9);
+  await expect(page.getByTestId('status')).toBeVisible();
+
+  await tapCanvas(page, 'b4');
+  await tapCanvas(page, 'a5');
+  await expect(piece(page, 'a5')).toHaveAttribute('data-color', 'light');
+  await expect(page.getByTestId('status')).toContainText('Dark to move.');
+
+  await page.getByRole('button', { name: 'Exit full screen' }).click();
+  await expect(column).not.toHaveClass(/fullscreen/);
+  expect(await page.evaluate(() => document.fullscreenElement)).toBeNull();
+});
+
+test('without the Fullscreen API (Safari on iPhone), the board fills the window instead', async ({ page }) => {
+  await page.addInitScript(() => {
+    delete (Element.prototype as Partial<Element>).requestFullscreen;
+    Object.defineProperty(Document.prototype, 'fullscreenEnabled', { get: () => false });
+  });
+  await open3d(page);
+  await page.getByRole('button', { name: 'Full screen' }).click();
+  await expect(page.locator('.board-column')).toHaveClass(/fill-window/);
+
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.board-column')).not.toHaveClass(/fullscreen/);
+});
