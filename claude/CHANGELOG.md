@@ -21,8 +21,16 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   - A tap was timed from when its events were handled, not when they happened, so a slow
     frame between press and lift could turn a quick tap into an ignored long press. Now uses
     the events' timestamps.
+- Found by playing (vs computer, after the merge): the computer takes a piece by nfikh, then
+  moves 600 ms later. The nfikh's delayed check (1.2 s later: verify the pieces, square up the
+  piles) compared the scene with the board *at the nfikh*, saw the next move as a mismatch and
+  snapped back to that old position, undoing the move on screen. Delayed checks now only run
+  if no newer position has come since (`DamaScene.revision`). Regression test in
+  `board-3d.spec.ts`, with a new hook `window.dama3d.shown()` (the pieces the scene draws) to
+  compare with the real position. It's a race: without the fix the test fails only some of
+  the time on a software renderer.
 - e2e: games start from the home screen (`startGame()` in `e2e/start.ts`, now with `view`).
-  `tapCanvas` also waits for the square to stay put on screen. 74 unit, 47 engine and 28 e2e
+  `tapCanvas` also waits for the square to stay put on screen. 74 unit, 47 engine and 30 e2e
   runs pass (e2e twice in a row).
 
 ## 2026-10-21 — 3D board: full screen, and a bug hunt by playing games

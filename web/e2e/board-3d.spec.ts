@@ -105,3 +105,48 @@ test('without the Fullscreen API (Safari on iPhone), the board fills the window 
   await page.keyboard.press('Escape');
   await expect(page.locator('.board-column')).not.toHaveClass(/fullscreen/);
 });
+
+/** The pieces the hidden board holds (the real position), in the form `dama3d.shown()` uses. */
+async function realPosition(page: Page): Promise<string[]> {
+  const pieces = await page.locator('[data-testid="piece"]').evaluateAll((elements) =>
+    elements.map((e) => `${e.dataset['square']}:${e.dataset['color']}:${e.dataset['king'] === 'true' ? 'king' : 'man'}`),
+  );
+  return pieces.sort();
+}
+
+/** Plays a square with the keyboard, straight away: no waiting for the board to come to rest. */
+async function press(page: Page, square: string): Promise<void> {
+  await page.locator(`button[data-square="${square}"]`).focus();
+  await page.keyboard.press('Enter');
+}
+
+test('a move made straight after an nfikh plays out, and the scene ends on the real position', async ({ page }) => {
+  await open3d(page);
+  // White's a5 could take b6 but plays a3-b4 instead: Black may take a5 by nfikh.
+  const status = page.getByTestId('status');
+  for (const [from, to, next] of [['b4', 'a5', 'Black'], ['c7', 'b6', 'White'], ['a3', 'b4', 'Black']]) {
+    await press(page, from);
+    await press(page, to);
+    await expect(status).toContainText(`${next} to move.`);
+  }
+
+  // The nfikh, then a move 600 ms later, as the computer plays it, while the nfikh is still
+  // playing out. Timed in the page, since separate key presses from the test can take longer
+  // than that on a slow runner. (A race: without the fix this fails some of the time, not
+  // always, on a software renderer.)
+  await page.evaluate(async () => {
+    const click = (square: string) => document.querySelector<HTMLElement>(`button[data-square="${square}"]`)!.click();
+    click('a5');
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    click('e7');
+    click('d6');
+  });
+  await expect(piece(page, 'd6')).toHaveAttribute('data-color', 'dark');
+  await expect(piece(page, 'a5')).toHaveCount(0);
+
+  // Once everything has landed, the 3D scene shows exactly the real position (it used to snap
+  // back to the position just after the nfikh, undoing the move).
+  await page.waitForTimeout(2000);
+  await page.waitForFunction(() => window.dama3d!.idle());
+  expect(await page.evaluate(() => window.dama3d!.shown())).toEqual(await realPosition(page));
+});

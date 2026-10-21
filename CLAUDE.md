@@ -66,6 +66,7 @@ dama/
   `data-theme="classic|wood|green"`. On the 3D board the same buttons and pieces exist in a
   visually hidden `Board`; `window.dama3d.project('b4')` gives a square's screen position for
   clicking the canvas (`data-testid="board-3d-canvas"`); wait for `window.dama3d.idle()` first.
+  `window.dama3d.shown()` lists the pieces the 3D scene draws, to compare with the real position.
 - No hints about which piece to move (no "must capture" rings): spotting captures, and missed
   ones to take by nfikh, is up to the player.
 - Settings (mode, difficulty, colour, board pattern, 2D/3D view, sound/music, strict mode)

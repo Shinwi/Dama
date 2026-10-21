@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { TeapotGeometry } from 'three/examples/jsm/geometries/TeapotGeometry.js';
+import { squareName } from '../../engine/board';
 import { BoardArray, DARK, LIGHT, Move, Side } from '../../engine/types';
 import { BoardTheme } from '../game/game-controller';
 import {
@@ -131,6 +132,13 @@ export class DamaScene {
   private readonly piles = { 1: [], '-1': [] } as Record<Side, (THREE.Object3D | null)[]>;
   private tweens: Tween[] = [];
   private epoch = 0;
+  /**
+   * Bumped by every new position (snap, move, nfikh). A check scheduled for later (squaring
+   * up the piles, verifying the pieces) only runs if no newer position has come since:
+   * otherwise it would compare against a board that's out of date, and could snap the scene
+   * back to it in the middle of the next move.
+   */
+  private revision = 0;
   private partial: Partial | null = null;
   private partialChain: Promise<void> = Promise.resolve();
   private markers: Markers = { selected: null, path: [], dots: [], rings: [], lastMove: [] };
@@ -234,6 +242,7 @@ export class DamaScene {
    */
   snap(board: BoardArray): void {
     this.epoch++;
+    this.revision++;
     for (const tween of this.tweens) if (!tween.camera) tween.resolve();
     this.tweens = this.tweens.filter((tween) => tween.camera);
     this.partial = null;
@@ -258,6 +267,7 @@ export class DamaScene {
    */
   async playMove(move: Move, board: BoardArray): Promise<void> {
     const epoch = this.epoch;
+    const revision = ++this.revision;
     const stale = () => epoch !== this.epoch || this.disposed;
     await this.partialChain;
     if (stale()) return;
@@ -311,7 +321,7 @@ export class DamaScene {
     this.verify(board);
     // Let the pieces knocked off finish landing before squaring up the piles.
     void this.wait(900).then(() => {
-      if (!stale()) this.syncPiles(board);
+      if (!stale() && revision === this.revision) this.syncPiles(board);
     });
   }
 
@@ -378,10 +388,11 @@ export class DamaScene {
    */
   takeMissing(board: BoardArray): void {
     const epoch = this.epoch;
+    const revision = ++this.revision;
     const taken = this.pieces.filter((p) => p !== this.partial?.piece && board[p.square] === 0);
     for (const piece of taken) void this.knockOff(piece);
     void this.wait(1200).then(() => {
-      if (epoch !== this.epoch || this.disposed) return;
+      if (epoch !== this.epoch || revision !== this.revision || this.disposed) return;
       this.verify(board);
       this.syncPiles(board);
     });
@@ -419,6 +430,16 @@ export class DamaScene {
     this.lanternTarget = mood === 'loss' ? 0.18 : mood === 'win' ? 1.35 : 1;
     if (mood === 'win') this.startPetals();
     if (mood === null) this.clearPetals();
+  }
+
+  /**
+   * The pieces the scene is drawing, e.g. "d6:dark:man", sorted. A testability hook: e2e tests
+   * compare it with the real position (the hidden board), which the scene must catch up to.
+   */
+  shown(): string[] {
+    return this.pieces
+      .map((p) => `${squareName(p.square)}:${p.side === LIGHT ? 'light' : 'dark'}:${p.king ? 'king' : 'man'}`)
+      .sort();
   }
 
   /** Nothing is moving: no piece, no camera sweep. A testability hook for e2e tests to wait on. */
