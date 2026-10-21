@@ -1,5 +1,4 @@
 import { ChangeDetectionStrategy, Component, computed, effect, input, output, signal, untracked } from '@angular/core';
-import { NgTemplateOutlet } from '@angular/common';
 import { colOf, rowOf, squareName } from '../../engine/board';
 import { BoardArray, Move } from '../../engine/types';
 
@@ -14,10 +13,6 @@ interface CellView {
   isCaptureRing: boolean;
   isCompulsoryRing: boolean;
   isLastMove: boolean;
-  /** File letter shown in the corner of a bottom-row square, as the board is drawn. */
-  fileLabel: string | null;
-  /** Rank number shown in the corner of a left-column square, as the board is drawn. */
-  rankLabel: string | null;
 }
 
 interface PieceState {
@@ -46,7 +41,6 @@ const CAPTURE_FADE_MS = 210;
 
 @Component({
   selector: 'app-board',
-  imports: [NgTemplateOutlet],
   templateUrl: './board.html',
   styleUrl: './board.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -83,6 +77,18 @@ export class Board {
   /** The last in-progress multi-jump path drawn, so its move's slide can pick up from there. */
   private shownPath: number[] = [];
 
+  /** Rank numbers down the left of the board, top to bottom as drawn. */
+  readonly rankLabels = computed(() => {
+    const ranks = Array.from({ length: 10 }, (_, i) => String(10 - i));
+    return this.flipped() ? ranks.reverse() : ranks;
+  });
+
+  /** File letters along the bottom of the board, left to right as drawn. */
+  readonly fileLabels = computed(() => {
+    const files = FILES.split('');
+    return this.flipped() ? files.reverse() : files;
+  });
+
   readonly cells = computed<CellView[]>(() => {
     const board = this.board();
     const flipped = this.flipped();
@@ -111,8 +117,6 @@ export class Board {
           isCaptureRing: playable && rings.has(square),
           isCompulsoryRing: playable && compulsory.has(square),
           isLastMove: playable && lastMoveSquares.has(square),
-          fileLabel: visualRow === 9 ? FILES[col] : null,
-          rankLabel: visualCol === 0 ? String(row + 1) : null,
         });
       }
     }

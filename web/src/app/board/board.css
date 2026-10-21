@@ -1,9 +1,20 @@
+/* The board plus its coordinates: rank numbers in a strip on the left, file letters in a strip
+   underneath. It fills its container (App's .board-wrap sets the size). --coord-gutter is
+   global so the game-over overlay in App can line up with the board alone. */
+:host {
+  --frame: min(2.5vw, 10px);
+  display: grid;
+  grid-template-columns: var(--coord-gutter) minmax(0, 1fr);
+  grid-template-rows: auto var(--coord-gutter);
+}
+
 .board {
   position: relative;
-  width: min(100%, 560px, calc(100vh - var(--board-vh-reserve, 170px)));
+  grid-column: 2;
+  grid-row: 1;
+  width: 100%;
   aspect-ratio: 1;
-  margin-inline: auto;
-  border: min(2.5vw, 10px) solid var(--board-frame);
+  border: var(--frame) solid var(--board-frame);
   border-radius: var(--radius-md);
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
@@ -60,42 +71,35 @@
   background: color-mix(in srgb, var(--board-dark-square) 72%, var(--color-saffron) 28%);
 }
 
-/* Coordinates in the corners of the edge squares, in the other square colour so they read on
-   both. Inside the squares, so the board needs no extra space on small phones. Drawn above
-   the pieces layer (which would otherwise cover them), with a halo in the square's own colour
-   so they stay legible over a piece. */
-.coord {
-  position: absolute;
-  z-index: 3;
-  font-size: clamp(8px, 2.4vw, 12px);
-  font-weight: 700;
+/* Each strip has ten equal tracks, inset by the board's frame, so every label sits level with
+   its row or column of squares. */
+.coords {
+  display: grid;
+  place-items: center;
+  font-size: var(--coord-font);
+  font-weight: 600;
   line-height: 1;
-  pointer-events: none;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
   user-select: none;
 }
 
-.coord-rank {
-  top: 4%;
-  left: 5%;
+.coords-ranks {
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-rows: repeat(10, minmax(0, 1fr));
+  padding-block: var(--frame);
+  padding-right: 3px;
+  justify-items: end;
 }
 
-.coord-file {
-  right: 5%;
-  bottom: 3%;
-}
-
-.square:not(.filler) .coord {
-  color: var(--board-light-square);
-  text-shadow:
-    0 0 2px var(--board-dark-square),
-    0 0 1px var(--board-dark-square);
-}
-
-.square.filler .coord {
-  color: var(--board-dark-square);
-  text-shadow:
-    0 0 2px var(--board-light-square),
-    0 0 1px var(--board-light-square);
+.coords-files {
+  grid-column: 2;
+  grid-row: 2;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  padding-inline: var(--frame);
+  padding-top: 3px;
+  align-items: start;
 }
 
 .dot {

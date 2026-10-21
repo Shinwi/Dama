@@ -180,28 +180,24 @@ describe('Board coordinates', () => {
 
   it('labels files a-j along the bottom and ranks 10-1 down the left, playing Light', async () => {
     await fixture.whenStable();
-    expect(labels('.coord-file')).toBe('a b c d e f g h i j');
-    expect(labels('.coord-rank')).toBe('10 9 8 7 6 5 4 3 2 1');
-    // The bottom-left square is a1, and it carries both labels.
-    const a1 = fixture.nativeElement.querySelector('button[data-square="a1"]');
-    expect(a1.querySelector('.coord-file')?.textContent?.trim()).toBe('a');
-    expect(a1.querySelector('.coord-rank')?.textContent?.trim()).toBe('1');
+    expect(labels('.coords-files span')).toBe('a b c d e f g h i j');
+    expect(labels('.coords-ranks span')).toBe('10 9 8 7 6 5 4 3 2 1');
   });
 
   it('follows the board when it is flipped (playing Dark)', async () => {
     fixture.componentRef.setInput('flipped', true);
     await fixture.whenStable();
-    expect(labels('.coord-file')).toBe('j i h g f e d c b a');
-    expect(labels('.coord-rank')).toBe('1 2 3 4 5 6 7 8 9 10');
-    const j10 = fixture.nativeElement.querySelector('button[data-square="j10"]');
-    expect(j10.querySelector('.coord-file')?.textContent?.trim()).toBe('j');
-    expect(j10.querySelector('.coord-rank')?.textContent?.trim()).toBe('10');
+    expect(labels('.coords-files span')).toBe('j i h g f e d c b a');
+    expect(labels('.coords-ranks span')).toBe('1 2 3 4 5 6 7 8 9 10');
   });
 
-  it('keeps the labels out of the way of screen readers and taps', async () => {
+  it('keeps the labels outside the board and hidden from screen readers', async () => {
     await fixture.whenStable();
-    const coords = [...fixture.nativeElement.querySelectorAll('.coord')] as HTMLElement[];
-    expect(coords).toHaveLength(20);
-    expect(coords.every((c) => c.getAttribute('aria-hidden') === 'true')).toBe(true);
+    const board = fixture.nativeElement.querySelector('.board');
+    const strips = [...fixture.nativeElement.querySelectorAll('.coords')] as HTMLElement[];
+    expect(strips).toHaveLength(2);
+    expect(
+      strips.every((s) => s.getAttribute('aria-hidden') === 'true' && !board.contains(s)),
+    ).toBe(true);
   });
 });

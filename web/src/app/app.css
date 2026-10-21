@@ -96,17 +96,18 @@
   font-weight: 700;
 }
 
-app-board {
-  display: block;
-}
-
 .board-wrap {
   position: relative;
+  /* Board plus its coordinate strips: a square that fits the same height budget the board
+     alone used to. The board component fills it. */
+  width: min(100%, calc(560px + var(--coord-gutter)), calc(100vh - var(--board-vh-reserve, 170px)));
+  margin-inline: auto;
 }
 
 .game-over {
   position: absolute;
-  inset: 0;
+  /* Over the board only, not the coordinate strips to its left and below it. */
+  inset: 0 0 var(--coord-gutter) var(--coord-gutter);
   display: flex;
   align-items: center;
   justify-content: center;
