@@ -3,6 +3,45 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-21
+
+Issue #21 (feature request), branch `feature/nfikh-home-screen-classic-board`:
+
+- **Men capture forward only**, on every hop. Side effect: a man's capture that reaches the far
+  row ends there and promotes (it can't jump on backwards), so the old "passes through the far
+  row, stays a man" case can't happen any more — that test now checks promotion instead.
+- **Captures are optional, with nfikh.** `generateLegalMoves` now returns captures *and* plain
+  moves (strict mode only narrows the captures to the longest). `GameState.forfeitable` lists
+  the pieces of the side that just moved that could have captured but didn't (computed in
+  `advanceState` via `forfeitableAfter`); `takeForfeit` removes one, keeps the same side to
+  move and clears the list. `outcome()` doesn't call a side lost while an nfikh would free a
+  move. The AI now searches *turns* (`chooseTurn`: optional nfikh + move; nfikh doesn't
+  change depth or side), and its quiescence search became a stand-pat search, since a capture
+  being available no longer means it's forced. The worker protocol carries `forfeitable` and
+  returns a `Turn`. In the UI, tapping a forfeitable enemy piece takes it (`TapResult`
+  `'nfikh'`); the board fades it out (`updateKind` `'nfikh'`), and the computer pauses 600ms
+  after an nfikh before moving so the player sees it. A note under the status line says what
+  happened, until the other side moves.
+- **No hints about which piece to move**: removed the pulsing "must capture" rings and the
+  "You must capture" status text (they'd also have given missed captures away).
+- **White and black pieces, classic board patterns**: plain discs with a pressed ring; board
+  pattern (`Settings.boardTheme`: classic black & white (default), wood, green), set per board
+  in `board.css`. The UI says White/Black; the code keeps LIGHT/DARK and `data-color`.
+- **Home screen** (`src/app/home/`): opponent → difficulty and colour (vs computer) → board
+  pattern → Start game. The game screen lost its mode/difficulty/colour buttons and gained a
+  summary line and a Menu button. GameService no longer starts the computer from its
+  constructor: a game only starts from the home screen.
+- Rebased onto master after #19 (board coordinates), #20 (screen reader + keyboard play) and
+  #23 (game-over card waits for the last move). Kept this branch's design, plus master's
+  accessibility: square labels now say white/black and no longer say "must capture" (that
+  would give the hint away again); move announcements name White/Black; the nfikh note is an
+  always-present live region. Also fixed a bug of this branch's own: a selected piece that
+  could both capture and move only showed one kind of marker (dots vs rings were decided by
+  its first move).
+- Tests: rule cases updated + new ones for forward-only captures; `nfikh.spec.ts` (engine and
+  AI); controller, service, board and app specs for nfikh and the home screen; e2e specs go
+  through the home screen (`e2e/start.ts`) and cover nfikh and the board pattern.
+
 ## 2026-10-18
 
 - Read `dama-claude-code-prompt.md` (the original spec) and started building phase 1: a

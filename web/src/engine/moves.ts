@@ -36,7 +36,8 @@ function captureHops(
   const row = rowOf(square);
   const col = colOf(square);
 
-  for (const [dr, dc] of ALL_DIAGONALS) {
+  // Men capture forward only; kings capture in every direction.
+  for (const [dr, dc] of pieceIsKing ? ALL_DIAGONALS : forwardDirs(side)) {
     if (!pieceIsKing) {
       const enemyRow = row + dr;
       const enemyCol = col + dc;
@@ -171,28 +172,52 @@ function squaresOf(board: BoardArray, side: Side): number[] {
 }
 
 /**
- * All legal moves for `side`. Capture is compulsory: if any capture exists for any piece,
- * only capture sequences are legal. In strict mode, only the sequence(s) with the most
- * captures (across the whole side) are legal.
+ * All legal moves for `side`. Capturing is optional: simple moves stay legal even when a
+ * capture is available (skipping one leaves the piece open to nfikh, see `game.ts`). In
+ * strict mode, a capture must be one of the sequences that capture the most pieces (across
+ * the whole side).
  */
 export function generateLegalMoves(board: BoardArray, side: Side, strictMode: boolean): Move[] {
   const squares = squaresOf(board, side);
-  const captures: Move[] = [];
+  let captures: Move[] = [];
   for (const square of squares) {
     captures.push(...captureSequencesFrom(board, square, side));
   }
-
-  if (captures.length > 0) {
-    if (!strictMode) return captures;
+  if (strictMode && captures.length > 0) {
     const maxCaptures = Math.max(...captures.map((m) => m.captures.length));
-    return captures.filter((m) => m.captures.length === maxCaptures);
+    captures = captures.filter((m) => m.captures.length === maxCaptures);
   }
 
   const simples: Move[] = [];
   for (const square of squares) {
     simples.push(...simpleMovesFrom(board, square, side));
   }
-  return simples;
+  return [...captures, ...simples];
+}
+
+/** Squares of `side`'s pieces that have at least one capture available. */
+export function capturingSquares(board: BoardArray, side: Side): number[] {
+  return squaresOf(board, side).filter(
+    (square) => captureHops(board, square, side, isKing(board[square]), new Set()).length > 0,
+  );
+}
+
+/**
+ * After `move` is played from `board`, the pieces the opponent may take by nfikh: every
+ * piece that could have captured, if the move captured nothing (the moved piece counted on
+ * the square it moved to). Empty if the move was a capture.
+ */
+export function forfeitableAfter(board: BoardArray, move: Move): number[] {
+  if (move.captures.length > 0) return [];
+  const side = Math.sign(move.piece) as Side;
+  return capturingSquares(board, side).map((square) => (square === move.from ? move.to : square));
+}
+
+/** The board with the piece on `square` taken off it by nfikh. */
+export function removePiece(board: BoardArray, square: number): BoardArray {
+  const next = board.slice();
+  next[square] = 0;
+  return next;
 }
 
 export function applyMove(board: BoardArray, move: Move): BoardArray {

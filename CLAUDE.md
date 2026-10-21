@@ -26,9 +26,11 @@ after and `/claude/PLAN.md` for the live working plan.
 ## Rules
 
 Full plain-language rules: `docs/RULES.md`. Implemented exactly as specified, including:
-compulsory captures, multi-jump men capturing forward/backward, kings flying arbitrary
-distances, strict-mode (max-capture) toggle, promotion only on the move's final landing
-square, and the 50-quiet-move draw rule.
+optional captures punished by *nfikh* (the opponent may take the piece that skipped a capture,
+then moves), men capturing forward only (multi-jumps included), kings flying arbitrary
+distances, strict-mode (max-capture) toggle, promotion on the move's final landing square, and
+the 50-quiet-move draw rule. The UI calls the sides White and Black; the code keeps
+`LIGHT`/`DARK`.
 
 ## Architecture
 
@@ -44,6 +46,7 @@ dama/
                        imports. Unit tested with plain Vitest. rules-cases.json drives the
                        rule tests. Will move to shared/ in phase 3.
     src/app/game/      game flow controller + signals-based GameService
+    src/app/home/      home screen: opponent, difficulty/colour, board pattern, Start game
     src/app/board/     board component (inputs in, square-tap output)
     src/app/ai/        web worker + client wrapping src/engine/ai.ts
     src/app/audio/     synthesized sound engine (Web Audio, no audio files)
@@ -57,5 +60,9 @@ dama/
   Cell values: 0 empty, ±1 man, ±2 king, positive = Light.
 - Testability hooks for Playwright: squares are buttons with `data-square="b4"`; pieces have
   `data-testid="piece"`, `data-square`, `data-color="light|dark"`, `data-king`; status line has
-  `data-testid="status"`.
-- Settings (mode, difficulty, colour, sound/music, strict mode) persist to `localStorage`.
+  `data-testid="status"`; the nfikh message has `data-testid="nfikh-note"`. The board has
+  `data-theme="classic|wood|green"`.
+- No hints about which piece to move (no "must capture" rings): spotting captures, and missed
+  ones to take by nfikh, is up to the player.
+- Settings (mode, difficulty, colour, board pattern, sound/music, strict mode) persist to
+  `localStorage`.

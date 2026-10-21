@@ -35,7 +35,7 @@ describe('describeMove', () => {
 
   it('names the side in 1v1', () => {
     const pvp = { ...defaultSettings(), mode: 'pvp' as const };
-    expect(describeMove(move({ dark: ['c7'] }, DARK, 'b6'), pvp)).toBe('Dark played c7 to b6.');
+    expect(describeMove(move({ dark: ['c7'] }, DARK, 'b6'), pvp)).toBe('Black played c7 to b6.');
   });
 });
 
@@ -47,7 +47,7 @@ describe('GameService announcements', () => {
     TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
     service = TestBed.inject(GameService);
     // The test plays the moves itself; the computer answers at once, with no move.
-    (service as unknown as { ai: unknown }).ai = { chooseMove: async () => null };
+    (service as unknown as { ai: unknown }).ai = { chooseTurn: async () => null };
   });
 
   it('announces the player move, then Undo and New game', async () => {

@@ -39,7 +39,7 @@ describe('GameService move sounds', () => {
     });
     service = TestBed.inject(GameService);
     // The test plays both sides itself; the computer answers at once, with no move.
-    (service as unknown as { ai: unknown }).ai = { chooseMove: async () => null };
+    (service as unknown as { ai: unknown }).ai = { chooseTurn: async () => null };
   });
 
   afterEach(() => localStorage.clear());

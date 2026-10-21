@@ -1,6 +1,6 @@
 import { createInitialBoard } from '../../engine/board';
 import { generateLegalMoves } from '../../engine/moves';
-import { LIGHT, Move } from '../../engine/types';
+import { LIGHT, Turn } from '../../engine/types';
 import { AiClient } from './ai-client';
 import { AiRequest, AiResponse } from './ai-protocol';
 
@@ -32,6 +32,7 @@ describe('AiClient', () => {
   const question = {
     board,
     side: LIGHT,
+    forfeitable: [],
     options: { difficulty: 'novice' as const, strictMode: false },
   };
 
@@ -39,16 +40,18 @@ describe('AiClient', () => {
     const worker = new FakeWorker();
     const client = new AiClient(worker as unknown as Worker);
 
-    const abandoned = client.chooseMove(question);
-    const current = client.chooseMove(question);
+    const abandoned = client.chooseTurn(question);
+    const current = client.chooseTurn(question);
     const [oldId, newId] = worker.requests.map((r) => r.id);
     expect(oldId).not.toBe(newId);
 
     // The worker answers in order: the first (since abandoned) request, then the new one.
-    worker.reply({ id: oldId, move: first });
-    worker.reply({ id: newId, move: second });
+    const firstTurn: Turn = { nfikh: null, move: first };
+    const secondTurn: Turn = { nfikh: null, move: second };
+    worker.reply({ id: oldId, turn: firstTurn });
+    worker.reply({ id: newId, turn: secondTurn });
 
-    expect(await abandoned).toBe(first);
-    expect(await current).toBe(second as Move);
+    expect(await abandoned).toBe(firstTurn);
+    expect(await current).toBe(secondTurn);
   });
 });

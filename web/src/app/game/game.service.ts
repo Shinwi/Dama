@@ -3,11 +3,13 @@ import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, LIGHT, Move } from '../../engine/types';
-import { defaultSettings, GameController, Settings } from './game-controller';
+import { defaultSettings, GameController, Settings, UpdateKind } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
 /** Backstop in case the board never reports a move as settled: no animation is this long. */
 const SETTLE_TIMEOUT_MS = 5000;
+/** When the computer takes a piece by nfikh, how long it pauses before making its move. */
+const NFIKH_PAUSE_MS = 600;
 
 function loadSettings(): Settings {
   const fallback = defaultSettings();
@@ -46,7 +48,7 @@ export class GameService {
   private lastAnnouncedMove: Move | null = null;
   /** Whether the game was already over at the last update, so the result is announced once. */
   private wasOver = false;
-  private updateKindValue: 'reset' | 'move' = 'reset';
+  private updateKindValue: UpdateKind = 'reset';
 
   readonly thinking = signal(false);
   /** What just happened (a move, Undo, New game) in words, for screen readers to announce. */
@@ -71,8 +73,9 @@ export class GameService {
   });
   /**
    * Tells Board whether the latest `state()` is reachable from the previous one by playing
-   * `lastMove()` (so it can slide the piece hop by hop), or is an unrelated jump — new game
-   * or undo — that should just snap to the new position with no animation.
+   * `lastMove()` (so it can slide the piece hop by hop), by taking a piece by nfikh (it fades
+   * out), or is an unrelated jump — new game or undo — that should just snap to the new
+   * position with no animation.
    */
   readonly updateKind = computed(() => {
     this.version();
@@ -89,6 +92,10 @@ export class GameService {
   readonly pieceCounts = computed(() => {
     this.version();
     return this.controller.pieceCounts;
+  });
+  readonly lastNfikh = computed(() => {
+    this.version();
+    return this.controller.lastNfikh;
   });
   readonly canUndo = computed(() => {
     this.version();
@@ -132,14 +139,14 @@ export class GameService {
         else this.audio.win();
       }
     });
-
-    void this.maybeTriggerComputer();
+    // No game starts on its own: the home screen starts one with newGame().
   }
 
   tapSquare(square: number): void {
     if (this.thinking() || this.moving() || !this.isHumanTurn()) return;
-    const completed = this.controller.tapSquare(square);
-    if (completed) this.startMove();
+    const result = this.controller.tapSquare(square);
+    if (result === 'move') this.startMove();
+    if (result === 'nfikh') this.showNfikh();
     this.bump();
   }
 
@@ -200,18 +207,28 @@ export class GameService {
 
     const request = ++this.aiRequest;
     this.thinking.set(true);
-    const reply = await this.ai.chooseMove({
+    const reply = await this.ai.chooseTurn({
       board: this.controller.state.board,
       side: this.controller.state.toMove,
+      forfeitable: this.controller.state.forfeitable,
       options: { difficulty: settings.difficulty, strictMode: settings.strictMode },
     });
     // New game, undo or a strict-mode change while it was thinking: this reply belongs to a
     // position that's gone, and the new one has already been dealt with.
     if (request !== this.aiRequest) return;
+
+    // Taking a piece by nfikh comes first, with a beat so the player sees what happened.
+    if (reply && reply.nfikh !== null && this.controller.state.forfeitable.includes(reply.nfikh)) {
+      this.controller.takeForfeit(reply.nfikh);
+      this.showNfikh();
+      this.bump();
+      await delay(NFIKH_PAUSE_MS);
+      if (request !== this.aiRequest) return;
+    }
     this.thinking.set(false);
 
     // Only ever play a move that's legal in the current position.
-    const move = reply && this.controller.legalMoves.find((m) => sameMove(m, reply));
+    const move = reply && this.controller.legalMoves.find((m) => sameMove(m, reply.move));
     if (move) {
       this.controller.applyExternalMove(move);
       this.startMove();
@@ -223,6 +240,11 @@ export class GameService {
   private abandonComputerMove(): void {
     this.aiRequest++;
     this.thinking.set(false);
+  }
+
+  private showNfikh(): void {
+    this.updateKindValue = 'nfikh';
+    this.audio.capture(1);
   }
 
   private startMove(): void {
@@ -281,14 +303,18 @@ export function describeMove(move: Move, settings: Settings): string {
         ? 'You'
         : 'Computer'
       : side === LIGHT
-        ? 'Light'
-        : 'Dark';
+        ? 'White'
+        : 'Black';
   const route = move.path.map(squareName).join(move.captures.length > 0 ? ' takes ' : ' to ');
   const details: string[] = [];
   if (move.captures.length > 1) details.push(`${move.captures.length} pieces captured`);
   if (move.capturedKing) details.push('a king captured');
   if (move.promotes) details.push('promoted to king');
   return `${who} played ${[route, ...details].join(', ')}.`;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function sameMove(a: Move, b: Move): boolean {

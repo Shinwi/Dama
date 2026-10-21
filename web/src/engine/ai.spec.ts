@@ -35,7 +35,7 @@ describe('chooseMove', () => {
   });
 
   it('plays the only legal move immediately without consulting rng', () => {
-    const board = boardFrom({ light: ['e5'], dark: ['d4'] });
+    const board = boardFrom({ light: ['a3'], dark: ['b4'] }); // a3xc5 is the only move
     const move = chooseMove(board, LIGHT, {
       difficulty: 'very-good',
       strictMode: false,
@@ -47,7 +47,7 @@ describe('chooseMove', () => {
   });
 
   // Light has one man at e5. Moving it to d6 hangs it to Dark's c7 man
-  // (c7xe5, capturing backwards, lands back on the now-empty e5). Moving to
+  // (c7xe5: Dark captures forward, down the board, landing on the now-empty e5). Moving to
   // f6 is safe. A sound engine must not choose the losing move, in this
   // position or its left-right mirror (so an asymmetric direction bug can't
   // pass by luck).

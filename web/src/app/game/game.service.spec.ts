@@ -1,20 +1,27 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { createInitialBoard, squareName } from '../../engine/board';
-import { DARK, LIGHT, Move } from '../../engine/types';
+import { boardFrom, createInitialBoard, parseSquare, squareName } from '../../engine/board';
+import { DARK, LIGHT, Move, Turn } from '../../engine/types';
 import { GameService } from './game.service';
 
 interface Pending {
   side: number;
   resolve: (move: Move | null) => void;
+  resolveTurn: (turn: Turn | null) => void;
 }
 
 /** Replaces the service's AI with one that answers only when the test says so. */
 function controllableAi(service: GameService): Pending[] {
   const pending: Pending[] = [];
   (service as unknown as { ai: unknown }).ai = {
-    chooseMove: (question: { side: number }) =>
-      new Promise<Move | null>((resolve) => pending.push({ side: question.side, resolve })),
+    chooseTurn: (question: { side: number }) =>
+      new Promise<Turn | null>((resolve) =>
+        pending.push({
+          side: question.side,
+          resolve: (move) => resolve(move && { nfikh: null, move }),
+          resolveTurn: resolve,
+        }),
+      ),
   };
   return pending;
 }
@@ -92,5 +99,27 @@ describe('GameService computer replies', () => {
     pending[0].resolve(bogus);
     await flush();
     expect(service.state()).toBe(before);
+  });
+
+  it('takes a piece by nfikh, then plays its move', async () => {
+    const pending = controllableAi(service);
+    const controller = service['controller'];
+    // White c3 could take d4 but plays a1-b2: the computer (Black) may take c3.
+    controller.state = { ...controller.state, board: boardFrom({ light: ['c3', 'a1'], dark: ['d4', 'j10'] }) };
+    tap(service, 'a1', 'b2');
+    service.boardSettled();
+    expect(service.state().forfeitable).toEqual([parseSquare('c3')]);
+
+    const reply = controller.legalMoves.find((m) => squareName(m.to) === 'i9')!;
+    pending[0].resolveTurn({ nfikh: parseSquare('c3'), move: reply });
+    await flush();
+    expect(service.state().board[parseSquare('c3')]).toBe(0);
+    expect(service.updateKind()).toBe('nfikh');
+    expect(service.lastNfikh()).toEqual({ square: parseSquare('c3'), by: DARK });
+    expect(service.state().toMove).toBe(DARK); // the move comes after a pause
+
+    await new Promise((resolve) => setTimeout(resolve, 700));
+    expect(service.lastMove()).toEqual(reply);
+    expect(service.state().toMove).toBe(LIGHT);
   });
 });

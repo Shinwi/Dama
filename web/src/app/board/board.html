@@ -1,4 +1,4 @@
-<div class="board" role="group" aria-label="Dama board" aria-describedby="board-help">
+<div class="board" role="group" aria-label="Dama board" aria-describedby="board-help" [attr.data-theme]="theme()">
   <p id="board-help" class="visually-hidden">
     Use the arrow keys to move between squares, and Enter to pick up a piece or choose where it goes.
   </p>
@@ -19,9 +19,6 @@
           (focus)="onFocus(cell)"
           (keydown)="onKeydown($event, cell)"
         >
-          @if (cell.isCompulsoryRing) {
-            <span class="ring compulsory-ring" aria-hidden="true"></span>
-          }
           @if (cell.isCaptureRing) {
             <span class="ring capture-ring" aria-hidden="true"></span>
           }
