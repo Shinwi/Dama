@@ -13,15 +13,17 @@ import {
 } from '@angular/core';
 import { Board } from './board/board';
 import { Board3d } from './board3d/board3d';
+import { GameSetup, Home } from './home/home';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
+import { squareName } from '../engine/board';
 import { DARK, LIGHT, Outcome } from '../engine/types';
 import { Difficulty } from '../engine/ai';
-import { BoardView, GameMode, Settings } from './game/game-controller';
+import { BoardView, Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Board3d],
+  imports: [Board, Board3d, Home],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -32,6 +34,14 @@ export class App {
 
   protected readonly LIGHT = LIGHT;
   protected readonly DARK = DARK;
+
+  /** The home screen comes first; Start game (or Menu, from the game) switches between them. */
+  protected readonly screen = signal<'home' | 'game'>('home');
+
+  protected readonly setupSummary = computed(() => describeSetup(this.game.settings()));
+
+  /** Says what a piece taken by nfikh means, while it's still news. */
+  protected readonly nfikhNote = computed(() => describeNfikh(this.game.lastNfikh(), this.game.settings()));
 
   protected readonly flipped = computed(() => {
     const settings = this.game.settings();
@@ -93,7 +103,6 @@ export class App {
     const settings = this.game.settings();
     const state = this.game.state();
     const outcome = this.game.outcome();
-    const mustCapture = this.game.selection().compulsorySquares.length > 0;
 
     if (outcome.kind === 'win') {
       if (settings.mode === 'computer') {
@@ -107,14 +116,9 @@ export class App {
     if (this.game.selection().target !== null) return 'More than one way to get there: tap the way to go.';
 
     if (settings.mode === 'computer') {
-      if (state.toMove === settings.playerSide) {
-        return mustCapture ? 'Your move. You must capture.' : 'Your move.';
-      }
-      return 'Computer is thinking…';
+      return state.toMove === settings.playerSide ? 'Your move.' : 'Computer is thinking…';
     }
-
-    const who = sideName(state.toMove);
-    return mustCapture ? `${who} to move. You must capture.` : `${who} to move.`;
+    return `${sideName(state.toMove)} to move.`;
   });
 
   protected readonly pieceCounts = computed(() => this.game.pieceCounts());
@@ -135,14 +139,14 @@ export class App {
    */
   private nextSquares(wantCaptures: boolean): number[] {
     const selection = this.game.selection();
-    if (selection.candidateMoves.length === 0) return [];
-    const isCapture = selection.candidateMoves[0].captures.length > 0;
-    if (isCapture !== wantCaptures) return [];
+    // Captures are optional, so a piece can have both kinds of move: dots for plain moves,
+    // rings for captures.
+    const moves = selection.candidateMoves.filter((m) => m.captures.length > 0 === wantCaptures);
     if (selection.target === null) {
-      return [...new Set(selection.candidateMoves.map((m) => m.to))];
+      return [...new Set(moves.map((m) => m.to))];
     }
     const nextIndex = selection.path.length;
-    const squares = selection.candidateMoves.map((m) => m.path[nextIndex] ?? m.to);
+    const squares = moves.map((m) => m.path[nextIndex] ?? m.to);
     return [...new Set(squares)];
   }
 
@@ -151,19 +155,16 @@ export class App {
     this.game.tapSquare(square);
   }
 
-  setMode(mode: GameMode): void {
+  startGame(setup: GameSetup): void {
     this.audio.unlock();
-    this.game.newGame({ mode });
+    this.game.newGame(setup);
+    this.screen.set('game');
   }
 
-  setDifficulty(difficulty: Difficulty): void {
+  /** Back to the home screen. The game is set aside; Start game begins a fresh one. */
+  openMenu(): void {
     this.audio.unlock();
-    this.game.newGame({ difficulty });
-  }
-
-  setPlayerSide(playerSide: typeof LIGHT | typeof DARK): void {
-    this.audio.unlock();
-    this.game.newGame({ playerSide });
+    this.screen.set('home');
   }
 
   newGame(): void {
@@ -254,7 +255,32 @@ function fullscreenElement(): Element | null {
 }
 
 function sideName(side: typeof LIGHT | typeof DARK): string {
-  return side === LIGHT ? 'Light' : 'Dark';
+  return side === LIGHT ? 'White' : 'Black';
+}
+
+const DIFFICULTY_NAMES: Record<Difficulty, string> = {
+  beginner: 'Beginner',
+  novice: 'Novice',
+  'very-good': 'Very good',
+};
+
+/** One line for the game screen saying what was picked on the home screen. */
+export function describeSetup(settings: Settings): string {
+  if (settings.mode === 'pvp') return '1v1';
+  return `Vs computer · ${DIFFICULTY_NAMES[settings.difficulty]} · You play ${sideName(settings.playerSide)}`;
+}
+
+/** Pure, like describeGameOver: what to say about a piece just taken by nfikh. */
+export function describeNfikh(nfikh: Nfikh | null, settings: Settings): string | null {
+  if (!nfikh) return null;
+  const square = squareName(nfikh.square);
+  if (settings.mode === 'computer') {
+    return nfikh.by === settings.playerSide
+      ? `Nfikh! You took the computer's piece on ${square}: it missed a capture.`
+      : `Nfikh! The computer took your piece on ${square}: you missed a capture.`;
+  }
+  const loser = nfikh.by === LIGHT ? DARK : LIGHT;
+  return `Nfikh! ${sideName(nfikh.by)} took ${sideName(loser)}'s piece on ${square}: it missed a capture.`;
 }
 
 export interface GameOverInfo {

@@ -1,10 +1,23 @@
 import { Difficulty } from '../../engine/ai';
-import { advanceState, createInitialState, legalMoves as engineLegalMoves, outcome as engineOutcome, pieceCounts as enginePieceCounts } from '../../engine/game';
+import { advanceState, createInitialState, legalMoves as engineLegalMoves, outcome as engineOutcome, pieceCounts as enginePieceCounts, takeForfeit } from '../../engine/game';
 import { GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
 
 export type GameMode = 'computer' | 'pvp';
 /** The flat board, or the (experimental) 3D one. */
 export type BoardView = '2d' | '3d';
+export type BoardTheme = 'classic' | 'wood' | 'green';
+
+/** How the board got to its latest position (see GameService.updateKind). */
+export type UpdateKind = 'reset' | 'move' | 'nfikh';
+
+/** What a tap did: nothing (yet), completed a move, or took a piece by nfikh. */
+export type TapResult = 'none' | 'move' | 'nfikh';
+
+/** A piece taken by nfikh: where it was, and which side took it. */
+export interface Nfikh {
+  square: number;
+  by: Side;
+}
 
 export interface Settings {
   mode: GameMode;
@@ -15,11 +28,13 @@ export interface Settings {
   soundOn: boolean;
   musicOn: boolean;
   view: BoardView;
+  boardTheme: BoardTheme;
 }
 
 interface Snapshot {
   state: GameState;
   lastMove: Move | null;
+  lastNfikh: Nfikh | null;
 }
 
 export interface SelectionInfo {
@@ -33,8 +48,6 @@ export interface SelectionInfo {
    * player then picks the route by tapping where the routes split. Null otherwise.
    */
   target: number | null;
-  /** Squares with a piece that must move this turn, because capture is compulsory. */
-  compulsorySquares: number[];
 }
 
 export function defaultSettings(): Settings {
@@ -46,6 +59,7 @@ export function defaultSettings(): Settings {
     soundOn: true,
     musicOn: false,
     view: '2d',
+    boardTheme: 'classic',
   };
 }
 
@@ -54,7 +68,6 @@ const EMPTY_SELECTION: SelectionInfo = {
   path: [],
   candidateMoves: [],
   target: null,
-  compulsorySquares: [],
 };
 
 /**
@@ -66,6 +79,11 @@ export class GameController {
   settings: Settings;
   state: GameState;
   lastMove: Move | null = null;
+  /**
+   * The latest piece taken by nfikh, kept until the other side next moves, so the screen can
+   * say what happened.
+   */
+  lastNfikh: Nfikh | null = null;
 
   private history: Snapshot[] = [];
   private selection: SelectionInfo = EMPTY_SELECTION;
@@ -98,23 +116,31 @@ export class GameController {
   }
 
   resetSelection(): void {
-    const moves = this.outcome.kind === 'ongoing' ? this.legalMoves : [];
-    this.selection = { ...EMPTY_SELECTION, compulsorySquares: compulsorySquaresFor(moves) };
+    this.selection = EMPTY_SELECTION;
   }
 
   /**
-   * Handles a tap on a board square. Returns true if it completed a full move.
+   * Handles a tap on a board square, and says what it did.
    *
    * A move is two taps: the piece, then where it ends up, even for a multi-jump (the board
    * then animates it through every square on the way). Only when two capture routes end on
    * the same square does the player have to say which, by tapping where the routes split.
+   *
+   * Tapping one of the opponent's pieces that skipped a capture last move takes it (nfikh);
+   * the player then makes their move as usual. Nothing points those pieces out: spotting the
+   * missed capture is up to the player.
    */
-  tapSquare(square: number): boolean {
-    if (this.outcome.kind !== 'ongoing') return false;
+  tapSquare(square: number): TapResult {
+    if (this.outcome.kind !== 'ongoing') return 'none';
+
+    if (this.state.forfeitable.includes(square)) {
+      this.takeForfeit(square);
+      return 'nfikh';
+    }
 
     if (this.selection.selected === null) {
       this.trySelect(square);
-      return false;
+      return 'none';
     }
 
     const { selected, path, candidateMoves, target } = this.selection;
@@ -123,18 +149,18 @@ export class GameController {
       const ending = candidateMoves.filter((m) => m.to === square);
       if (ending.length === 1) {
         this.commitMove(ending[0]);
-        return true;
+        return 'move';
       }
       if (ending.length > 1) {
         this.chooseRoute(path, ending, square);
-        return false;
+        return 'none';
       }
       if (square === selected) {
         this.resetSelection();
       } else {
         this.trySelect(square);
       }
-      return false;
+      return 'none';
     }
 
     // A king's route can pass through its destination and come back to it later; the route
@@ -142,12 +168,12 @@ export class GameController {
     const stopsHere = candidateMoves.find((m) => m.path.length === path.length);
     if (square === target && stopsHere) {
       this.commitMove(stopsHere);
-      return true;
+      return 'move';
     }
     const routes = candidateMoves.filter((m) => m.path[path.length] === square);
     if (routes.length === 1) {
       this.commitMove(routes[0]);
-      return true;
+      return 'move';
     }
     if (routes.length > 1) {
       this.chooseRoute([...path, square], routes, target);
@@ -156,7 +182,7 @@ export class GameController {
       // starting square, so that's checked first.)
       this.resetSelection();
     }
-    return false;
+    return 'none';
   }
 
   /** Narrows to `routes` and follows them as far as they agree, up to where they split. */
@@ -174,6 +200,15 @@ export class GameController {
     this.commitMove(move);
   }
 
+  /** Takes an opponent's piece that skipped a capture (nfikh). Ignored if it isn't one. */
+  takeForfeit(square: number): void {
+    if (!this.state.forfeitable.includes(square)) return;
+    this.history.push({ state: this.state, lastMove: this.lastMove, lastNfikh: this.lastNfikh });
+    this.lastNfikh = { square, by: this.state.toMove };
+    this.state = takeForfeit(this.state, square);
+    this.resetSelection();
+  }
+
   /**
    * Takes back the player's last move, along with the computer's reply to it if one has been
    * played, so it's the player's turn again. Never undoes a computer move that came before
@@ -186,6 +221,7 @@ export class GameController {
     this.history = this.history.slice(0, index);
     this.state = previous.state;
     this.lastMove = previous.lastMove;
+    this.lastNfikh = previous.lastNfikh;
     this.resetSelection();
   }
 
@@ -202,6 +238,7 @@ export class GameController {
     this.settings = { ...this.settings, ...partial };
     this.state = createInitialState(this.settings.strictMode);
     this.lastMove = null;
+    this.lastNfikh = null;
     this.history = [];
     this.resetSelection();
   }
@@ -215,28 +252,22 @@ export class GameController {
   }
 
   private trySelect(square: number): void {
-    const moves = this.legalMoves;
-    const compulsory = compulsorySquaresFor(moves);
     const ownPiece = Math.sign(this.state.board[square]) === this.state.toMove;
-    const blockedByCompulsory = compulsory.length > 0 && !compulsory.includes(square);
-    const candidateMoves = ownPiece && !blockedByCompulsory ? moves.filter((m) => m.from === square) : [];
+    const candidateMoves = ownPiece ? this.legalMoves.filter((m) => m.from === square) : [];
 
     if (candidateMoves.length === 0) {
-      this.selection = { ...EMPTY_SELECTION, compulsorySquares: compulsory };
+      this.selection = EMPTY_SELECTION;
       return;
     }
-    this.selection = { ...EMPTY_SELECTION, selected: square, path: [square], candidateMoves, compulsorySquares: compulsory };
+    this.selection = { ...EMPTY_SELECTION, selected: square, path: [square], candidateMoves };
   }
 
   private commitMove(move: Move): void {
-    this.history.push({ state: this.state, lastMove: this.lastMove });
+    this.history.push({ state: this.state, lastMove: this.lastMove, lastNfikh: this.lastNfikh });
+    // A piece taken by nfikh stays news through the taker's own move, until the other side moves.
+    if (this.lastNfikh && this.lastNfikh.by !== this.state.toMove) this.lastNfikh = null;
     this.state = advanceState(this.state, move);
     this.lastMove = move;
     this.resetSelection();
   }
-}
-
-function compulsorySquaresFor(moves: Move[]): number[] {
-  if (moves.length === 0 || moves[0].captures.length === 0) return [];
-  return [...new Set(moves.map((m) => m.from))];
 }

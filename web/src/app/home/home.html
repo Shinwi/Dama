@@ -1,0 +1,60 @@
+<section class="home" aria-label="New game">
+  <div class="step">
+    <h2 class="step-title">Opponent</h2>
+    <div class="segmented" role="group" aria-label="Opponent">
+      <button type="button" [attr.aria-pressed]="mode() === 'computer'" (click)="mode.set('computer')">Vs computer</button>
+      <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="mode.set('pvp')">1v1</button>
+    </div>
+  </div>
+
+  @if (mode() === 'computer') {
+    <div class="step">
+      <h2 class="step-title">Difficulty</h2>
+      <div class="segmented" role="group" aria-label="Difficulty">
+        <button type="button" [attr.aria-pressed]="difficulty() === 'beginner'" (click)="difficulty.set('beginner')">Beginner</button>
+        <button type="button" [attr.aria-pressed]="difficulty() === 'novice'" (click)="difficulty.set('novice')">Novice</button>
+        <button type="button" [attr.aria-pressed]="difficulty() === 'very-good'" (click)="difficulty.set('very-good')">Very good</button>
+      </div>
+    </div>
+
+    <div class="step">
+      <h2 class="step-title">Play as</h2>
+      <div class="segmented" role="group" aria-label="Play as">
+        <button type="button" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
+        <button type="button" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
+      </div>
+    </div>
+  }
+
+  <div class="step">
+    <h2 class="step-title">Board</h2>
+    <div class="themes" role="group" aria-label="Board pattern">
+      @for (theme of themes; track theme.id) {
+        <button
+          type="button"
+          class="theme"
+          [attr.data-theme]="theme.id"
+          [attr.aria-pressed]="boardTheme() === theme.id"
+          (click)="boardTheme.set(theme.id)"
+        >
+          <span class="swatch" aria-hidden="true">
+            @for (dark of swatchSquares; track $index) {
+              <span class="swatch-square" [class.dark]="dark"></span>
+            }
+          </span>
+          {{ theme.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="step">
+    <h2 class="step-title">View</h2>
+    <div class="segmented" role="group" aria-label="View">
+      <button type="button" [attr.aria-pressed]="view() === '2d'" (click)="view.set('2d')">2D</button>
+      <button type="button" [attr.aria-pressed]="view() === '3d'" (click)="view.set('3d')">3D ✨</button>
+    </div>
+  </div>
+
+  <button type="button" class="start" (click)="startGame()">Start game</button>
+</section>

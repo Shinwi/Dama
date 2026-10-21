@@ -201,3 +201,29 @@ describe('Board coordinates', () => {
     ).toBe(true);
   });
 });
+
+describe('Board nfikh', () => {
+  it('fades out a piece taken by nfikh without moving anything else', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(Board);
+    const start = boardFrom({ light: ['c3', 'a1'], dark: ['d4', 'j10'] });
+    fixture.componentRef.setInput('board', start);
+    fixture.componentRef.setInput('updateKind', 'reset');
+    await fixture.whenStable();
+
+    const after = start.slice();
+    after[parseSquare('c3')] = 0;
+    fixture.componentRef.setInput('board', after);
+    fixture.componentRef.setInput('updateKind', 'nfikh');
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[data-testid="piece"][data-square="c3"].captured')).not.toBeNull();
+    expect(renderedPieces(fixture)).toEqual(expectedPieces(after));
+
+    await wait(400);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-square="c3"][data-testid="piece"]')).toBeNull();
+  });
+});

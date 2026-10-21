@@ -1,0 +1,125 @@
+.home {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  max-width: 460px;
+  margin: 12px auto 0;
+  padding: 24px 16px 28px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.step-title {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--color-text-muted);
+}
+
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--color-surface);
+}
+
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  padding: 10px 14px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.segmented button + button {
+  border-left: 1px solid var(--color-border);
+}
+
+.segmented button[aria-pressed='true'] {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-weight: 600;
+}
+
+.themes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+
+.theme {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.theme[aria-pressed='true'] {
+  border-color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Same colours as the board patterns in board.css. */
+.theme[data-theme='classic'] {
+  --swatch-light: #f4f1ea;
+  --swatch-dark: #3b3b3b;
+  --swatch-frame: #161616;
+}
+
+.theme[data-theme='wood'] {
+  --swatch-light: #ecd3a5;
+  --swatch-dark: #8a5a36;
+  --swatch-frame: #4e301b;
+}
+
+.theme[data-theme='green'] {
+  --swatch-light: #eeeed2;
+  --swatch-dark: #6f9551;
+  --swatch-frame: #34492a;
+}
+
+.swatch {
+  display: grid;
+  grid-template-columns: repeat(4, 16px);
+  grid-template-rows: repeat(4, 16px);
+  border: 4px solid var(--swatch-frame);
+  border-radius: 4px;
+}
+
+.swatch-square {
+  background: var(--swatch-light);
+}
+
+.swatch-square.dark {
+  background: var(--swatch-dark);
+}
+
+.start {
+  border: 1px solid var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  padding: 12px 32px;
+  border-radius: var(--radius-md);
+  font-size: 1.05rem;
+  font-weight: 600;
+  cursor: pointer;
+}

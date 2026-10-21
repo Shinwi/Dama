@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { App, describeGameOver } from './app';
+import { App, describeGameOver, describeNfikh } from './app';
 import { defaultSettings } from './game/game-controller';
 import { GameService } from './game/game.service';
 import { boardFrom, parseSquare } from '../engine/board';
@@ -15,16 +15,33 @@ describe('App', () => {
     }).compileComponents();
   });
 
-  it('renders the 40 starting pieces', () => {
+  /** The app opens on the home screen: press Start game to get to the board. */
+  function startedApp() {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
+    const start = [...fixture.nativeElement.querySelectorAll('button')].find(
+      (b: HTMLButtonElement) => b.textContent?.trim() === 'Start game',
+    ) as HTMLButtonElement;
+    start.click();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('opens on the home screen, with no board yet', () => {
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('app-home')).not.toBeNull();
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="piece"]').length).toBe(0);
+  });
+
+  it('renders the 40 starting pieces', () => {
+    const fixture = startedApp();
     const pieces = fixture.nativeElement.querySelectorAll('[data-testid="piece"]');
     expect(pieces.length).toBe(40);
   });
 
-  it('shows "Your move." for Light to move at the start', () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
+  it('shows "Your move." for White to move at the start', () => {
+    const fixture = startedApp();
     const status = fixture.nativeElement.querySelector('[data-testid="status"]');
     expect(status.textContent).toContain('Your move.');
   });
@@ -35,8 +52,7 @@ describe('App', () => {
         (b: HTMLButtonElement) => b.textContent?.trim() === 'Undo',
       );
 
-    const vsComputer = TestBed.createComponent(App);
-    vsComputer.detectChanges();
+    const vsComputer = startedApp();
     expect(undoButton(vsComputer)).toBeDefined();
 
     localStorage.setItem('dama.settings.v1', JSON.stringify({ mode: 'pvp' }));
@@ -45,8 +61,7 @@ describe('App', () => {
       imports: [App],
       providers: [provideZonelessChangeDetection()],
     });
-    const pvp = TestBed.createComponent(App);
-    pvp.detectChanges();
+    const pvp = startedApp();
     expect(undoButton(pvp)).toBeUndefined();
   });
 
@@ -54,11 +69,10 @@ describe('App', () => {
     localStorage.setItem('dama.settings.v1', JSON.stringify({ mode: 'pvp' }));
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({ imports: [App], providers: [provideZonelessChangeDetection()] });
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
+    const fixture = startedApp();
     const game = TestBed.inject(GameService);
     const controller = game['controller'];
-    // Light c3 takes Dark's last piece, d4, landing on e5.
+    // White c3 takes Black's last piece, d4, landing on e5.
     controller.state = { ...controller.state, board: boardFrom({ light: ['c3'], dark: ['d4'] }) };
     controller.resetSelection();
     game.tapSquare(parseSquare('c3'));
@@ -74,9 +88,23 @@ describe('App', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="game-over"]')).not.toBeNull();
   });
 
+  it('marks both kinds of move for a piece that can capture or just move', async () => {
+    const fixture = startedApp();
+    const game = TestBed.inject(GameService);
+    const controller = game['controller'];
+    // White c3 can take d4 (landing on e5) or step to b4.
+    controller.state = { ...controller.state, board: boardFrom({ light: ['c3'], dark: ['d4', 'j10'] }) };
+    controller.resetSelection();
+    game.tapSquare(parseSquare('c3'));
+    await fixture.whenStable();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('button[data-square="e5"] .capture-ring')).not.toBeNull();
+    expect(el.querySelector('button[data-square="b4"] .dot')).not.toBeNull();
+  });
+
   it('does not show the game-over overlay while a game is ongoing', () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
+    const fixture = startedApp();
     expect(fixture.nativeElement.querySelector('[data-testid="game-over"]')).toBeNull();
   });
 });
@@ -109,7 +137,30 @@ describe('describeGameOver', () => {
   it('1v1: names the winning side, no "you"', () => {
     const result = describeGameOver({ kind: 'win', winner: DARK }, { ...settings, mode: 'pvp' });
     expect(result?.variant).toBe('win');
-    expect(result?.title).toBe('Dark wins!');
-    expect(result?.subtitle).toContain('Light');
+    expect(result?.title).toBe('Black wins!');
+    expect(result?.subtitle).toContain('White');
+  });
+});
+
+describe('describeNfikh', () => {
+  const settings = { ...defaultSettings(), mode: 'computer' as const, playerSide: LIGHT };
+  const e5 = 44; // row 4, col 4
+
+  it('says nothing when no piece was taken', () => {
+    expect(describeNfikh(null, settings)).toBeNull();
+  });
+
+  it('vs computer: tells the player they missed a capture', () => {
+    expect(describeNfikh({ square: e5, by: DARK }, settings)).toContain('you missed a capture');
+  });
+
+  it('vs computer: tells the player they took the piece', () => {
+    expect(describeNfikh({ square: e5, by: LIGHT }, settings)).toContain('You took');
+  });
+
+  it('1v1: names the sides and the square', () => {
+    expect(describeNfikh({ square: e5, by: LIGHT }, { ...settings, mode: 'pvp' })).toBe(
+      "Nfikh! White took Black's piece on e5: it missed a capture.",
+    );
   });
 });

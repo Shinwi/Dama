@@ -16,6 +16,7 @@ import {
 import { Board } from '../board/board';
 import { parseSquare } from '../../engine/board';
 import { BoardArray, DARK, LIGHT, Move, Side } from '../../engine/types';
+import { BoardTheme, UpdateKind } from '../game/game-controller';
 import { DamaScene, Markers, Mood } from './dama-scene';
 
 const STORAGE_KEY = 'dama.3d.v1';
@@ -67,15 +68,16 @@ function saveTurnTable(turnTable: boolean): void {
 })
 export class Board3d {
   readonly board = input.required<BoardArray>();
+  /** The board pattern picked on the home screen. */
+  readonly theme = input<BoardTheme>('classic');
   readonly flipped = input(false);
   readonly selected = input<number | null>(null);
   readonly pathSoFar = input<number[]>([]);
   readonly capturedSoFar = input<number[]>([]);
   readonly landingDots = input<number[]>([]);
   readonly captureRings = input<number[]>([]);
-  readonly compulsoryRings = input<number[]>([]);
   readonly lastMove = input<Move | null>(null);
-  readonly updateKind = input<'reset' | 'move'>('reset');
+  readonly updateKind = input<UpdateKind>('reset');
   /** Whose turn it is, for "Turn the table". */
   readonly turnSide = input<Side>(LIGHT);
   /** 1v1 on one device: "Turn the table" is offered. */
@@ -111,7 +113,6 @@ export class Board3d {
     path: this.pathSoFar(),
     dots: this.landingDots(),
     rings: this.captureRings(),
-    compulsory: this.compulsoryRings(),
     lastMove: this.lastMove()?.path ?? [],
   }));
 
@@ -145,6 +146,10 @@ export class Board3d {
       const mood = this.mood();
       untracked(() => this.scene?.setMood(mood));
     });
+    effect(() => {
+      const theme = this.theme();
+      untracked(() => this.scene?.setTheme(theme));
+    });
   }
 
   private start(): void {
@@ -161,6 +166,7 @@ export class Board3d {
     scene.setMarkers(this.markers());
     scene.setViewSide(this.viewSide(), false);
     scene.setMood(this.mood());
+    scene.setTheme(this.theme());
     scene.intro();
     this.seen = { board: this.board(), kind: this.updateKind(), move: this.lastMove() };
     // Switched to 3D while a move was playing out on the 2D board: it has landed now.
@@ -168,13 +174,19 @@ export class Board3d {
     window.dama3d = { project: (square) => scene.project(parseSquare(square)), idle: () => scene.idle() };
   }
 
-  private sync(board: BoardArray, kind: 'reset' | 'move', move: Move | null, path: number[], captured: number[]): void {
+  private sync(board: BoardArray, kind: UpdateKind, move: Move | null, path: number[], captured: number[]): void {
     const scene = this.scene;
     if (!scene) return;
     const changed = board !== this.seen.board || kind !== this.seen.kind || move !== this.seen.move;
     this.seen = { board, kind, move };
     if (!changed) {
       scene.showPartial(path, captured);
+      return;
+    }
+
+    // A piece taken by nfikh: knocked off where it stands. The game doesn't wait for it.
+    if (kind === 'nfikh') {
+      scene.takeMissing(board);
       return;
     }
 

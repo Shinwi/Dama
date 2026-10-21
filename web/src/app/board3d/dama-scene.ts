@@ -3,6 +3,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { TeapotGeometry } from 'three/examples/jsm/geometries/TeapotGeometry.js';
 import { BoardArray, DARK, LIGHT, Move, Side } from '../../engine/types';
+import { BoardTheme } from '../game/game-controller';
 import {
   BOARD_HEIGHT,
   DISC_HEIGHT,
@@ -40,7 +41,6 @@ export interface Markers {
   path: number[];
   dots: number[];
   rings: number[];
-  compulsory: number[];
   lastMove: number[];
 }
 
@@ -97,8 +97,8 @@ const LOW_POWER_IDLE_MS = 400;
 /** In low-power mode, the most pixels drawn per frame. */
 const LOW_POWER_PIXELS = 520_000;
 const COLORS = {
-  light: '#f3e9d2',
-  dark: '#1a2a78',
+  light: '#f2f0ea',
+  dark: '#18181b',
   gold: '#d8ab48',
   cobalt: '#2546a3',
   saffron: '#ffc54d',
@@ -133,7 +133,7 @@ export class DamaScene {
   private epoch = 0;
   private partial: Partial | null = null;
   private partialChain: Promise<void> = Promise.resolve();
-  private markers: Markers = { selected: null, path: [], dots: [], rings: [], compulsory: [], lastMove: [] };
+  private markers: Markers = { selected: null, path: [], dots: [], rings: [], lastMove: [] };
 
   private readonly markerGroup = new THREE.Group();
   private readonly hoverTile: THREE.Mesh;
@@ -143,6 +143,8 @@ export class DamaScene {
   private readonly lanternLight: THREE.PointLight;
   private readonly spot: THREE.SpotLight;
   private readonly lantern = new THREE.Group();
+  private squares!: THREE.Mesh;
+  private theme: BoardTheme = 'classic';
   private readonly teapotSpout = new THREE.Vector3();
   private petals: THREE.InstancedMesh | null = null;
   private petalState: Petal[] = [];
@@ -359,13 +361,30 @@ export class DamaScene {
       glow.scale.setScalar(1.1);
       this.markerGroup.add(glow);
     });
-    for (const square of markers.compulsory) {
-      const { x, z } = squareToWorld(square);
-      const ring = new THREE.Mesh(this.geo['bigRing'], this.mat['compulsory']);
-      ring.position.set(x, 0.03, z);
-      ring.userData = { kind: 'pulse', phase: square };
-      this.markerGroup.add(ring);
-    }
+  }
+
+  /** The board pattern picked on the home screen. */
+  setTheme(theme: BoardTheme): void {
+    if (theme === this.theme) return;
+    this.theme = theme;
+    const material = this.squares.material as THREE.MeshStandardMaterial | THREE.MeshLambertMaterial;
+    material.map = this.keep(squaresTexture(theme));
+    material.needsUpdate = true;
+  }
+
+  /**
+   * Pieces taken off without a move (nfikh): each one still drawn on a square that's empty
+   * in `board` is knocked off onto its pile.
+   */
+  takeMissing(board: BoardArray): void {
+    const epoch = this.epoch;
+    const taken = this.pieces.filter((p) => p !== this.partial?.piece && board[p.square] === 0);
+    for (const piece of taken) void this.knockOff(piece);
+    void this.wait(1200).then(() => {
+      if (epoch !== this.epoch || this.disposed) return;
+      this.verify(board);
+      this.syncPiles(board);
+    });
   }
 
   /** The keyboard's square (from the hidden square buttons), or null when the board isn't focused. */
@@ -410,6 +429,7 @@ export class DamaScene {
   /** Where a square appears on screen, in client coordinates. A testability hook for e2e tests. */
   project(square: number): { x: number; y: number } {
     const { x, z } = squareToWorld(square);
+    this.camera.updateMatrixWorld();
     const point = new THREE.Vector3(x, 0.12, z).project(this.camera);
     const rect = this.renderer.domElement.getBoundingClientRect();
     return {
@@ -473,7 +493,6 @@ export class DamaScene {
     this.geo['frame'] = new THREE.RingGeometry(0.47, 0.56, 4, 1, Math.PI / 4).rotateX(-Math.PI / 2);
     this.geo['dot'] = new THREE.SphereGeometry(0.085, 16, 12);
     this.geo['ring'] = new THREE.TorusGeometry(0.36, 0.035, 10, 48).rotateX(Math.PI / 2);
-    this.geo['bigRing'] = new THREE.TorusGeometry(0.46, 0.028, 8, 48).rotateX(Math.PI / 2);
 
     const glow = this.keep(glowTexture());
     const glaze = { roughness: 0.3, clearcoat: 1, clearcoatRoughness: 0.1 };
@@ -515,7 +534,6 @@ export class DamaScene {
     this.mat['focus'] = flat(COLORS.focus, 0.95);
     this.mat['dot'] = new THREE.MeshBasicMaterial({ color: '#ffd97a' });
     this.mat['captureRing'] = new THREE.MeshBasicMaterial({ color: COLORS.ember });
-    this.mat['compulsory'] = flat(COLORS.saffron, 0.9);
     const sprite = (color: string, opacity: number) =>
       new THREE.SpriteMaterial({ map: glow, color, blending: THREE.AdditiveBlending, depthWrite: false, opacity });
     this.mat['dotGlow'] = sprite('#ffb020', 0.9);
@@ -577,13 +595,14 @@ export class DamaScene {
     const squares = new THREE.Mesh(
       new THREE.PlaneGeometry(10, 10).rotateX(-Math.PI / 2),
       new THREE.MeshPhysicalMaterial({
-        map: this.keep(squaresTexture()),
+        map: this.keep(squaresTexture('classic')),
         roughness: 0.42,
         clearcoat: 0.8,
         clearcoatRoughness: 0.2,
       }),
     );
     squares.position.y = 0.003;
+    this.squares = squares;
     squares.receiveShadow = true;
     this.scene.add(box, top, squares);
 
@@ -964,7 +983,7 @@ export class DamaScene {
     for (let i = 0; i < discs; i++) pile.push(null);
     const slot = pileSlot(victim.side, index);
 
-    const shards = victim.side === LIGHT ? [COLORS.light, '#ffffff', COLORS.cobalt] : [COLORS.dark, '#5b74e0', COLORS.gold];
+    const shards = victim.side === LIGHT ? [COLORS.light, '#ffffff', COLORS.cobalt] : [COLORS.dark, '#5a5a60', COLORS.gold];
     this.sparks.emit({ count: 46, x: from.x, y: 0.2, z: from.z, speed: 3.4, lift: 1.6, gravity: 7, drag: 0.4, life: 0.85, size: 0.12, colors: [...shards, '#ffd27a'] });
     this.dust.emit({ count: 22, x: from.x, y: 0.1, z: from.z, speed: 1.8, flat: 0.7, drag: 0.03, life: 0.9, size: 0.3, colors: ['#d8c19a', '#bfa47c'], alpha: 0.45 });
     this.shake = Math.max(this.shake, victim.king ? 0.2 : 0.11);
@@ -1239,6 +1258,8 @@ export class DamaScene {
     else this.placeCamera(new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(TARGET)).theta, this.tilt(), fit);
     const scale = this.renderer.getDrawingBufferSize(new THREE.Vector2()).y / (2 * Math.tan((CAMERA_FOV * Math.PI) / 360));
     this.sparks.setScale(scale);
+    // Draw the new size straight away, even in low-power mode's idle pauses.
+    this.lastRender = 0;
     this.dust.setScale(scale);
   }
 
@@ -1248,13 +1269,18 @@ export class DamaScene {
   private squareAt(clientX: number, clientY: number): number | null {
     const rect = this.renderer.domElement.getBoundingClientRect();
     const ndc = new THREE.Vector2(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+    // The camera's matrix is only refreshed when a frame is drawn, and a resize may have moved
+    // the camera since (in low-power mode an idle board draws a frame only every 400 ms).
+    this.camera.updateMatrixWorld();
     this.raycaster.setFromCamera(ndc, this.camera);
     const hit = this.raycaster.ray.intersectPlane(this.pickPlane, new THREE.Vector3());
     return hit ? worldToSquare(hit.x, hit.z) : null;
   }
 
   private readonly onPointerDown = (event: PointerEvent) => {
-    this.pointerDown = { x: event.clientX, y: event.clientY, time: performance.now() };
+    // The event's own timestamp, not when it's handled: a slow frame between the press and
+    // the lift mustn't make a quick tap look like a long press.
+    this.pointerDown = { x: event.clientX, y: event.clientY, time: event.timeStamp };
   };
 
   /** A tap is a press that hardly moved: anything more was the player turning the camera. */
@@ -1263,7 +1289,7 @@ export class DamaScene {
     this.pointerDown = null;
     if (!down) return;
     const moved = Math.hypot(event.clientX - down.x, event.clientY - down.y);
-    if (moved > 8 || performance.now() - down.time > 700) return;
+    if (moved > 8 || event.timeStamp - down.time > 700) return;
     const square = this.squareAt(event.clientX, event.clientY);
     if (square !== null) this.onTap(square);
   };
@@ -1322,9 +1348,8 @@ export class DamaScene {
       else if (kind === 'ring') {
         marker.scale.setScalar(1 + Math.sin(p * 5) * 0.07);
         marker.rotation.y = p;
-      } else if (kind === 'pulse') marker.scale.setScalar(1 + Math.sin(p * 4) * 0.05);
+      }
     }
-    (this.mat['compulsory'] as THREE.MeshBasicMaterial).opacity = 0.55 + Math.sin(time * 4) * 0.35;
 
     // The lantern sways a little and its flame flickers. On a loss it gutters almost out.
     this.lanternLevel += (this.lanternTarget - this.lanternLevel) * Math.min(1, dt * 1.5);

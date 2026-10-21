@@ -27,19 +27,19 @@ describe('Board accessibility', () => {
 
   it('says what is on each square', async () => {
     await fixture.whenStable();
-    expect(label('b4')).toBe('b4, light man');
-    expect(label('e7')).toBe('e7, dark king');
+    expect(label('b4')).toBe('b4, white man');
+    expect(label('e7')).toBe('e7, black king');
     expect(label('a1')).toBe('a1, empty');
   });
 
   it('says which piece is selected and where it can go', async () => {
     fixture.componentRef.setInput('selected', parseSquare('b4'));
     fixture.componentRef.setInput('landingDots', [parseSquare('a5'), parseSquare('c5')]);
-    fixture.componentRef.setInput('compulsoryRings', [parseSquare('c3')]);
     await fixture.whenStable();
-    expect(label('b4')).toBe('b4, light man, selected');
+    expect(label('b4')).toBe('b4, white man, selected');
     expect(label('a5')).toBe('a5, empty, you can move here');
-    expect(label('c3')).toBe('c3, light man, must capture');
+    // No hint about which piece can capture: spotting it is up to the player.
+    expect(label('c3')).toBe('c3, white man');
 
     fixture.componentRef.setInput('landingDots', []);
     fixture.componentRef.setInput('captureRings', [parseSquare('f8')]);

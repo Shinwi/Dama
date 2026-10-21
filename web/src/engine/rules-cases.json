@@ -1,82 +1,17 @@
 [
-  {
-    "name": "light man moves forward",
-    "light": ["e5"], "dark": [], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "expected": ["e5-d6", "e5-f6"]
-  },
-  {
-    "name": "dark man moves forward",
-    "light": [], "dark": ["e5"], "lightKings": [], "darkKings": [],
-    "toMove": "dark",
-    "expected": ["e5-d4", "e5-f4"]
-  },
-  {
-    "name": "capture is compulsory",
-    "light": ["e5", "a1"], "dark": ["f6"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "expected": ["e5xg7"]
-  },
-  {
-    "name": "men capture backwards",
-    "light": ["e5"], "dark": ["d4"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "expected": ["e5xc3"]
-  },
-  {
-    "name": "must keep jumping",
-    "light": ["c3"], "dark": ["d4", "f6"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "expected": ["c3xe5xg7"]
-  },
-  {
-    "name": "passes far row, stays a man",
-    "light": ["d8"], "dark": ["e9", "g9"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "expected": ["d8xf10xh8"]
-  },
-  {
-    "name": "king flies the whole diagonal",
-    "light": [], "dark": [], "lightKings": ["a1"], "darkKings": [],
-    "toMove": "light",
-    "expected": ["a1-b2", "a1-c3", "a1-d4", "a1-e5", "a1-f6", "a1-g7", "a1-h8", "a1-i9", "a1-j10"]
-  },
-  {
-    "name": "king captures at any distance, lands anywhere beyond",
-    "light": [], "dark": ["e5"], "lightKings": ["a1"], "darkKings": [],
-    "toMove": "light",
-    "expected": ["a1xf6", "a1xg7", "a1xh8", "a1xi9", "a1xj10"]
-  },
-  {
-    "name": "king can't jump two pieces in a row",
-    "light": [], "dark": ["e5", "f6"], "lightKings": ["a1"], "darkKings": [],
-    "toMove": "light",
-    "expected": ["a1-b2", "a1-c3", "a1-d4"]
-  },
-  {
-    "name": "king blocked by own piece, man moves normally",
-    "light": ["c3"], "dark": ["h8"], "lightKings": ["a1"], "darkKings": [],
-    "toMove": "light",
-    "expected": ["a1-b2", "c3-b4", "c3-d4"]
-  },
-  {
-    "name": "choice of captures, strict off",
-    "light": ["c3", "g1"], "dark": ["d4", "f6", "h2"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "strictMode": false,
-    "expected": ["c3xe5xg7", "g1xi3"]
-  },
-  {
-    "name": "choice of captures, strict on",
-    "light": ["c3", "g1"], "dark": ["d4", "f6", "h2"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "strictMode": true,
-    "expected": ["c3xe5xg7"]
-  },
-  {
-    "name": "blocked piece has no legal move",
-    "light": ["a9"], "dark": ["b10"], "lightKings": [], "darkKings": [],
-    "toMove": "light",
-    "expected": []
-  }
+  {"name": "light man moves forward", "light": ["e5"], "dark": [], "lightKings": [], "darkKings": [], "toMove": "light", "expected": ["e5-d6", "e5-f6"]},
+  {"name": "dark man moves forward", "light": [], "dark": ["e5"], "lightKings": [], "darkKings": [], "toMove": "dark", "expected": ["e5-d4", "e5-f4"]},
+  {"name": "capture is optional: simple moves stay legal", "light": ["e5", "a1"], "dark": ["f6"], "lightKings": [], "darkKings": [], "toMove": "light", "expected": ["a1-b2", "e5-d6", "e5xg7"]},
+  {"name": "men cannot capture backwards", "light": ["e5"], "dark": ["d4"], "lightKings": [], "darkKings": [], "toMove": "light", "expected": ["e5-d6", "e5-f6"]},
+  {"name": "men cannot capture backwards in a multi-jump either", "light": ["c3"], "dark": ["d4", "f4"], "lightKings": [], "darkKings": [], "toMove": "light", "expected": ["c3-b4", "c3xe5"]},
+  {"name": "dark men capture forward (down the board) only", "light": ["d4", "d6"], "dark": ["e5"], "lightKings": [], "darkKings": [], "toMove": "dark", "expected": ["e5-f4", "e5xc3"]},
+  {"name": "must keep jumping", "light": ["c3"], "dark": ["d4", "f6"], "lightKings": [], "darkKings": [], "toMove": "light", "expected": ["c3-b4", "c3xe5xg7"]},
+  {"name": "a man's capture onto the far row ends there", "light": ["d8"], "dark": ["e9", "g9"], "lightKings": [], "darkKings": [], "toMove": "light", "expected": ["d8-c9", "d8xf10"]},
+  {"name": "king flies the whole diagonal", "light": [], "dark": [], "lightKings": ["a1"], "darkKings": [], "toMove": "light", "expected": ["a1-b2", "a1-c3", "a1-d4", "a1-e5", "a1-f6", "a1-g7", "a1-h8", "a1-i9", "a1-j10"]},
+  {"name": "king captures at any distance, lands anywhere beyond", "light": [], "dark": ["e5"], "lightKings": ["a1"], "darkKings": [], "toMove": "light", "expected": ["a1-b2", "a1-c3", "a1-d4", "a1xf6", "a1xg7", "a1xh8", "a1xi9", "a1xj10"]},
+  {"name": "king can't jump two pieces in a row", "light": [], "dark": ["e5", "f6"], "lightKings": ["a1"], "darkKings": [], "toMove": "light", "expected": ["a1-b2", "a1-c3", "a1-d4"]},
+  {"name": "king blocked by own piece, man moves normally", "light": ["c3"], "dark": ["h8"], "lightKings": ["a1"], "darkKings": [], "toMove": "light", "expected": ["a1-b2", "c3-b4", "c3-d4"]},
+  {"name": "choice of captures, strict off", "light": ["c3", "g1"], "dark": ["d4", "f6", "h2"], "lightKings": [], "darkKings": [], "toMove": "light", "strictMode": false, "expected": ["c3-b4", "c3xe5xg7", "g1-f2", "g1xi3"]},
+  {"name": "choice of captures, strict on: only the longest capture, simple moves still legal", "light": ["c3", "g1"], "dark": ["d4", "f6", "h2"], "lightKings": [], "darkKings": [], "toMove": "light", "strictMode": true, "expected": ["c3-b4", "c3xe5xg7", "g1-f2"]},
+  {"name": "blocked piece has no legal move", "light": ["a9"], "dark": ["b10"], "lightKings": [], "darkKings": [], "toMove": "light", "expected": []}
 ]

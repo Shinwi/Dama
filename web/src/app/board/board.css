@@ -8,6 +8,26 @@
   grid-template-rows: auto var(--coord-gutter);
 }
 
+/* Board patterns, picked on the home screen. The pieces are always white and black. */
+.board,
+.board[data-theme='classic'] {
+  --board-light-square: #f4f1ea;
+  --board-dark-square: #3b3b3b;
+  --board-frame: #161616;
+}
+
+.board[data-theme='wood'] {
+  --board-light-square: #ecd3a5;
+  --board-dark-square: #8a5a36;
+  --board-frame: #4e301b;
+}
+
+.board[data-theme='green'] {
+  --board-light-square: #eeeed2;
+  --board-dark-square: #6f9551;
+  --board-frame: #34492a;
+}
+
 .board {
   position: relative;
   grid-column: 2;
@@ -129,22 +149,6 @@
   opacity: 0.9;
 }
 
-.compulsory-ring {
-  width: 86%;
-  height: 86%;
-  animation: pulse-ring 1.4s ease-in-out infinite;
-}
-
-@keyframes pulse-ring {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-  50% {
-    opacity: 1;
-  }
-}
-
 /* Pieces live in their own absolutely-positioned layer on top of the squares grid (not
    nested inside a square button) so a piece can be a single, stable DOM element that slides
    smoothly from square to square — including hopping over a captured piece mid-multi-jump —
@@ -179,7 +183,7 @@
   transform: scale(1.12);
   box-shadow:
     0 9px 14px var(--piece-shadow),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22);
 }
 
 .piece.captured {
@@ -190,52 +194,45 @@
   transform: scale(0.35);
 }
 
+/* Classic draughtsmen: a plain disc with a raised rim and a ring pressed into the face. */
 .piece-disc {
   position: relative;
-  width: 78%;
-  height: 78%;
+  width: 80%;
+  height: 80%;
   border-radius: 50%;
   box-shadow:
     0 3px 6px var(--piece-shadow),
-    inset 0 1px 2px rgba(255, 255, 255, 0.2);
+    inset 0 -3px 0 rgba(0, 0, 0, 0.22),
+    inset 0 2px 1px rgba(255, 255, 255, 0.25);
   transition:
     transform 140ms ease,
     box-shadow 140ms ease;
 }
 
 .piece-disc[data-color='light'] {
-  background: repeating-conic-gradient(
-    from 0deg,
-    var(--piece-light-rim) 0deg 9deg,
-    var(--piece-light-fill) 9deg 18deg
-  );
+  background: radial-gradient(circle at 38% 32%, var(--piece-white-shine), var(--piece-white-fill) 70%);
+  border: 1px solid var(--piece-white-edge);
 }
 
 .piece-disc[data-color='dark'] {
-  background: repeating-conic-gradient(
-    from 0deg,
-    var(--piece-dark-rim) 0deg 9deg,
-    var(--piece-dark-fill) 9deg 18deg
-  );
+  background: radial-gradient(circle at 38% 32%, var(--piece-black-shine), var(--piece-black-fill) 70%);
+  /* A light edge so a black piece stays visible on a dark square. */
+  border: 1px solid var(--piece-black-edge);
 }
 
 .piece-disc::before {
   content: '';
   position: absolute;
-  inset: 14%;
+  inset: 20%;
   border-radius: 50%;
 }
 
 .piece-disc[data-color='light']::before {
-  background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0) 55%),
-    var(--piece-light-fill);
+  border: 2px solid var(--piece-white-edge);
 }
 
 .piece-disc[data-color='dark']::before {
-  background:
-    radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0) 55%),
-    var(--piece-dark-fill);
+  border: 2px solid var(--piece-black-edge);
 }
 
 .king-star {
@@ -259,8 +256,7 @@
 @media (prefers-reduced-motion: reduce) {
   .piece,
   .piece.captured,
-  .piece-disc,
-  .compulsory-ring {
+  .piece-disc {
     transition: none;
     animation: none;
   }

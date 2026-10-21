@@ -68,11 +68,18 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
     computer replied mid multi-jump (see `CHANGELOG.md`), plus a king-loop tap-sequencing
     bug found along the way. Still worth doing: a sound/visual cue on an invalid tap during
     a forced continuation, instead of silence.
-19. **Try it for real, more** — now that it's deployed, keep playing it (phone + desktop,
+19. ✅ **Gameplay changes from issue #21**: men capture forward only; captures are optional
+    and a missed one can be punished by *nfikh* (engine `forfeitable`/`takeForfeit`, AI
+    searches nfikh turns too); white/black pieces with a choice of board pattern (classic,
+    wood, green); no "must capture" hints; a home screen (opponent → difficulty/colour →
+    board → Start game) with a Menu button back to it.
+20. **Try it for real, more** — now that it's deployed, keep playing it (phone + desktop,
     both colours, both modes, sound/music on) and note anything else that feels off, the way
     the capture bug above got found.
-20. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
-    (*nfakh*, a move list, installable PWA).
+21. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
+    (a move list, installable PWA).
+22. Known rough edge, seen only at test-bot speed: taps queued during a move's animation that
+    add up to more than one full move are dropped after the first.
 
 ## Experiments
 

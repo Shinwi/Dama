@@ -1,4 +1,5 @@
 import { CanvasTexture, RepeatWrapping, SRGBColorSpace, Texture } from 'three';
+import { BoardTheme } from '../game/game-controller';
 
 /**
  * Every texture in the scene is drawn here on a canvas at start-up, so the 3D board needs no
@@ -84,11 +85,12 @@ function speckle(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
 }
 
 /**
- * The 10×10 playing surface, 100 px a square: limestone light squares, walnut dark
- * (playable) squares, with a thin brass inlay between them. Canvas top = the far side
- * (rank 10), so it maps straight onto a plane laid flat.
+ * The 10×10 playing surface, 100 px a square, in one of the board patterns the home screen
+ * offers: white marble and ebony (classic), limestone and walnut (wood), or cream and green.
+ * A thin brass inlay runs between the squares. Canvas top = the far side (rank 10), so it
+ * maps straight onto a plane laid flat.
  */
-export function squaresTexture(): Texture {
+export function squaresTexture(theme: BoardTheme): Texture {
   const size = 100;
   const [element, ctx] = canvas(size * 10);
   const rnd = random(7);
@@ -98,14 +100,8 @@ export function squaresTexture(): Texture {
       const playable = (row + px) % 2 === 0;
       const x = px * size;
       const y = py * size;
-      if (playable) {
-        const shade = 30 + Math.floor(rnd() * 10);
-        grain(ctx, x, y, size, size, `hsl(22 46% ${shade - 6}%)`, '#2a140a', rnd);
-      } else {
-        ctx.fillStyle = `hsl(38 ${40 + rnd() * 8}% ${72 + rnd() * 4}%)`;
-        ctx.fillRect(x, y, size, size);
-        speckle(ctx, x, y, size, size, ['#b59a6e', '#fff7e6', '#9c8460'], 220, rnd);
-      }
+      if (playable) darkSquare(ctx, theme, x, y, size, rnd);
+      else lightSquare(ctx, theme, x, y, size, rnd);
     }
   }
   ctx.strokeStyle = '#c9a24a';
@@ -119,6 +115,49 @@ export function squaresTexture(): Texture {
     ctx.stroke();
   }
   return texture(element);
+}
+
+function darkSquare(ctx: CanvasRenderingContext2D, theme: BoardTheme, x: number, y: number, size: number, rnd: () => number): void {
+  if (theme === 'classic') {
+    grain(ctx, x, y, size, size, `hsl(30 6% ${15 + rnd() * 5}%)`, '#000000', rnd);
+  } else if (theme === 'green') {
+    ctx.fillStyle = `hsl(95 ${28 + rnd() * 6}% ${42 + rnd() * 4}%)`;
+    ctx.fillRect(x, y, size, size);
+    speckle(ctx, x, y, size, size, ['#4f6e3a', '#86ac66', '#5d7f45'], 260, rnd);
+  } else {
+    grain(ctx, x, y, size, size, `hsl(22 46% ${24 + rnd() * 10}%)`, '#2a140a', rnd);
+  }
+}
+
+function lightSquare(ctx: CanvasRenderingContext2D, theme: BoardTheme, x: number, y: number, size: number, rnd: () => number): void {
+  if (theme === 'classic') {
+    // White marble: a few soft grey veins.
+    ctx.fillStyle = `hsl(40 18% ${91 + rnd() * 3}%)`;
+    ctx.fillRect(x, y, size, size);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, size, size);
+    ctx.clip();
+    ctx.strokeStyle = '#9d9a92';
+    for (let i = 0; i < 3; i++) {
+      ctx.globalAlpha = 0.12 + rnd() * 0.15;
+      ctx.lineWidth = 0.8 + rnd() * 1.5;
+      ctx.beginPath();
+      ctx.moveTo(x + rnd() * size, y);
+      ctx.bezierCurveTo(x + rnd() * size, y + size * 0.3, x + rnd() * size, y + size * 0.7, x + rnd() * size, y + size);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.globalAlpha = 1;
+  } else if (theme === 'green') {
+    ctx.fillStyle = `hsl(60 ${38 + rnd() * 6}% ${86 + rnd() * 3}%)`;
+    ctx.fillRect(x, y, size, size);
+    speckle(ctx, x, y, size, size, ['#c9c9a8', '#fbfbea'], 160, rnd);
+  } else {
+    ctx.fillStyle = `hsl(38 ${40 + rnd() * 8}% ${72 + rnd() * 4}%)`;
+    ctx.fillRect(x, y, size, size);
+    speckle(ctx, x, y, size, size, ['#b59a6e', '#fff7e6', '#9c8460'], 220, rnd);
+  }
 }
 
 /**

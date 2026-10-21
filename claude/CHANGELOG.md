@@ -3,6 +3,28 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-21 — 3D board: merged with nfikh / home screen / board patterns (PR #24)
+
+- PR #27's preview never built: `master` had moved on (PR #24) and the PR conflicted, and
+  GitHub doesn't run `pull_request` workflows on a PR it can't merge. Merged `master` in.
+- The 3D board follows #24: white and black pieces (white glaze with cobalt, black glaze with
+  gold), the three board patterns in 3D (white marble and ebony, limestone and walnut, cream
+  and green), no "must capture" rings, and **nfikh**: a piece taken by nfikh is knocked off
+  onto its pile without holding up the game (`DamaScene.takeMissing`). The 2D/3D choice is a
+  step on the new home screen ("View") and stays a toggle in the game sidebar.
+- Bugs found while getting the tests green again:
+  - Three.js only refreshes the camera's matrix when it draws a frame, and in low-power mode
+    an idle board draws one only every 400 ms. Right after a resize (full screen, turning a
+    phone), picking a tapped square and `project()` both used the old camera: a tap could
+    land on the wrong square. Both now refresh the matrix first, and a resize draws a frame
+    straight away.
+  - A tap was timed from when its events were handled, not when they happened, so a slow
+    frame between press and lift could turn a quick tap into an ignored long press. Now uses
+    the events' timestamps.
+- e2e: games start from the home screen (`startGame()` in `e2e/start.ts`, now with `view`).
+  `tapCanvas` also waits for the square to stay put on screen. 74 unit, 47 engine and 28 e2e
+  runs pass (e2e twice in a row).
+
 ## 2026-10-21 — 3D board: full screen, and a bug hunt by playing games
 
 - **Full screen** (3D only): a ⛶ button in the 3D toolbar puts the board column (status line,
@@ -78,6 +100,44 @@ sessions. Newest entries at the top. See `PLAN.md` for what's next.
   wait) and `e2e/board-3d.spec.ts` (40 pieces, canvas taps, keyboard play, back to 2D). All 58
   unit, 35 engine and 20 e2e runs pass. Raised the per-component CSS *warning* budget from 4 kB
   to 6 kB (`app.css` went just over with the 3D layout rules); the error budget is unchanged.
+## 2026-10-21
+
+Issue #21 (feature request), branch `feature/nfikh-home-screen-classic-board`:
+
+- **Men capture forward only**, on every hop. Side effect: a man's capture that reaches the far
+  row ends there and promotes (it can't jump on backwards), so the old "passes through the far
+  row, stays a man" case can't happen any more — that test now checks promotion instead.
+- **Captures are optional, with nfikh.** `generateLegalMoves` now returns captures *and* plain
+  moves (strict mode only narrows the captures to the longest). `GameState.forfeitable` lists
+  the pieces of the side that just moved that could have captured but didn't (computed in
+  `advanceState` via `forfeitableAfter`); `takeForfeit` removes one, keeps the same side to
+  move and clears the list. `outcome()` doesn't call a side lost while an nfikh would free a
+  move. The AI now searches *turns* (`chooseTurn`: optional nfikh + move; nfikh doesn't
+  change depth or side), and its quiescence search became a stand-pat search, since a capture
+  being available no longer means it's forced. The worker protocol carries `forfeitable` and
+  returns a `Turn`. In the UI, tapping a forfeitable enemy piece takes it (`TapResult`
+  `'nfikh'`); the board fades it out (`updateKind` `'nfikh'`), and the computer pauses 600ms
+  after an nfikh before moving so the player sees it. A note under the status line says what
+  happened, until the other side moves.
+- **No hints about which piece to move**: removed the pulsing "must capture" rings and the
+  "You must capture" status text (they'd also have given missed captures away).
+- **White and black pieces, classic board patterns**: plain discs with a pressed ring; board
+  pattern (`Settings.boardTheme`: classic black & white (default), wood, green), set per board
+  in `board.css`. The UI says White/Black; the code keeps LIGHT/DARK and `data-color`.
+- **Home screen** (`src/app/home/`): opponent → difficulty and colour (vs computer) → board
+  pattern → Start game. The game screen lost its mode/difficulty/colour buttons and gained a
+  summary line and a Menu button. GameService no longer starts the computer from its
+  constructor: a game only starts from the home screen.
+- Rebased onto master after #19 (board coordinates), #20 (screen reader + keyboard play) and
+  #23 (game-over card waits for the last move). Kept this branch's design, plus master's
+  accessibility: square labels now say white/black and no longer say "must capture" (that
+  would give the hint away again); move announcements name White/Black; the nfikh note is an
+  always-present live region. Also fixed a bug of this branch's own: a selected piece that
+  could both capture and move only showed one kind of marker (dots vs rings were decided by
+  its first move).
+- Tests: rule cases updated + new ones for forward-only captures; `nfikh.spec.ts` (engine and
+  AI); controller, service, board and app specs for nfikh and the home screen; e2e specs go
+  through the home screen (`e2e/start.ts`) and cover nfikh and the board pattern.
 
 ## 2026-10-18
 

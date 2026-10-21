@@ -1,6 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { App } from './app';
+import { defaultSettings } from './game/game-controller';
 
 describe('App full screen (3D board)', () => {
   beforeEach(async () => {
@@ -14,6 +15,7 @@ describe('App full screen (3D board)', () => {
   it('fills the window where real full screen is unavailable, and Esc leaves it', async () => {
     // jsdom has no Fullscreen API, like Safari on iPhone.
     const fixture = TestBed.createComponent(App);
+    fixture.componentInstance.startGame(defaultSettings());
     fixture.detectChanges();
     const column = () => fixture.nativeElement.querySelector('.board-column') as HTMLElement;
 
@@ -29,6 +31,7 @@ describe('App full screen (3D board)', () => {
 
   it('leaves the fallback with the button too', async () => {
     const fixture = TestBed.createComponent(App);
+    fixture.componentInstance.startGame(defaultSettings());
     fixture.detectChanges();
     fixture.componentInstance.toggleFullscreen();
     fixture.componentInstance.toggleFullscreen();
