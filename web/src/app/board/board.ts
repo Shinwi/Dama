@@ -193,6 +193,11 @@ export class Board {
     this.squareTap.emit(cell.square);
   }
 
+  /** Puts keyboard focus on the board, on its Tab stop square. */
+  focus(): void {
+    this.host.nativeElement.querySelector<HTMLElement>('.board button[tabindex="0"]')?.focus();
+  }
+
   /** Keeps the Tab stop on whichever square last had focus (by Tab, arrow keys or a tap). */
   onFocus(cell: CellView): void {
     this.focusKey.set(cell.key);

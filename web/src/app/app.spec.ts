@@ -63,6 +63,13 @@ describe('App', () => {
     const dialog = fixture.nativeElement.querySelector('[role="dialog"]');
     expect(dialog.getAttribute('aria-labelledby')).toBe('game-over-title');
     expect(document.activeElement?.textContent?.trim()).toBe('New game');
+
+    // Starting the new game from the card puts focus back on the board, on its Tab stop.
+    (document.activeElement as HTMLButtonElement).click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[data-testid="game-over"]')).toBeNull();
+    expect(document.activeElement?.closest('.board')).not.toBeNull();
+    expect(document.activeElement?.getAttribute('tabindex')).toBe('0');
   });
 
   it('has a live region for move announcements', () => {

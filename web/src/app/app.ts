@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, ElementRef, computed, effect, inject, viewChild } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  ElementRef,
+  Injector,
+  afterNextRender,
+  computed,
+  effect,
+  inject,
+  viewChild,
+} from '@angular/core';
 import { Board } from './board/board';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
@@ -28,6 +38,8 @@ export class App {
   protected readonly selection = computed(() => this.game.selection());
 
   private readonly gameOverButton = viewChild<ElementRef<HTMLButtonElement>>('gameOverButton');
+  private readonly board = viewChild(Board);
+  private readonly injector = inject(Injector);
 
   constructor() {
     // When the game-over card appears, move keyboard (and screen reader) focus to its
@@ -118,6 +130,16 @@ export class App {
   newGame(): void {
     this.audio.unlock();
     this.game.newGame();
+  }
+
+  /**
+   * "New game" on the game-over card. The card (and the focused button with it) goes away, so
+   * put focus back on the board; otherwise it falls to the page, and the next Tab skips past
+   * the board to the sidebar.
+   */
+  newGameFromGameOver(): void {
+    this.newGame();
+    afterNextRender(() => this.board()?.focus(), { injector: this.injector });
   }
 
   undo(): void {
