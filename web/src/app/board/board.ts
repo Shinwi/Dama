@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { colOf, isKing, rowOf, squareName } from '../../engine/board';
 import { BoardArray, Move } from '../../engine/types';
+import type { BoardTheme, UpdateKind } from '../game/game-controller';
 
 interface CellView {
   /** Position as drawn: visualRow * 10 + visualCol, top-left first. */
@@ -23,7 +24,6 @@ interface CellView {
   onPath: boolean;
   isLandingDot: boolean;
   isCaptureRing: boolean;
-  isCompulsoryRing: boolean;
   isLastMove: boolean;
   /** What a screen reader says for the square: its name, what's on it, and its state. */
   label: string;
@@ -66,6 +66,8 @@ const CAPTURE_FADE_MS = 210;
 })
 export class Board {
   readonly board = input.required<BoardArray>();
+  /** The board's colours: the squares, frame and pieces are styled per theme in board.css. */
+  readonly theme = input<BoardTheme>('classic');
   readonly flipped = input(false);
   readonly selected = input<number | null>(null);
   readonly pathSoFar = input<number[]>([]);
@@ -73,10 +75,12 @@ export class Board {
   readonly capturedSoFar = input<number[]>([]);
   readonly landingDots = input<number[]>([]);
   readonly captureRings = input<number[]>([]);
-  readonly compulsoryRings = input<number[]>([]);
   readonly lastMove = input<Move | null>(null);
-  /** 'move' animates `lastMove` hop by hop; 'reset' (new game / undo) snaps instantly. */
-  readonly updateKind = input<'reset' | 'move'>('reset');
+  /**
+   * 'move' animates `lastMove` hop by hop; 'nfikh' fades out the piece that was taken;
+   * 'reset' (new game / undo) snaps instantly.
+   */
+  readonly updateKind = input<UpdateKind>('reset');
 
   readonly squareTap = output<number>();
   /**
@@ -115,7 +119,6 @@ export class Board {
     const path = new Set(this.pathSoFar());
     const dots = new Set(this.landingDots());
     const rings = new Set(this.captureRings());
-    const compulsory = new Set(this.compulsoryRings());
     const lastMoveSquares = new Set(this.lastMove()?.path ?? []);
     const focusKey = this.focusKey();
 
@@ -136,7 +139,6 @@ export class Board {
           onPath: playable && path.has(square),
           isLandingDot: playable && dots.has(square),
           isCaptureRing: playable && rings.has(square),
-          isCompulsoryRing: playable && compulsory.has(square),
           isLastMove: playable && lastMoveSquares.has(square),
           tabIndex: key === focusKey ? 0 : -1,
         } as const;
@@ -289,7 +291,12 @@ export class Board {
    * Moves never cut each other short: one that arrives while another is still playing waits
    * its turn in `queue`. (GameService already holds the next move back until `settled`.)
    */
-  private reconcile(board: BoardArray, kind: 'reset' | 'move', move: Move | null): void {
+  private reconcile(board: BoardArray, kind: UpdateKind, move: Move | null): void {
+    if (kind === 'nfikh' && !this.reducedMotion()) {
+      this.fadeOutTaken(board);
+      return;
+    }
+
     const shownPath = this.shownPath;
     this.shownPath = [];
 
@@ -315,6 +322,21 @@ export class Board {
           this.releaseHeldTaps();
         }
       });
+  }
+
+  /**
+   * A piece taken by nfikh fades out where it stands. Nothing else moves, and no move is
+   * waiting on it, so it doesn't hold up taps or the next move.
+   */
+  private fadeOutTaken(board: BoardArray): void {
+    const taken = this.pieceStates()
+      .filter((p) => !p.captured && board[p.square] === 0)
+      .map((p) => p.id);
+    if (taken.length === 0) return;
+    this.pieceStates.update((list) => list.map((p) => (taken.includes(p.id) ? { ...p, captured: true } : p)));
+    void delay(CAPTURE_FADE_MS).then(() =>
+      this.pieceStates.update((list) => list.filter((p) => !taken.includes(p.id))),
+    );
   }
 
   private async animate(board: BoardArray, move: Move, shownPath: number[], generation: number): Promise<void> {
@@ -381,14 +403,13 @@ export class Board {
   }
 }
 
-/** E.g. "b4, light man", "c5, empty, you can move here", "a5, light man, must capture". */
+/** E.g. "b4, white man", "c5, empty, you can move here", "a5, black king, selected". */
 function describeSquare(cell: Omit<CellView, 'label'>, contents: number): string {
   const parts = [cell.name];
   if (contents === 0) parts.push('empty');
-  else parts.push(`${contents > 0 ? 'light' : 'dark'} ${isKing(contents) ? 'king' : 'man'}`);
+  else parts.push(`${contents > 0 ? 'white' : 'black'} ${isKing(contents) ? 'king' : 'man'}`);
   if (cell.selected) parts.push('selected');
   else if (cell.onPath) parts.push('on the chosen route');
-  if (cell.isCompulsoryRing) parts.push('must capture');
   if (cell.isLandingDot) parts.push('you can move here');
   if (cell.isCaptureRing) parts.push('you can capture by moving here');
   if (cell.isLastMove) parts.push('part of the last move');

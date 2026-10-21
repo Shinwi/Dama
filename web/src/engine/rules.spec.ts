@@ -55,12 +55,14 @@ describe('promotion', () => {
     expect(next[parseSquare('f1')]).toBe(-2);
   });
 
-  it('does not promote a man only passing through the far row', () => {
+  it('promotes a man whose capture lands on the far row: it cannot jump on backwards', () => {
     const board = boardFrom({ light: ['d8'], dark: ['e9', 'g9'] });
-    const [move] = generateLegalMoves(board, LIGHT, false);
-    expect(move.promotes).toBe(false);
+    const move = generateLegalMoves(board, LIGHT, false).find((m) => m.captures.length > 0)!;
+    expect(move.to).toBe(parseSquare('f10'));
+    expect(move.promotes).toBe(true);
     const next = applyMove(board, move);
-    expect(next[parseSquare('h8')]).toBe(1);
+    expect(next[parseSquare('f10')]).toBe(2);
+    expect(next[parseSquare('g9')]).toBe(-1);
   });
 });
 
@@ -95,7 +97,7 @@ describe('applyMove', () => {
   it('removes all captured pieces at once and does not mutate its input', () => {
     const board = boardFrom({ light: ['c3'], dark: ['d4', 'f6'] });
     const before = board.slice();
-    const [move] = generateLegalMoves(board, LIGHT, false);
+    const move = generateLegalMoves(board, LIGHT, false).find((m) => m.captures.length > 0)!;
     const next = applyMove(board, move);
 
     expect(board).toEqual(before);

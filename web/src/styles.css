@@ -4,17 +4,14 @@
   --color-accent-contrast: #ffffff;
   --color-saffron: #e0a21c;
 
-  /* Board */
-  --board-light-square: #ecdcbc;
-  --board-dark-square: #8c5b3c;
-  --board-frame: #5a3622;
-
-  /* Pieces */
-  --piece-light-fill: #f6ecd9;
-  --piece-light-rim: #d9c79e;
-  --piece-dark-fill: #23247a;
-  --piece-dark-rim: #141548;
-  --piece-shadow: rgba(0, 0, 0, 0.35);
+  /* Pieces (the board's own colours are per pattern, in board.css) */
+  --piece-white-fill: #ecebe6;
+  --piece-white-shine: #ffffff;
+  --piece-white-edge: #a9a69d;
+  --piece-black-fill: #121212;
+  --piece-black-shine: #4a4a4a;
+  --piece-black-edge: #8a8a8a;
+  --piece-shadow: rgba(0, 0, 0, 0.45);
 
   /* Surfaces */
   --color-bg: #f6f1e7;
@@ -38,15 +35,6 @@
   :root {
     --color-accent: #8a80ff;
     --color-accent-contrast: #15132b;
-
-    --board-light-square: #cdb186;
-    --board-dark-square: #5c3a26;
-    --board-frame: #2c1b12;
-
-    --piece-light-fill: #efe3c8;
-    --piece-light-rim: #c8b685;
-    --piece-dark-fill: #2a2d7a;
-    --piece-dark-rim: #191a4a;
 
     --color-bg: #15121b;
     --color-surface: #211c2b;

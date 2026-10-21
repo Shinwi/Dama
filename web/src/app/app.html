@@ -3,99 +3,89 @@
     <h1 class="title">Dama <span class="arabic" lang="ar" dir="rtl">ضامة</span></h1>
   </header>
 
-  <div class="layout">
-    <div class="board-column">
-      <p class="status" data-testid="status" aria-live="polite">{{ statusText() }}</p>
-      <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
+  @if (screen() === 'home') {
+    <app-home [settings]="game.settings()" (start)="startGame($event)"></app-home>
+  } @else {
+    <div class="layout">
+      <div class="board-column">
+        <p class="status" data-testid="status" aria-live="polite">{{ statusText() }}</p>
+        <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
+        <!-- Always in the page, so screen readers announce it when the text appears. -->
+        <p class="nfikh-note" data-testid="nfikh-note" aria-live="polite">{{ nfikhNote() }}</p>
 
-      <p class="piece-counts">
-        <span [class.active-turn]="game.state().toMove === LIGHT">● Light {{ pieceCounts().light }}</span>
-        <span [class.active-turn]="game.state().toMove === DARK">○ Dark {{ pieceCounts().dark }}</span>
-      </p>
+        <p class="piece-counts">
+          <span [class.active-turn]="game.state().toMove === LIGHT">○ White {{ pieceCounts().light }}</span>
+          <span [class.active-turn]="game.state().toMove === DARK">● Black {{ pieceCounts().dark }}</span>
+        </p>
 
-      <div class="board-wrap">
-        <app-board
-          [board]="game.state().board"
-          [flipped]="flipped()"
-          [selected]="selection().selected"
-          [pathSoFar]="selection().path"
-          [capturedSoFar]="capturedSoFar()"
-          [landingDots]="landingDots()"
-          [captureRings]="captureRings()"
-          [compulsoryRings]="selection().path.length > 1 ? [] : selection().compulsorySquares"
-          [lastMove]="game.lastMove()"
-          [updateKind]="game.updateKind()"
-          (squareTap)="onSquareTap($event)"
-          (settled)="game.boardSettled()"
-        ></app-board>
+        <div class="board-wrap">
+          <app-board
+            [board]="game.state().board"
+            [theme]="game.settings().boardTheme"
+            [flipped]="flipped()"
+            [selected]="selection().selected"
+            [pathSoFar]="selection().path"
+            [capturedSoFar]="capturedSoFar()"
+            [landingDots]="landingDots()"
+            [captureRings]="captureRings()"
+            [lastMove]="game.lastMove()"
+            [updateKind]="game.updateKind()"
+            (squareTap)="onSquareTap($event)"
+            (settled)="game.boardSettled()"
+          ></app-board>
 
-        @if (gameOver(); as result) {
-          <div
-            class="game-over"
-            [class.win]="result.variant === 'win'"
-            [class.loss]="result.variant === 'loss'"
-            data-testid="game-over"
-          >
+          @if (gameOver(); as result) {
             <div
-              class="game-over-card"
-              role="dialog"
-              aria-modal="true"
-              aria-labelledby="game-over-title"
-              aria-describedby="game-over-subtitle"
+              class="game-over"
+              [class.win]="result.variant === 'win'"
+              [class.loss]="result.variant === 'loss'"
+              data-testid="game-over"
             >
-              <p class="game-over-title" id="game-over-title">{{ result.title }}</p>
-              <p class="game-over-subtitle" id="game-over-subtitle">{{ result.subtitle }}</p>
-              <button type="button" #gameOverButton (click)="newGameFromGameOver()">New game</button>
+              <div
+                class="game-over-card"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="game-over-title"
+                aria-describedby="game-over-subtitle"
+              >
+                <p class="game-over-title" id="game-over-title">{{ result.title }}</p>
+                <p class="game-over-subtitle" id="game-over-subtitle">{{ result.subtitle }}</p>
+                <button type="button" #gameOverButton (click)="newGameFromGameOver()">New game</button>
+              </div>
             </div>
-          </div>
-        }
-      </div>
-    </div>
-
-    <aside class="sidebar">
-      <section class="controls" aria-label="Game settings">
-        <div class="segmented" role="group" aria-label="Game mode">
-          <button type="button" [attr.aria-pressed]="game.settings().mode === 'computer'" (click)="setMode('computer')">Vs computer</button>
-          <button type="button" [attr.aria-pressed]="game.settings().mode === 'pvp'" (click)="setMode('pvp')">1v1</button>
+          }
         </div>
+      </div>
 
-        @if (game.settings().mode === 'computer') {
-          <div class="segmented" role="group" aria-label="Difficulty">
-            <button type="button" [attr.aria-pressed]="game.settings().difficulty === 'beginner'" (click)="setDifficulty('beginner')">Beginner</button>
-            <button type="button" [attr.aria-pressed]="game.settings().difficulty === 'novice'" (click)="setDifficulty('novice')">Novice</button>
-            <button type="button" [attr.aria-pressed]="game.settings().difficulty === 'very-good'" (click)="setDifficulty('very-good')">Very good</button>
-          </div>
+      <aside class="sidebar">
+        <p class="setup-summary" data-testid="setup-summary">{{ setupSummary() }}</p>
 
-          <div class="segmented" role="group" aria-label="Play as">
-            <button type="button" [attr.aria-pressed]="game.settings().playerSide === LIGHT" (click)="setPlayerSide(LIGHT)">Light</button>
-            <button type="button" [attr.aria-pressed]="game.settings().playerSide === DARK" (click)="setPlayerSide(DARK)">Dark</button>
-          </div>
-        }
-      </section>
+        <section class="actions">
+          <button type="button" (click)="openMenu()">Menu</button>
+          <button type="button" (click)="newGame()">New game</button>
+          @if (game.settings().mode === 'computer') {
+            <button type="button" (click)="undo()" [disabled]="!game.canUndo() || game.thinking()">Undo</button>
+          }
+          <button type="button" [attr.aria-pressed]="game.settings().soundOn" (click)="toggleSound()">🔊 Sound</button>
+          <button type="button" [attr.aria-pressed]="game.settings().musicOn" (click)="toggleMusic()">🎵 Music</button>
+        </section>
 
-      <section class="actions">
-        <button type="button" (click)="newGame()">New game</button>
-        @if (game.settings().mode === 'computer') {
-          <button type="button" (click)="undo()" [disabled]="!game.canUndo() || game.thinking()">Undo</button>
-        }
-        <button type="button" [attr.aria-pressed]="game.settings().soundOn" (click)="toggleSound()">🔊 Sound</button>
-        <button type="button" [attr.aria-pressed]="game.settings().musicOn" (click)="toggleMusic()">🎵 Music</button>
-      </section>
-
-      <details class="rules">
-        <summary>Rules</summary>
-        <ul>
-          <li>Men move one square diagonally forward. They capture forward or backward by jumping an adjacent enemy piece.</li>
-          <li>Capturing is compulsory, and a piece that starts capturing must keep capturing while it can.</li>
-          <li>A man only becomes a king if its move ends on the far row.</li>
-          <li>Kings fly any distance along a diagonal, and capture at any distance too.</li>
-          <li>You lose if you have no legal move. 50 quiet moves in a row (no capture, no man move) is a draw.</li>
-        </ul>
-        <label class="strict-toggle">
-          <input type="checkbox" [checked]="game.settings().strictMode" (change)="toggleStrictMode()">
-          Strict mode — you must play the capture that takes the most pieces
-        </label>
-      </details>
-    </aside>
-  </div>
+        <details class="rules">
+          <summary>Rules</summary>
+          <ul>
+            <li>Men move one square diagonally forward, and capture forward only, by jumping an adjacent enemy piece.</li>
+            <li>Capturing is optional, but a piece that starts capturing must keep capturing while it can.</li>
+            <li><strong>Nfikh</strong>: if your opponent could have captured and didn't, tap the piece that could have captured to take it off the board, then make your move. Only on the very next turn.</li>
+            <li>A man only becomes a king if its move ends on the far row.</li>
+            <li>Kings fly any distance along a diagonal, and capture at any distance, in any direction.</li>
+            <li>You lose if you have no legal move. 50 quiet moves in a row (no capture, no man move) is a draw.</li>
+          </ul>
+          <label class="strict-toggle">
+            <input type="checkbox" [checked]="game.settings().strictMode" (change)="toggleStrictMode()">
+            Strict mode — if you capture, you must take the most pieces you can
+          </label>
+        </details>
+      </aside>
+    </div>
+  }
 </div>

@@ -14,12 +14,23 @@ describe('App accessibility', () => {
     }).compileComponents();
   });
 
-  it('moves focus to "New game" when the game ends', async () => {
+  /** The app opens on the home screen: press Start game to get to the board. */
+  function startedApp() {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
+    const start = [...fixture.nativeElement.querySelectorAll('button')].find(
+      (b: HTMLButtonElement) => b.textContent?.trim() === 'Start game',
+    ) as HTMLButtonElement;
+    start.click();
+    fixture.detectChanges();
+    return fixture;
+  }
+
+  it('moves focus to "New game" when the game ends', async () => {
+    const fixture = startedApp();
     const game = TestBed.inject(GameService);
     const controller = game['controller'];
-    // Dark has no pieces left and is to move: Light has won.
+    // Black has no pieces left and is to move: White has won.
     controller.state = { ...controller.state, board: boardFrom({ light: ['c3'] }), toMove: DARK };
     game['bump']();
     await fixture.whenStable();
@@ -36,10 +47,11 @@ describe('App accessibility', () => {
     expect(document.activeElement?.getAttribute('tabindex')).toBe('0');
   });
 
-  it('has a live region for move announcements', () => {
-    const fixture = TestBed.createComponent(App);
-    fixture.detectChanges();
-    const region = fixture.nativeElement.querySelector('[data-testid="announcement"]');
-    expect(region.getAttribute('aria-live')).toBe('polite');
+  it('has live regions for move announcements and nfikh', () => {
+    const fixture = startedApp();
+    for (const testId of ['announcement', 'nfikh-note']) {
+      const region = fixture.nativeElement.querySelector(`[data-testid="${testId}"]`);
+      expect(region.getAttribute('aria-live')).toBe('polite');
+    }
   });
 });

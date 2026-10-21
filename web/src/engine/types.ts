@@ -31,6 +31,18 @@ export interface GameState {
   strictMode: boolean;
   /** Consecutive moves (either side) with no capture and no man move — 50 reaches a draw. */
   quietMoves: number;
+  /**
+   * Pieces of the side that just moved which could have captured but didn't. The side to
+   * move may take one of them off the board (nfikh) before playing its own move. Empty
+   * unless the last move skipped an available capture.
+   */
+  forfeitable: number[];
+}
+
+/** One player's turn: an optional nfikh (the square of the piece taken), then a move. */
+export interface Turn {
+  nfikh: number | null;
+  move: Move;
 }
 
 export type Outcome =

@@ -1,5 +1,5 @@
-import { chooseMove } from '../../engine/ai';
-import { Move } from '../../engine/types';
+import { chooseTurn } from '../../engine/ai';
+import { Turn } from '../../engine/types';
 import { AiRequest, AiResponse } from './ai-protocol';
 
 /** Floor on how long a reply takes to feel like a deliberate beat, not an instant reflex. */
@@ -20,37 +20,37 @@ export class AiClient {
     this.worker = worker;
   }
 
-  async chooseMove(question: Omit<AiRequest, 'id'>): Promise<Move | null> {
+  async chooseTurn(question: Omit<AiRequest, 'id'>): Promise<Turn | null> {
     const start = Date.now();
-    const move = await this.runWorkerOrFallback({ ...question, id: this.nextId++ });
+    const turn = await this.runWorkerOrFallback({ ...question, id: this.nextId++ });
     const elapsed = Date.now() - start;
     if (elapsed < MIN_THINK_MS) {
       await delay(MIN_THINK_MS - elapsed);
     }
-    return move;
+    return turn;
   }
 
-  private async runWorkerOrFallback(request: AiRequest): Promise<Move | null> {
+  private async runWorkerOrFallback(request: AiRequest): Promise<Turn | null> {
     if (!this.worker) {
-      return chooseMove(request.board, request.side, request.options);
+      return chooseTurn(request.board, request.side, request.forfeitable, request.options);
     }
     try {
       return await this.runOnWorker(this.worker, request);
     } catch {
       this.worker.terminate();
       this.worker = null;
-      return chooseMove(request.board, request.side, request.options);
+      return chooseTurn(request.board, request.side, request.forfeitable, request.options);
     }
   }
 
-  private runOnWorker(worker: Worker, request: AiRequest): Promise<Move | null> {
+  private runOnWorker(worker: Worker, request: AiRequest): Promise<Turn | null> {
     return new Promise((resolve, reject) => {
       const onMessage = (event: MessageEvent<AiResponse>) => {
         // The worker answers requests one at a time, and every pending request listens: only
         // take the reply to this one (an abandoned earlier request may still be answered first).
         if (event.data.id !== request.id) return;
         cleanup();
-        resolve(event.data.move);
+        resolve(event.data.turn);
       };
       const onError = (event: ErrorEvent) => {
         cleanup();

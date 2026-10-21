@@ -1,6 +1,6 @@
 import { colOf, isKing, rowOf } from './board';
-import { applyMove, generateLegalMoves } from './moves';
-import { BoardArray, LIGHT, Move, Side } from './types';
+import { applyMove, forfeitableAfter, generateLegalMoves, removePiece } from './moves';
+import { BoardArray, LIGHT, Move, Side, Turn } from './types';
 
 export type Difficulty = 'beginner' | 'novice' | 'very-good';
 
@@ -74,13 +74,15 @@ function outOfTime(clock: SearchClock | undefined): boolean {
 }
 
 /**
- * Negamax with alpha-beta pruning. Quiescence: once depth reaches 0, keep searching
- * while the side to move is in a forced-capture position, so the search never stops
- * mid-exchange.
+ * Negamax with alpha-beta pruning, over turns: the side to move may first take a piece by
+ * nfikh (from `forfeitable`, which keeps it the same side's turn) and then plays a move.
+ * Quiescence: once depth reaches 0, the side to move can stand pat on the static evaluation
+ * or keep going with captures (and nfikh), so the search never stops mid-exchange.
  */
 function negamax(
   board: BoardArray,
   side: Side,
+  forfeitable: number[],
   depth: number,
   alpha: number,
   beta: number,
@@ -89,19 +91,39 @@ function negamax(
 ): number {
   if (outOfTime(clock)) return 0;
   const moves = generateLegalMoves(board, side, strictMode);
-  if (moves.length === 0) {
+  if (moves.length === 0 && forfeitable.length === 0) {
     return -WIN_SCORE;
   }
 
-  const inForcedCapture = moves[0].captures.length > 0;
-  if (depth <= 0 && !inForcedCapture) {
-    return side * evaluate(board);
+  const quiescent = depth <= 0;
+  let best = -Infinity;
+  if (quiescent) {
+    best = side * evaluate(board);
+    if (best >= beta) return best;
+    if (best > alpha) alpha = best;
   }
 
-  let best = -Infinity;
+  for (const square of forfeitable) {
+    // Nfikh doesn't pass the turn: same side, same depth, no negation.
+    const value = negamax(removePiece(board, square), side, [], depth, alpha, beta, strictMode, clock);
+    if (value > best) best = value;
+    if (best > alpha) alpha = best;
+    if (alpha >= beta) return best;
+  }
+
   for (const move of orderMoves(moves)) {
+    if (quiescent && move.captures.length === 0) continue;
     const nextBoard = applyMove(board, move);
-    const value = -negamax(nextBoard, (-side) as Side, depth - 1, -beta, -alpha, strictMode, clock);
+    const value = -negamax(
+      nextBoard,
+      (-side) as Side,
+      forfeitableAfter(board, move),
+      depth - 1,
+      -beta,
+      -alpha,
+      strictMode,
+      clock,
+    );
     if (value > best) best = value;
     if (best > alpha) alpha = best;
     if (alpha >= beta) break;
@@ -109,20 +131,38 @@ function negamax(
   return best;
 }
 
+/** Every turn `side` can play: each move, with no nfikh and after each possible nfikh. */
+function legalTurns(board: BoardArray, side: Side, forfeitable: number[], strictMode: boolean): Turn[] {
+  const turns: Turn[] = generateLegalMoves(board, side, strictMode).map((move) => ({ nfikh: null, move }));
+  for (const square of forfeitable) {
+    for (const move of generateLegalMoves(removePiece(board, square), side, strictMode)) {
+      turns.push({ nfikh: square, move });
+    }
+  }
+  return turns;
+}
+
+function orderTurns(turns: Turn[]): Turn[] {
+  const score = (t: Turn) => (t.nfikh !== null ? 2000 : 0) + t.move.captures.length * 1000 + (t.move.promotes ? 500 : 0);
+  return [...turns].sort((a, b) => score(b) - score(a));
+}
+
 function searchRoot(
   board: BoardArray,
   side: Side,
   depth: number,
   strictMode: boolean,
-  moves: Move[],
+  turns: Turn[],
   clock?: SearchClock,
-): { move: Move; score: number }[] {
-  const results: { move: Move; score: number }[] = [];
-  for (const move of orderMoves(moves)) {
-    const nextBoard = applyMove(board, move);
+): { turn: Turn; score: number }[] {
+  const results: { turn: Turn; score: number }[] = [];
+  for (const turn of orderTurns(turns)) {
+    const before = turn.nfikh === null ? board : removePiece(board, turn.nfikh);
+    const nextBoard = applyMove(before, turn.move);
     const score = -negamax(
       nextBoard,
       (-side) as Side,
+      forfeitableAfter(before, turn.move),
       depth - 1,
       -Infinity,
       Infinity,
@@ -130,16 +170,16 @@ function searchRoot(
       clock,
     );
     if (clock?.timedOut) break;
-    results.push({ move, score });
+    results.push({ turn, score });
   }
   return results;
 }
 
 function pickWithNoise(
-  results: { move: Move; score: number }[],
+  results: { turn: Turn; score: number }[],
   noise: number,
   rng: () => number,
-): Move {
+): Turn {
   let best = results[0];
   let bestNoisy = best.score + (rng() * 2 - 1) * noise;
   for (let i = 1; i < results.length; i++) {
@@ -149,14 +189,22 @@ function pickWithNoise(
       bestNoisy = noisy;
     }
   }
-  return best.move;
+  return best.turn;
 }
 
-/** Picks a move for `side` to play. Returns null when there is no legal move. */
-export function chooseMove(board: BoardArray, side: Side, options: AiOptions): Move | null {
-  const moves = generateLegalMoves(board, side, options.strictMode);
-  if (moves.length === 0) return null;
-  if (moves.length === 1) return moves[0];
+/**
+ * Picks a turn for `side` to play: whether to take one of `forfeitable` by nfikh first, and
+ * the move. Returns null when there is no legal move.
+ */
+export function chooseTurn(
+  board: BoardArray,
+  side: Side,
+  forfeitable: number[],
+  options: AiOptions,
+): Turn | null {
+  const turns = legalTurns(board, side, forfeitable, options.strictMode);
+  if (turns.length === 0) return null;
+  if (turns.length === 1) return turns[0];
 
   const rng = options.rng ?? Math.random;
   const now = options.now ?? Date.now;
@@ -164,13 +212,13 @@ export function chooseMove(board: BoardArray, side: Side, options: AiOptions): M
   switch (options.difficulty) {
     case 'beginner': {
       if (rng() < 0.35) {
-        return moves[Math.floor(rng() * moves.length)];
+        return turns[Math.floor(rng() * turns.length)];
       }
-      const results = searchRoot(board, side, 1, options.strictMode, moves);
+      const results = searchRoot(board, side, 1, options.strictMode, turns);
       return pickWithNoise(results, 160, rng);
     }
     case 'novice': {
-      const results = searchRoot(board, side, 3, options.strictMode, moves);
+      const results = searchRoot(board, side, 3, options.strictMode, turns);
       return pickWithNoise(results, 40, rng);
     }
     case 'very-good': {
@@ -179,19 +227,24 @@ export function chooseMove(board: BoardArray, side: Side, options: AiOptions): M
       // the previous depth's answer kept) instead of overrunning the budget many times over.
       const budget = options.timeBudgetMs ?? 300;
       const clock: SearchClock = { deadline: now() + budget, now, nodes: 0, timedOut: false };
-      let best = moves[0];
+      let best = turns[0];
       for (let depth = 1; depth <= 12; depth++) {
         // Depth 1 always runs to completion, so there's always a searched move to play.
         const timed = depth > 1 ? clock : undefined;
-        const results = searchRoot(board, side, depth, options.strictMode, moves, timed);
+        const results = searchRoot(board, side, depth, options.strictMode, turns, timed);
         if (clock.timedOut) break;
         results.sort((a, b) => b.score - a.score);
-        best = results[0].move;
+        best = results[0].turn;
         if (Math.abs(results[0].score) >= WIN_SCORE - 100 || now() >= clock.deadline) break;
       }
       return best;
     }
   }
+}
+
+/** Picks a move for `side` when there's nothing to take by nfikh. Null when there is no legal move. */
+export function chooseMove(board: BoardArray, side: Side, options: AiOptions): Move | null {
+  return chooseTurn(board, side, [], options)?.move ?? null;
 }
 
 export { evaluate };
