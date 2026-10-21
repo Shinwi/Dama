@@ -1,4 +1,7 @@
-<div class="board" role="grid" aria-label="Dama board">
+<div class="board" role="group" aria-label="Dama board" aria-describedby="board-help">
+  <p id="board-help" class="visually-hidden">
+    Use the arrow keys to move between squares, and Enter to pick up a piece or choose where it goes.
+  </p>
   <div class="squares">
     @for (cell of cells(); track cell.key) {
       @if (cell.playable) {
@@ -9,8 +12,12 @@
           [class.on-path]="cell.onPath"
           [class.last-move]="cell.isLastMove"
           [attr.data-square]="cell.name"
-          [attr.aria-label]="'Square ' + cell.name"
+          [attr.data-key]="cell.key"
+          [attr.aria-label]="cell.label"
+          [attr.tabindex]="cell.tabIndex"
           (click)="tap(cell)"
+          (focus)="onFocus(cell)"
+          (keydown)="onKeydown($event, cell)"
         >
           @if (cell.isCompulsoryRing) {
             <span class="ring compulsory-ring" aria-hidden="true"></span>

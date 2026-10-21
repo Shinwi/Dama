@@ -5,7 +5,8 @@
 
   <div class="layout">
     <div class="board-column">
-      <p class="status" data-testid="status">{{ statusText() }}</p>
+      <p class="status" data-testid="status" aria-live="polite">{{ statusText() }}</p>
+      <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
 
       <p class="piece-counts">
         <span [class.active-turn]="game.state().toMove === LIGHT">● Light {{ pieceCounts().light }}</span>
@@ -35,10 +36,16 @@
             [class.loss]="result.variant === 'loss'"
             data-testid="game-over"
           >
-            <div class="game-over-card">
-              <p class="game-over-title">{{ result.title }}</p>
-              <p class="game-over-subtitle">{{ result.subtitle }}</p>
-              <button type="button" (click)="newGame()">New game</button>
+            <div
+              class="game-over-card"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="game-over-title"
+              aria-describedby="game-over-subtitle"
+            >
+              <p class="game-over-title" id="game-over-title">{{ result.title }}</p>
+              <p class="game-over-subtitle" id="game-over-subtitle">{{ result.subtitle }}</p>
+              <button type="button" #gameOverButton (click)="newGameFromGameOver()">New game</button>
             </div>
           </div>
         }
