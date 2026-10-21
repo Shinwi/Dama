@@ -116,6 +116,30 @@
   animation: game-over-in 220ms ease;
 }
 
+/* The 3D board has no coordinate strips, and the card leaves the board in view: the winner's
+   petals, the lantern going dark. */
+.board-wrap.three-d {
+  width: min(100%, 640px, calc(100vh - var(--board-vh-reserve, 170px)));
+}
+
+.board-wrap.three-d .game-over {
+  inset: 0;
+  align-items: flex-end;
+  padding-bottom: 6%;
+  background: linear-gradient(to top, rgba(7, 5, 15, 0.55), transparent 55%);
+  border-radius: var(--radius-lg);
+}
+
+.board-3d-loading {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  margin: 0;
+  border-radius: var(--radius-lg);
+  background: #07050f;
+  color: #f6e9cc;
+}
+
 .game-over-card {
   display: flex;
   flex-direction: column;

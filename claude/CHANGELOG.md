@@ -3,6 +3,44 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-21 — experimental 3D board (branch `expiremental/3d-dama`, issue #25)
+
+- Added a **2D / 3D** switch (new `Settings.view`, saved like the other settings). 2D stays
+  the default. The 3D board is in `web/src/app/board3d/` and loaded with `@defer`, so Three.js
+  (`three@0.180`, ~133 kB gzipped) is a lazy chunk the 2D game never downloads.
+- `Board3d` has the same inputs/outputs as `Board`, so `GameService` didn't change. The scene
+  itself is a plain class, `DamaScene` (no Angular), mirroring how the engine is kept apart.
+  Animations are promises driven by the render loop, so a move reads as a script (lift, arc,
+  land, knock the jumped piece off, crown). A snap bumps an `epoch` that makes any running
+  animation give up.
+- The scene: a riad at night. A cedar board with a zellige frame and carved coordinates, on an
+  engraved brass tea tray. A flickering lantern whose spotlight projects a star lattice, a
+  steaming silver teapot and mint-tea glasses, glazed ceramic pieces (kings get a spinning gold
+  khatam star). Every texture is drawn on a canvas at start-up: no image files.
+- Movement: pieces lean into an arc and land with a squash and a puff of dust. Jumped pieces
+  are knocked off, tumbling onto **piles of captured pieces** beside the board, with shards and
+  a camera jolt. **Promotion is done as at a real board**: a disc is taken off the player's own
+  captured pile and put on top. Rose petals for a win, the lantern gutters out on a loss. The
+  camera flies in, sweeps round when playing Dark, and in 1v1 can "Turn the table" each turn.
+- Accessibility and tests: a visually hidden `Board` sits under the canvas with the real square
+  buttons, so keyboard, screen reader and the existing Playwright hooks all still work (the
+  focused square is outlined in 3D). New hook `window.dama3d.project('b4')` gives a square's
+  screen position, so e2e tests can click the canvas itself. No WebGL → the 2D board instead.
+- Bugs found while testing in a real browser:
+  - The canvas is created by Three.js at runtime, so Angular's component-scoped CSS never
+    matched it. On high-DPR phones it rendered at its pixel size and was cropped: zoomed in,
+    and taps landed on the wrong squares. Now styled in code.
+  - Tweens started their clock when created, so a slow first frame (shader compilation)
+    swallowed most of the intro. They now start on the first frame that runs them.
+  - With CPU-only WebGL (SwiftShader: CI runners, the cloud container, weak phones) a frame
+    took ~1.2 s and starved the page. There's now a low-power mode, picked automatically from
+    the WebGL renderer name: pixel ratio 1, no shadows, matte materials, no lattice spotlight,
+    and frames only every 400 ms while nothing moves. ~30 ms a frame after that.
+- Tests: `geometry.spec.ts` (square ↔ world mapping, piles, hop timing within GameService's 5 s
+  wait) and `e2e/board-3d.spec.ts` (40 pieces, canvas taps, keyboard play, back to 2D). All 58
+  unit, 35 engine and 20 e2e runs pass. Raised the per-component CSS *warning* budget from 4 kB
+  to 6 kB (`app.css` went just over with the 3D layout rules); the error budget is unchanged.
+
 ## 2026-10-18
 
 - Read `dama-claude-code-prompt.md` (the original spec) and started building phase 1: a

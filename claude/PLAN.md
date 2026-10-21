@@ -74,6 +74,12 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 20. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
     (*nfakh*, a move list, installable PWA).
 
+## Experiments
+
+- **3D board** (`expiremental/3d-dama`, issue #25): playable end to end, behind a 2D/3D
+  switch. To try next: play it on a real phone GPU, and decide whether it graduates to
+  `master`.
+
 ## Open items / decisions to revisit
 
 - **Angular version**: on Angular 20, not 21, because of the Node version on this machine

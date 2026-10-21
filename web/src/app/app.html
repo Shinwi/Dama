@@ -13,21 +13,45 @@
         <span [class.active-turn]="game.state().toMove === DARK">○ Dark {{ pieceCounts().dark }}</span>
       </p>
 
-      <div class="board-wrap">
-        <app-board
-          [board]="game.state().board"
-          [flipped]="flipped()"
-          [selected]="selection().selected"
-          [pathSoFar]="selection().path"
-          [capturedSoFar]="capturedSoFar()"
-          [landingDots]="landingDots()"
-          [captureRings]="captureRings()"
-          [compulsoryRings]="selection().path.length > 1 ? [] : selection().compulsorySquares"
-          [lastMove]="game.lastMove()"
-          [updateKind]="game.updateKind()"
-          (squareTap)="onSquareTap($event)"
-          (settled)="game.boardSettled()"
-        ></app-board>
+      <div class="board-wrap" [class.three-d]="game.settings().view === '3d'">
+        @if (game.settings().view === '3d') {
+          @defer (on immediate) {
+            <app-board-3d
+              [board]="game.state().board"
+              [flipped]="flipped()"
+              [selected]="selection().selected"
+              [pathSoFar]="selection().path"
+              [capturedSoFar]="capturedSoFar()"
+              [landingDots]="landingDots()"
+              [captureRings]="captureRings()"
+              [compulsoryRings]="selection().path.length > 1 ? [] : selection().compulsorySquares"
+              [lastMove]="game.lastMove()"
+              [updateKind]="game.updateKind()"
+              [turnSide]="game.state().toMove"
+              [pvp]="game.settings().mode === 'pvp'"
+              [mood]="mood()"
+              (squareTap)="onSquareTap($event)"
+              (settled)="game.boardSettled()"
+            ></app-board-3d>
+          } @placeholder {
+            <p class="board-3d-loading">Setting the table…</p>
+          }
+        } @else {
+          <app-board
+            [board]="game.state().board"
+            [flipped]="flipped()"
+            [selected]="selection().selected"
+            [pathSoFar]="selection().path"
+            [capturedSoFar]="capturedSoFar()"
+            [landingDots]="landingDots()"
+            [captureRings]="captureRings()"
+            [compulsoryRings]="selection().path.length > 1 ? [] : selection().compulsorySquares"
+            [lastMove]="game.lastMove()"
+            [updateKind]="game.updateKind()"
+            (squareTap)="onSquareTap($event)"
+            (settled)="game.boardSettled()"
+          ></app-board>
+        }
 
         @if (gameOver(); as result) {
           <div
@@ -71,6 +95,11 @@
             <button type="button" [attr.aria-pressed]="game.settings().playerSide === DARK" (click)="setPlayerSide(DARK)">Dark</button>
           </div>
         }
+
+        <div class="segmented" role="group" aria-label="Board">
+          <button type="button" [attr.aria-pressed]="game.settings().view === '2d'" (click)="setView('2d')">2D</button>
+          <button type="button" [attr.aria-pressed]="game.settings().view === '3d'" (click)="setView('3d')">3D ✨</button>
+        </div>
       </section>
 
       <section class="actions">

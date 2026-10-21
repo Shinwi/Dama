@@ -10,15 +10,16 @@ import {
   viewChild,
 } from '@angular/core';
 import { Board } from './board/board';
+import { Board3d } from './board3d/board3d';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
 import { DARK, LIGHT, Outcome } from '../engine/types';
 import { Difficulty } from '../engine/ai';
-import { GameMode, Settings } from './game/game-controller';
+import { BoardView, GameMode, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board],
+  imports: [Board, Board3d],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -37,9 +38,13 @@ export class App {
 
   protected readonly selection = computed(() => this.game.selection());
 
+  /** How the 3D board reacts to the end of a game: petals for a win, the lantern dims for a loss. */
+  protected readonly mood = computed(() => this.gameOver()?.variant ?? null);
+
   private readonly gameOverButton = viewChild<ElementRef<HTMLButtonElement>>('gameOverButton');
   private readonly board = viewChild(Board);
   private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
 
   constructor() {
     // When the game-over card appears, move keyboard (and screen reader) focus to its
@@ -146,12 +151,25 @@ export class App {
    */
   newGameFromGameOver(): void {
     this.newGame();
-    afterNextRender(() => this.board()?.focus(), { injector: this.injector });
+    afterNextRender(
+      () => {
+        // The 3D board's square buttons are in its own (deferred) view, out of reach of viewChild.
+        const board = this.board();
+        if (board) board.focus();
+        else this.host.nativeElement.querySelector<HTMLElement>('.board button[tabindex="0"]')?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   undo(): void {
     this.audio.unlock();
     this.game.undo();
+  }
+
+  setView(view: BoardView): void {
+    this.audio.unlock();
+    this.game.updateSettings({ view });
   }
 
   toggleSound(): void {

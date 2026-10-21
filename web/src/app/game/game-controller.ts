@@ -3,6 +3,8 @@ import { advanceState, createInitialState, legalMoves as engineLegalMoves, outco
 import { GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
 
 export type GameMode = 'computer' | 'pvp';
+/** The flat board, or the (experimental) 3D one. */
+export type BoardView = '2d' | '3d';
 
 export interface Settings {
   mode: GameMode;
@@ -12,6 +14,7 @@ export interface Settings {
   strictMode: boolean;
   soundOn: boolean;
   musicOn: boolean;
+  view: BoardView;
 }
 
 interface Snapshot {
@@ -42,6 +45,7 @@ export function defaultSettings(): Settings {
     strictMode: false,
     soundOn: true,
     musicOn: false,
+    view: '2d',
   };
 }
 

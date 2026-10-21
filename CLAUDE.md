@@ -45,6 +45,8 @@ dama/
                        rule tests. Will move to shared/ in phase 3.
     src/app/game/      game flow controller + signals-based GameService
     src/app/board/     board component (inputs in, square-tap output)
+    src/app/board3d/   experimental 3D board (Three.js, lazy-loaded): same inputs/outputs as
+                       board/, scene logic in the framework-free DamaScene class
     src/app/ai/        web worker + client wrapping src/engine/ai.ts
     src/app/audio/     synthesized sound engine (Web Audio, no audio files)
     e2e/               Playwright tests
@@ -57,5 +59,7 @@ dama/
   Cell values: 0 empty, ±1 man, ±2 king, positive = Light.
 - Testability hooks for Playwright: squares are buttons with `data-square="b4"`; pieces have
   `data-testid="piece"`, `data-square`, `data-color="light|dark"`, `data-king`; status line has
-  `data-testid="status"`.
-- Settings (mode, difficulty, colour, sound/music, strict mode) persist to `localStorage`.
+  `data-testid="status"`. On the 3D board the same buttons and pieces exist in a visually
+  hidden `Board`; `window.dama3d.project('b4')` gives a square's screen position for clicking
+  the canvas (`data-testid="board-3d-canvas"`).
+- Settings (mode, difficulty, colour, sound/music, strict mode, 2D/3D view) persist to `localStorage`.
