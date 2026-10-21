@@ -66,6 +66,8 @@ interface Tween {
   duration: number;
   step: (t: number) => void;
   resolve: () => void;
+  /** A camera sweep: not about the position on the board, so a snap leaves it running. */
+  camera: boolean;
 }
 
 /** A multi-jump being tapped out hop by hop: drawn as far as it has been tapped. */
@@ -92,6 +94,8 @@ const TARGET = new THREE.Vector3(0, -0.35, 0);
 const PETAL_COUNT = 240;
 /** In low-power mode, how often to draw a frame while nothing is moving. */
 const LOW_POWER_IDLE_MS = 400;
+/** In low-power mode, the most pixels drawn per frame. */
+const LOW_POWER_PIXELS = 520_000;
 const COLORS = {
   light: '#f3e9d2',
   dark: '#1a2a78',
@@ -145,6 +149,9 @@ export class DamaScene {
 
   private viewSide: Side = LIGHT;
   private sweeping = false;
+  private sweepId = 0;
+  /** Where the running sweep is heading: updated by a resize part-way through. */
+  private sweepTarget: { phi: number; radius: number } | null = null;
   private shake = 0;
   private lanternLevel = 1;
   private lanternTarget = 1;
@@ -218,11 +225,15 @@ export class DamaScene {
   // ---------------------------------------------------------------------------------------
   // Public API, used by Board3d.
 
-  /** Shows `board` straight away, with no animation, and drops anything still playing. */
+  /**
+   * Shows `board` straight away, with no animation, and drops any piece animation still
+   * playing. A camera sweep carries on (New game during the intro mustn't freeze the camera
+   * half-way down).
+   */
   snap(board: BoardArray): void {
     this.epoch++;
-    for (const tween of this.tweens) tween.resolve();
-    this.tweens = [];
+    for (const tween of this.tweens) if (!tween.camera) tween.resolve();
+    this.tweens = this.tweens.filter((tween) => tween.camera);
     this.partial = null;
     this.partialChain = Promise.resolve();
     for (const piece of this.pieces) this.scene.remove(piece.root);
@@ -389,6 +400,11 @@ export class DamaScene {
     this.lanternTarget = mood === 'loss' ? 0.18 : mood === 'win' ? 1.35 : 1;
     if (mood === 'win') this.startPetals();
     if (mood === null) this.clearPetals();
+  }
+
+  /** Nothing is moving: no piece, no camera sweep. A testability hook for e2e tests to wait on. */
+  idle(): boolean {
+    return this.tweens.length === 0;
   }
 
   /** Where a square appears on screen, in client coordinates. A testability hook for e2e tests. */
@@ -875,13 +891,13 @@ export class DamaScene {
   }
 
   /** Runs `step(t)` every frame for `duration` ms, t from 0 to 1. Resolves at the end. */
-  private tween(duration: number, step: (t: number) => void): Promise<void> {
+  private tween(duration: number, step: (t: number) => void, camera = false): Promise<void> {
     if (duration <= 0 || this.reducedMotion()) {
       step(1);
       return Promise.resolve();
     }
     return new Promise((resolve) => {
-      this.tweens.push({ start: null, duration, step, resolve });
+      this.tweens.push({ start: null, duration, step, resolve, camera });
     });
   }
 
@@ -1177,19 +1193,31 @@ export class DamaScene {
     this.camera.lookAt(TARGET);
   }
 
+  /**
+   * Swings the camera round to `to`. A newer sweep takes over from one still running, and a
+   * resize part-way through (entering full screen, turning a phone) re-aims it at the rest
+   * framing for the new shape, rather than ending at the framing for the old one.
+   */
   private async sweep(to: { theta: number; phi?: number; radius?: number }, duration: number): Promise<void> {
     const start = new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(TARGET));
     const turn = shortestTurn(start.theta, to.theta);
-    const phi = to.phi ?? start.phi;
-    const radius = to.radius ?? start.radius;
+    const target = { phi: to.phi ?? start.phi, radius: to.radius ?? start.radius };
+    const id = ++this.sweepId;
+    this.sweepTarget = target;
     this.sweeping = true;
     this.controls.enabled = false;
     await this.tween(duration, (t) => {
+      if (id !== this.sweepId) return;
       const e = easeInOutCubic(t);
-      this.placeCamera(start.theta + turn * e, start.phi + (phi - start.phi) * e, start.radius + (radius - start.radius) * e);
-    });
-    if (this.disposed) return;
+      this.placeCamera(
+        start.theta + turn * e,
+        start.phi + (target.phi - start.phi) * e,
+        start.radius + (target.radius - start.radius) * e,
+      );
+    }, true);
+    if (this.disposed || id !== this.sweepId) return;
     this.sweeping = false;
+    this.sweepTarget = null;
     this.controls.enabled = true;
     this.controls.update();
   }
@@ -1198,13 +1226,17 @@ export class DamaScene {
     const width = this.container.clientWidth;
     const height = this.container.clientHeight;
     if (width === 0 || height === 0) return;
+    // Low-power mode draws at most about half a megapixel (a full-screen board would be
+    // twice that) and lets the browser scale it up.
+    if (this.lowPower) this.renderer.setPixelRatio(Math.min(1, Math.sqrt(LOW_POWER_PIXELS / (width * height))));
     this.renderer.setSize(width, height, false);
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     const fit = this.fit();
     this.controls.minDistance = fit * 0.55;
     this.controls.maxDistance = fit * 1.4;
-    if (!this.sweeping) this.placeCamera(new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(TARGET)).theta, this.tilt(), fit);
+    if (this.sweepTarget) Object.assign(this.sweepTarget, { phi: this.tilt(), radius: fit });
+    else this.placeCamera(new THREE.Spherical().setFromVector3(this.camera.position.clone().sub(TARGET)).theta, this.tilt(), fit);
     const scale = this.renderer.getDrawingBufferSize(new THREE.Vector2()).y / (2 * Math.tan((CAMERA_FOV * Math.PI) / 360));
     this.sparks.setScale(scale);
     this.dust.setScale(scale);

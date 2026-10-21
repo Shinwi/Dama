@@ -61,11 +61,6 @@ export class App {
     // "New game" button, rather than leaving it on the board behind the card.
     effect(() => this.gameOverButton()?.nativeElement.focus());
 
-    // Full screen is for the 3D board only: switching to 2D leaves it.
-    effect(() => {
-      if (this.game.settings().view !== '3d') this.exitFullscreen();
-    });
-
     // Leaving full screen with the browser's own controls (Esc, the back gesture) instead of
     // the button. Esc also leaves the window-filling fallback.
     const onFullscreenChange = () => {

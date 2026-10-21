@@ -61,5 +61,5 @@ dama/
   `data-testid="piece"`, `data-square`, `data-color="light|dark"`, `data-king`; status line has
   `data-testid="status"`. On the 3D board the same buttons and pieces exist in a visually
   hidden `Board`; `window.dama3d.project('b4')` gives a square's screen position for clicking
-  the canvas (`data-testid="board-3d-canvas"`).
+  the canvas (`data-testid="board-3d-canvas"`); wait for `window.dama3d.idle()` first.
 - Settings (mode, difficulty, colour, sound/music, strict mode, 2D/3D view) persist to `localStorage`.

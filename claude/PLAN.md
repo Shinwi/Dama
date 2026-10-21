@@ -77,8 +77,9 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 ## Experiments
 
 - **3D board** (`expiremental/3d-dama`, issue #25): playable end to end, behind a 2D/3D
-  switch. To try next: play it on a real phone GPU, and decide whether it graduates to
-  `master`.
+  switch, with full screen. Bug-hunted by 10 scripted games (see CHANGELOG). To try next: play
+  it on a real phone GPU (only software rendering has been tested), and decide whether it
+  graduates to `master`.
 
 ## Open items / decisions to revisit
 

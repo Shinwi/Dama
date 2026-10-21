@@ -1,5 +1,9 @@
 import { expect, Page, test } from '@playwright/test';
 
+// Without a GPU (CI runners, headless browsers) WebGL runs on the CPU, so the 3D board is slow
+// to draw: give these tests three times the usual timeout.
+test.slow();
+
 /** Opens the game in 1v1 with the 3D board, and waits for the scene to be up. */
 async function open3d(page: Page): Promise<void> {
   await page.goto('/');
@@ -10,8 +14,12 @@ async function open3d(page: Page): Promise<void> {
   await page.waitForFunction(() => window.dama3d !== undefined);
 }
 
-/** Taps a square on the 3D board itself: projects it to the screen and clicks the canvas there. */
+/**
+ * Taps a square on the 3D board itself: waits for the camera and pieces to come to rest,
+ * projects the square to the screen and clicks the canvas there.
+ */
 async function tapCanvas(page: Page, square: string): Promise<void> {
+  await page.waitForFunction(() => window.dama3d!.idle());
   const point = await page.evaluate((name) => window.dama3d!.project(name), square);
   await page.mouse.click(point.x, point.y);
 }

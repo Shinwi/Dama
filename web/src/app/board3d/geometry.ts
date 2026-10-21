@@ -78,8 +78,11 @@ export function squareDistance(a: number, b: number): number {
   return Math.max(Math.abs(colOf(a) - colOf(b)), Math.abs(rowOf(a) - rowOf(b)));
 }
 
-/** Longest a move may take to play out: GameService gives up waiting after 5 s. */
-const MAX_MOVE_MS = 3200;
+/**
+ * Longest the hops of a move may take: GameService gives up waiting after 5 s, and a
+ * promotion at the end adds another ~1.4 s.
+ */
+const MAX_MOVE_MS = 2800;
 
 /**
  * How long each hop of a move takes, in ms. A flying king's long hop takes a little longer

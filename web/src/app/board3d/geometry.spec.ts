@@ -46,7 +46,7 @@ describe('3D board geometry', () => {
   it('keeps even the longest multi-jump well within GameService\'s 5 s wait', () => {
     const path = Array.from({ length: 12 }, (_, i) => (i % 2 === 0 ? 0 : 99));
     const total = hopDurations(path, true).reduce((a, b) => a + b, 0);
-    expect(total).toBeLessThanOrEqual(3200.001);
+    expect(total).toBeLessThanOrEqual(2800.001);
     expect(hopDurations([parseSquare('b4'), parseSquare('a5')], false)).toEqual([330]);
   });
 

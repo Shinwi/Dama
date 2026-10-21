@@ -3,6 +3,44 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-21 — 3D board: full screen, and a bug hunt by playing games
+
+- **Full screen** (3D only): a ⛶ button in the 3D toolbar puts the board column (status line,
+  piece counts, board, game-over card) in full screen. `App` owns it, since the status line is
+  App's. Where the Fullscreen API is missing (Safari on iPhone only allows it for video) the
+  column fills the window instead (`fill-window`), and Esc leaves it. On a tall view (a phone
+  held upright) the camera looks down more steeply and comes closer (`cameraTilt()`,
+  `fitDistance()`), so the board fills the screen instead of a band across the middle.
+- **Bug hunt**: a Playwright script (not committed) played 10 whole games on the 3D board: vs
+  computer as Light and as Dark, 1v1 with "Turn the table", strict mode, Pixel 7, and "chaos"
+  games with Undo, 2D↔3D, full screen, strict-mode toggles and camera drags in the middle of
+  moves. Taps went through the canvas (75%) and the keyboard (25%). After every move it checked
+  the 3D scene against the engine: every piece on its square at rest, kings with their star,
+  nothing ghosted or still animating, the captured piles the right size, the hidden board in
+  step. ~600 moves, 7 promotions: no mismatches. A position with two king routes that share
+  their first hops (found with the engine: king d4; dark c5 i5 h6 b8 e9 g9; d4→a9) was tested
+  by hand: completing it and cancelling half-way both end right.
+- Bugs it did find, all in the camera, all fixed:
+  - Entering full screen (or turning a phone) during a camera sweep (the intro, "Turn the
+    table") left the camera at the framing for the old shape: `resize()` skipped re-framing
+    while sweeping. A resize now re-aims the running sweep.
+  - New game or Undo during a camera sweep froze the camera half-way: `snap()` cancelled every
+    animation. Camera sweeps now carry on through a snap.
+  - Two sweeps at once (e.g. "Turn the table" during the intro) fought each other. A newer
+    sweep now takes over.
+- Hardening:
+  - The longest move's hops are capped at 2.8 s (was 3.2 s), so even a long king capture
+    ending in promotion (~4.2 s) stays well inside GameService's 5 s safety timeout.
+  - Low-power mode also caps the pixels drawn at ~0.5 MP: a full-screen board on CPU-only
+    WebGL was making the e2e tests time out.
+- Tests: new `window.dama3d.idle()` hook (true when nothing is animating). The e2e helper waits
+  on it before projecting a square, like an explicit wait in Selenium. Without it, a tap during
+  a camera sweep aimed at a moving target (that's how the full-screen bug surfaced). Full-screen
+  e2e tests (real full screen, and the iPhone fallback), `app.fullscreen.spec.ts` for the
+  fallback in jsdom, and `cameraTilt` unit tests. The 3D e2e spec is marked `test.slow()`:
+  without a GPU, WebGL runs on the CPU. 61 unit, 35 engine and 24 e2e runs pass (e2e twice in
+  a row).
+
 ## 2026-10-21 — experimental 3D board (branch `expiremental/3d-dama`, issue #25)
 
 - Added a **2D / 3D** switch (new `Settings.view`, saved like the other settings). 2D stays

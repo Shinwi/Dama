@@ -22,8 +22,11 @@ const STORAGE_KEY = 'dama.3d.v1';
 
 declare global {
   interface Window {
-    /** Testability hook for e2e tests: where a square (e.g. "b4") is on screen, to click it. */
-    dama3d?: { project(square: string): { x: number; y: number } };
+    /**
+     * Testability hooks for e2e tests: where a square (e.g. "b4") is on screen, to click it,
+     * and whether everything has come to rest (wait for it before projecting a square).
+     */
+    dama3d?: { project(square: string): { x: number; y: number }; idle(): boolean };
   }
 }
 
@@ -162,7 +165,7 @@ export class Board3d {
     this.seen = { board: this.board(), kind: this.updateKind(), move: this.lastMove() };
     // Switched to 3D while a move was playing out on the 2D board: it has landed now.
     if (this.updateKind() === 'move') this.settled.emit();
-    window.dama3d = { project: (square) => scene.project(parseSquare(square)) };
+    window.dama3d = { project: (square) => scene.project(parseSquare(square)), idle: () => scene.idle() };
   }
 
   private sync(board: BoardArray, kind: 'reset' | 'move', move: Move | null, path: number[], captured: number[]): void {
