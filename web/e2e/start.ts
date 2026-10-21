@@ -5,6 +5,7 @@ export interface Setup {
   difficulty?: 'Beginner' | 'Novice' | 'Very good';
   side?: 'White' | 'Black';
   board?: 'Classic' | 'Wood' | 'Green';
+  view?: '2D' | '3D ✨';
 }
 
 /** Opens the app and starts a game from the home screen. */
@@ -15,6 +16,7 @@ export async function startGame(page: Page, setup: Setup = {}): Promise<void> {
   if (setup.difficulty) await group('Difficulty').getByRole('button', { name: setup.difficulty, exact: true }).click();
   if (setup.side) await group('Play as').getByRole('button', { name: setup.side, exact: true }).click();
   if (setup.board) await group('Board pattern').getByRole('button', { name: setup.board, exact: true }).click();
+  if (setup.view) await group('View').getByRole('button', { name: setup.view, exact: true }).click();
   await page.getByRole('button', { name: 'Start game', exact: true }).click();
 }
 

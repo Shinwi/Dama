@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -11,17 +12,18 @@ import {
   viewChild,
 } from '@angular/core';
 import { Board } from './board/board';
+import { Board3d } from './board3d/board3d';
 import { GameSetup, Home } from './home/home';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
 import { squareName } from '../engine/board';
 import { DARK, LIGHT, Outcome } from '../engine/types';
 import { Difficulty } from '../engine/ai';
-import { Nfikh, Settings } from './game/game-controller';
+import { BoardView, Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Home],
+  imports: [Board, Board3d, Home],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -48,14 +50,43 @@ export class App {
 
   protected readonly selection = computed(() => this.game.selection());
 
+  /** How the 3D board reacts to the end of a game: petals for a win, the lantern dims for a loss. */
+  protected readonly mood = computed(() => this.gameOver()?.variant ?? null);
+
   private readonly gameOverButton = viewChild<ElementRef<HTMLButtonElement>>('gameOverButton');
   private readonly board = viewChild(Board);
   private readonly injector = inject(Injector);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  private readonly boardColumn = viewChild<ElementRef<HTMLElement>>('boardColumn');
+
+  /**
+   * The 3D board in full screen: 'screen' is the browser's real full screen; 'window' fills
+   * the browser window instead, where full screen isn't allowed (Safari on iPhone only
+   * allows it for video).
+   */
+  protected readonly fullscreen = signal<'off' | 'screen' | 'window'>('off');
 
   constructor() {
     // When the game-over card appears, move keyboard (and screen reader) focus to its
     // "New game" button, rather than leaving it on the board behind the card.
     effect(() => this.gameOverButton()?.nativeElement.focus());
+
+    // Leaving full screen with the browser's own controls (Esc, the back gesture) instead of
+    // the button. Esc also leaves the window-filling fallback.
+    const onFullscreenChange = () => {
+      if (this.fullscreen() === 'screen' && !fullscreenElement()) this.fullscreen.set('off');
+    };
+    const onKeydown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && this.fullscreen() === 'window') this.exitFullscreen();
+    };
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+    document.addEventListener('keydown', onKeydown);
+    inject(DestroyRef).onDestroy(() => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', onFullscreenChange);
+      document.removeEventListener('keydown', onKeydown);
+    });
   }
 
   /** Pieces jumped so far by a multi-jump that's still being tapped out, hop by hop. */
@@ -148,12 +179,51 @@ export class App {
    */
   newGameFromGameOver(): void {
     this.newGame();
-    afterNextRender(() => this.board()?.focus(), { injector: this.injector });
+    afterNextRender(
+      () => {
+        // The 3D board's square buttons are in its own (deferred) view, out of reach of viewChild.
+        const board = this.board();
+        if (board) board.focus();
+        else this.host.nativeElement.querySelector<HTMLElement>('.board button[tabindex="0"]')?.focus();
+      },
+      { injector: this.injector },
+    );
   }
 
   undo(): void {
     this.audio.unlock();
     this.game.undo();
+  }
+
+  setView(view: BoardView): void {
+    this.audio.unlock();
+    this.game.updateSettings({ view });
+  }
+
+  /** The board column (status, piece counts, board, game-over card) goes full screen. */
+  toggleFullscreen(): void {
+    if (this.fullscreen() !== 'off') {
+      this.exitFullscreen();
+      return;
+    }
+    const element = this.boardColumn()?.nativeElement as FullscreenElement | undefined;
+    const request = element?.requestFullscreen ?? element?.webkitRequestFullscreen;
+    if (!element || !request || document.fullscreenEnabled === false) {
+      this.fullscreen.set('window');
+      return;
+    }
+    this.fullscreen.set('screen');
+    // Refused (e.g. not allowed in an iframe): fill the window instead.
+    Promise.resolve(request.call(element)).catch(() => this.fullscreen.set('window'));
+  }
+
+  private exitFullscreen(): void {
+    const was = this.fullscreen();
+    this.fullscreen.set('off');
+    if (was !== 'screen' || !fullscreenElement()) return;
+    const doc = document as FullscreenDocument;
+    const exit = doc.exitFullscreen ?? doc.webkitExitFullscreen;
+    Promise.resolve(exit?.call(doc)).catch(() => undefined);
   }
 
   toggleSound(): void {
@@ -170,6 +240,18 @@ export class App {
     this.audio.unlock();
     this.game.updateSettings({ strictMode: !this.game.settings().strictMode });
   }
+}
+
+/** Safari before 16.4 only has the webkit-prefixed Fullscreen API. */
+type FullscreenElement = HTMLElement & { webkitRequestFullscreen?: () => Promise<void> | void };
+type FullscreenDocument = Document & {
+  webkitExitFullscreen?: () => Promise<void> | void;
+  webkitFullscreenElement?: Element | null;
+};
+
+function fullscreenElement(): Element | null {
+  const doc = document as FullscreenDocument;
+  return doc.fullscreenElement ?? doc.webkitFullscreenElement ?? null;
 }
 
 function sideName(side: typeof LIGHT | typeof DARK): string {

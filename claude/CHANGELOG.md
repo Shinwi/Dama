@@ -3,6 +3,111 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-21 — 3D board: merged with nfikh / home screen / board patterns (PR #24)
+
+- PR #27's preview never built: `master` had moved on (PR #24) and the PR conflicted, and
+  GitHub doesn't run `pull_request` workflows on a PR it can't merge. Merged `master` in.
+- The 3D board follows #24: white and black pieces (white glaze with cobalt, black glaze with
+  gold), the three board patterns in 3D (white marble and ebony, limestone and walnut, cream
+  and green), no "must capture" rings, and **nfikh**: a piece taken by nfikh is knocked off
+  onto its pile without holding up the game (`DamaScene.takeMissing`). The 2D/3D choice is a
+  step on the new home screen ("View") and stays a toggle in the game sidebar.
+- Bugs found while getting the tests green again:
+  - Three.js only refreshes the camera's matrix when it draws a frame, and in low-power mode
+    an idle board draws one only every 400 ms. Right after a resize (full screen, turning a
+    phone), picking a tapped square and `project()` both used the old camera: a tap could
+    land on the wrong square. Both now refresh the matrix first, and a resize draws a frame
+    straight away.
+  - A tap was timed from when its events were handled, not when they happened, so a slow
+    frame between press and lift could turn a quick tap into an ignored long press. Now uses
+    the events' timestamps.
+- Found by playing (vs computer, after the merge): the computer takes a piece by nfikh, then
+  moves 600 ms later. The nfikh's delayed check (1.2 s later: verify the pieces, square up the
+  piles) compared the scene with the board *at the nfikh*, saw the next move as a mismatch and
+  snapped back to that old position, undoing the move on screen. Delayed checks now only run
+  if no newer position has come since (`DamaScene.revision`). Regression test in
+  `board-3d.spec.ts`, with a new hook `window.dama3d.shown()` (the pieces the scene draws) to
+  compare with the real position. It's a race: without the fix the test fails only some of
+  the time on a software renderer.
+- e2e: games start from the home screen (`startGame()` in `e2e/start.ts`, now with `view`).
+  `tapCanvas` also waits for the square to stay put on screen. 74 unit, 47 engine and 30 e2e
+  runs pass (e2e twice in a row).
+
+## 2026-10-21 — 3D board: full screen, and a bug hunt by playing games
+
+- **Full screen** (3D only): a ⛶ button in the 3D toolbar puts the board column (status line,
+  piece counts, board, game-over card) in full screen. `App` owns it, since the status line is
+  App's. Where the Fullscreen API is missing (Safari on iPhone only allows it for video) the
+  column fills the window instead (`fill-window`), and Esc leaves it. On a tall view (a phone
+  held upright) the camera looks down more steeply and comes closer (`cameraTilt()`,
+  `fitDistance()`), so the board fills the screen instead of a band across the middle.
+- **Bug hunt**: a Playwright script (not committed) played 10 whole games on the 3D board: vs
+  computer as Light and as Dark, 1v1 with "Turn the table", strict mode, Pixel 7, and "chaos"
+  games with Undo, 2D↔3D, full screen, strict-mode toggles and camera drags in the middle of
+  moves. Taps went through the canvas (75%) and the keyboard (25%). After every move it checked
+  the 3D scene against the engine: every piece on its square at rest, kings with their star,
+  nothing ghosted or still animating, the captured piles the right size, the hidden board in
+  step. ~600 moves, 7 promotions: no mismatches. A position with two king routes that share
+  their first hops (found with the engine: king d4; dark c5 i5 h6 b8 e9 g9; d4→a9) was tested
+  by hand: completing it and cancelling half-way both end right.
+- Bugs it did find, all in the camera, all fixed:
+  - Entering full screen (or turning a phone) during a camera sweep (the intro, "Turn the
+    table") left the camera at the framing for the old shape: `resize()` skipped re-framing
+    while sweeping. A resize now re-aims the running sweep.
+  - New game or Undo during a camera sweep froze the camera half-way: `snap()` cancelled every
+    animation. Camera sweeps now carry on through a snap.
+  - Two sweeps at once (e.g. "Turn the table" during the intro) fought each other. A newer
+    sweep now takes over.
+- Hardening:
+  - The longest move's hops are capped at 2.8 s (was 3.2 s), so even a long king capture
+    ending in promotion (~4.2 s) stays well inside GameService's 5 s safety timeout.
+  - Low-power mode also caps the pixels drawn at ~0.5 MP: a full-screen board on CPU-only
+    WebGL was making the e2e tests time out.
+- Tests: new `window.dama3d.idle()` hook (true when nothing is animating). The e2e helper waits
+  on it before projecting a square, like an explicit wait in Selenium. Without it, a tap during
+  a camera sweep aimed at a moving target (that's how the full-screen bug surfaced). Full-screen
+  e2e tests (real full screen, and the iPhone fallback), `app.fullscreen.spec.ts` for the
+  fallback in jsdom, and `cameraTilt` unit tests. The 3D e2e spec is marked `test.slow()`:
+  without a GPU, WebGL runs on the CPU. 61 unit, 35 engine and 24 e2e runs pass (e2e twice in
+  a row).
+
+## 2026-10-21 — experimental 3D board (branch `expiremental/3d-dama`, issue #25)
+
+- Added a **2D / 3D** switch (new `Settings.view`, saved like the other settings). 2D stays
+  the default. The 3D board is in `web/src/app/board3d/` and loaded with `@defer`, so Three.js
+  (`three@0.180`, ~133 kB gzipped) is a lazy chunk the 2D game never downloads.
+- `Board3d` has the same inputs/outputs as `Board`, so `GameService` didn't change. The scene
+  itself is a plain class, `DamaScene` (no Angular), mirroring how the engine is kept apart.
+  Animations are promises driven by the render loop, so a move reads as a script (lift, arc,
+  land, knock the jumped piece off, crown). A snap bumps an `epoch` that makes any running
+  animation give up.
+- The scene: a riad at night. A cedar board with a zellige frame and carved coordinates, on an
+  engraved brass tea tray. A flickering lantern whose spotlight projects a star lattice, a
+  steaming silver teapot and mint-tea glasses, glazed ceramic pieces (kings get a spinning gold
+  khatam star). Every texture is drawn on a canvas at start-up: no image files.
+- Movement: pieces lean into an arc and land with a squash and a puff of dust. Jumped pieces
+  are knocked off, tumbling onto **piles of captured pieces** beside the board, with shards and
+  a camera jolt. **Promotion is done as at a real board**: a disc is taken off the player's own
+  captured pile and put on top. Rose petals for a win, the lantern gutters out on a loss. The
+  camera flies in, sweeps round when playing Dark, and in 1v1 can "Turn the table" each turn.
+- Accessibility and tests: a visually hidden `Board` sits under the canvas with the real square
+  buttons, so keyboard, screen reader and the existing Playwright hooks all still work (the
+  focused square is outlined in 3D). New hook `window.dama3d.project('b4')` gives a square's
+  screen position, so e2e tests can click the canvas itself. No WebGL → the 2D board instead.
+- Bugs found while testing in a real browser:
+  - The canvas is created by Three.js at runtime, so Angular's component-scoped CSS never
+    matched it. On high-DPR phones it rendered at its pixel size and was cropped: zoomed in,
+    and taps landed on the wrong squares. Now styled in code.
+  - Tweens started their clock when created, so a slow first frame (shader compilation)
+    swallowed most of the intro. They now start on the first frame that runs them.
+  - With CPU-only WebGL (SwiftShader: CI runners, the cloud container, weak phones) a frame
+    took ~1.2 s and starved the page. There's now a low-power mode, picked automatically from
+    the WebGL renderer name: pixel ratio 1, no shadows, matte materials, no lattice spotlight,
+    and frames only every 400 ms while nothing moves. ~30 ms a frame after that.
+- Tests: `geometry.spec.ts` (square ↔ world mapping, piles, hop timing within GameService's 5 s
+  wait) and `e2e/board-3d.spec.ts` (40 pieces, canvas taps, keyboard play, back to 2D). All 58
+  unit, 35 engine and 20 e2e runs pass. Raised the per-component CSS *warning* budget from 4 kB
+  to 6 kB (`app.css` went just over with the 3D layout rules); the error budget is unchanged.
 ## 2026-10-21
 
 Issue #21 (feature request), branch `feature/nfikh-home-screen-classic-board`:

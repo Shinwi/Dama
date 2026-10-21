@@ -48,6 +48,8 @@ dama/
     src/app/game/      game flow controller + signals-based GameService
     src/app/home/      home screen: opponent, difficulty/colour, board pattern, Start game
     src/app/board/     board component (inputs in, square-tap output)
+    src/app/board3d/   experimental 3D board (Three.js, lazy-loaded): same inputs/outputs as
+                       board/, scene logic in the framework-free DamaScene class
     src/app/ai/        web worker + client wrapping src/engine/ai.ts
     src/app/audio/     synthesized sound engine (Web Audio, no audio files)
     e2e/               Playwright tests
@@ -61,8 +63,11 @@ dama/
 - Testability hooks for Playwright: squares are buttons with `data-square="b4"`; pieces have
   `data-testid="piece"`, `data-square`, `data-color="light|dark"`, `data-king`; status line has
   `data-testid="status"`; the nfikh message has `data-testid="nfikh-note"`. The board has
-  `data-theme="classic|wood|green"`.
+  `data-theme="classic|wood|green"`. On the 3D board the same buttons and pieces exist in a
+  visually hidden `Board`; `window.dama3d.project('b4')` gives a square's screen position for
+  clicking the canvas (`data-testid="board-3d-canvas"`); wait for `window.dama3d.idle()` first.
+  `window.dama3d.shown()` lists the pieces the 3D scene draws, to compare with the real position.
 - No hints about which piece to move (no "must capture" rings): spotting captures, and missed
   ones to take by nfikh, is up to the player.
-- Settings (mode, difficulty, colour, board pattern, sound/music, strict mode) persist to
-  `localStorage`.
+- Settings (mode, difficulty, colour, board pattern, 2D/3D view, sound/music, strict mode)
+  persist to `localStorage`.

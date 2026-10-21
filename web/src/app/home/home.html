@@ -48,5 +48,13 @@
     </div>
   </div>
 
+  <div class="step">
+    <h2 class="step-title">View</h2>
+    <div class="segmented" role="group" aria-label="View">
+      <button type="button" [attr.aria-pressed]="view() === '2d'" (click)="view.set('2d')">2D</button>
+      <button type="button" [attr.aria-pressed]="view() === '3d'" (click)="view.set('3d')">3D ✨</button>
+    </div>
+  </div>
+
   <button type="button" class="start" (click)="startGame()">Start game</button>
 </section>

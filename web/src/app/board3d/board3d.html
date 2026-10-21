@@ -1,0 +1,51 @@
+@if (unavailable()) {
+  <p class="fallback">This browser can't draw the 3D board (it needs WebGL), so here's the 2D one.</p>
+  <app-board
+    [board]="board()"
+    [theme]="theme()"
+    [flipped]="flipped()"
+    [selected]="selected()"
+    [pathSoFar]="pathSoFar()"
+    [capturedSoFar]="capturedSoFar()"
+    [landingDots]="landingDots()"
+    [captureRings]="captureRings()"
+    [lastMove]="lastMove()"
+    [updateKind]="updateKind()"
+    (squareTap)="squareTap.emit($event)"
+    (settled)="settled.emit()"
+  ></app-board>
+} @else {
+  <div class="stage" #stage data-testid="board-3d" [class.fill]="fullscreen()">
+    <div class="toolbar">
+      <button type="button" (click)="resetView()" aria-label="Reset the view" title="Reset the view">⟲</button>
+      @if (pvp()) {
+        <button type="button" [attr.aria-pressed]="turnTable()" (click)="toggleTurnTable()">⇄ Turn the table</button>
+      }
+      <button
+        type="button"
+        [attr.aria-label]="fullscreen() ? 'Exit full screen' : 'Full screen'"
+        [title]="fullscreen() ? 'Exit full screen' : 'Full screen'"
+        (click)="fullscreenToggle.emit()"
+      >
+        {{ fullscreen() ? '✕' : '⛶' }}
+      </button>
+    </div>
+    <p class="hint" aria-hidden="true">Drag to look around · pinch or scroll to zoom</p>
+  </div>
+
+  <div class="visually-hidden" (focusin)="onFocusIn($event)" (focusout)="onFocusOut()">
+    <app-board
+      [board]="board()"
+      [theme]="theme()"
+      [flipped]="flipped()"
+      [selected]="selected()"
+      [pathSoFar]="pathSoFar()"
+      [capturedSoFar]="capturedSoFar()"
+      [landingDots]="landingDots()"
+      [captureRings]="captureRings()"
+        [lastMove]="lastMove()"
+      updateKind="reset"
+      (squareTap)="tap($event)"
+    ></app-board>
+  </div>
+}

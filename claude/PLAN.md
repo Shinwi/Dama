@@ -81,6 +81,13 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 22. Known rough edge, seen only at test-bot speed: taps queued during a move's animation that
     add up to more than one full move are dropped after the first.
 
+## Experiments
+
+- **3D board** (`expiremental/3d-dama`, issue #25): playable end to end, behind a 2D/3D
+  switch, with full screen. Bug-hunted by 10 scripted games (see CHANGELOG). To try next: play
+  it on a real phone GPU (only software rendering has been tested), and decide whether it
+  graduates to `master`.
+
 ## Open items / decisions to revisit
 
 - **Angular version**: on Angular 20, not 21, because of the Node version on this machine
