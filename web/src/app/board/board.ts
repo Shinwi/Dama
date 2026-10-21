@@ -32,6 +32,8 @@ interface PieceView extends PieceState {
   left: number;
 }
 
+const FILES = 'abcdefghij';
+
 const MOVE_HOP_MS = 170;
 const CAPTURE_HOP_MS = 210;
 /** How long a jumped piece takes to fade out, starting as the mover passes over it. */
@@ -74,6 +76,18 @@ export class Board {
   private heldTaps: number[] = [];
   /** The last in-progress multi-jump path drawn, so its move's slide can pick up from there. */
   private shownPath: number[] = [];
+
+  /** Rank numbers down the left of the board, top to bottom as drawn. */
+  readonly rankLabels = computed(() => {
+    const ranks = Array.from({ length: 10 }, (_, i) => String(10 - i));
+    return this.flipped() ? ranks.reverse() : ranks;
+  });
+
+  /** File letters along the bottom of the board, left to right as drawn. */
+  readonly fileLabels = computed(() => {
+    const files = FILES.split('');
+    return this.flipped() ? files.reverse() : files;
+  });
 
   readonly cells = computed<CellView[]>(() => {
     const board = this.board();

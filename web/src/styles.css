@@ -26,6 +26,10 @@
   --font-title: 'Reem Kufi', 'Segoe UI', sans-serif;
   --font-body: 'Figtree', 'Segoe UI', sans-serif;
 
+  /* Board coordinates: the strip they sit in beside/below the board, and their size. */
+  --coord-gutter: clamp(14px, 3.6vw, 20px);
+  --coord-font: clamp(9px, 2.6vw, 12px);
+
   --radius-md: 10px;
   --radius-lg: 16px;
 }

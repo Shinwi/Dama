@@ -51,3 +51,15 @@
     }
   </div>
 </div>
+
+<!-- Coordinates outside the board, lined up with its squares, as the board is drawn. -->
+<div class="coords coords-ranks" aria-hidden="true">
+  @for (rank of rankLabels(); track rank) {
+    <span>{{ rank }}</span>
+  }
+</div>
+<div class="coords coords-files" aria-hidden="true">
+  @for (file of fileLabels(); track file) {
+    <span>{{ file }}</span>
+  }
+</div>

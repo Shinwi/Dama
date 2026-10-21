@@ -160,3 +160,44 @@ describe('Board move animation', () => {
     expect(settled).toBe(1);
   });
 });
+
+describe('Board coordinates', () => {
+  let fixture: ComponentFixture<Board>;
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+    fixture = TestBed.createComponent(Board);
+    fixture.componentRef.setInput('board', boardFrom({}));
+  });
+
+  const labels = (selector: string): string =>
+    [...fixture.nativeElement.querySelectorAll(selector)]
+      .map((e: Element) => e.textContent?.trim())
+      .join(' ');
+
+  it('labels files a-j along the bottom and ranks 10-1 down the left, playing Light', async () => {
+    await fixture.whenStable();
+    expect(labels('.coords-files span')).toBe('a b c d e f g h i j');
+    expect(labels('.coords-ranks span')).toBe('10 9 8 7 6 5 4 3 2 1');
+  });
+
+  it('follows the board when it is flipped (playing Dark)', async () => {
+    fixture.componentRef.setInput('flipped', true);
+    await fixture.whenStable();
+    expect(labels('.coords-files span')).toBe('j i h g f e d c b a');
+    expect(labels('.coords-ranks span')).toBe('1 2 3 4 5 6 7 8 9 10');
+  });
+
+  it('keeps the labels outside the board and hidden from screen readers', async () => {
+    await fixture.whenStable();
+    const board = fixture.nativeElement.querySelector('.board');
+    const strips = [...fixture.nativeElement.querySelectorAll('.coords')] as HTMLElement[];
+    expect(strips).toHaveLength(2);
+    expect(
+      strips.every((s) => s.getAttribute('aria-hidden') === 'true' && !board.contains(s)),
+    ).toBe(true);
+  });
+});
