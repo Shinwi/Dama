@@ -67,7 +67,14 @@ export class App {
 
   protected readonly pieceCounts = computed(() => this.game.pieceCounts());
 
-  protected readonly gameOver = computed(() => describeGameOver(this.game.outcome(), this.game.settings()));
+  /**
+   * The game-over card, once the move that ended the game has finished playing out on the
+   * board: shown straight away, it would hide the winning move (and the moving piece would
+   * slide across it).
+   */
+  protected readonly gameOver = computed(() =>
+    this.game.moving() ? null : describeGameOver(this.game.outcome(), this.game.settings()),
+  );
 
   /**
    * Where the selected piece can be sent: the square each move ends on, however many jumps
