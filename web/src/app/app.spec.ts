@@ -2,6 +2,8 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { App, describeGameOver } from './app';
 import { defaultSettings } from './game/game-controller';
+import { GameService } from './game/game.service';
+import { boardFrom, parseSquare } from '../engine/board';
 import { DARK, LIGHT } from '../engine/types';
 
 describe('App', () => {
@@ -46,6 +48,30 @@ describe('App', () => {
     const pvp = TestBed.createComponent(App);
     pvp.detectChanges();
     expect(undoButton(pvp)).toBeUndefined();
+  });
+
+  it('shows the game-over card only once the winning move has finished on the board', async () => {
+    localStorage.setItem('dama.settings.v1', JSON.stringify({ mode: 'pvp' }));
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [App], providers: [provideZonelessChangeDetection()] });
+    const fixture = TestBed.createComponent(App);
+    fixture.detectChanges();
+    const game = TestBed.inject(GameService);
+    const controller = game['controller'];
+    // Light c3 takes Dark's last piece, d4, landing on e5.
+    controller.state = { ...controller.state, board: boardFrom({ light: ['c3'], dark: ['d4'] }) };
+    controller.resetSelection();
+    game.tapSquare(parseSquare('c3'));
+    game.tapSquare(parseSquare('e5'));
+    await fixture.whenStable();
+
+    expect(game.outcome().kind).toBe('win');
+    expect(game.moving()).toBe(true); // the capture is still sliding
+    expect(fixture.nativeElement.querySelector('[data-testid="game-over"]')).toBeNull();
+
+    game.boardSettled();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[data-testid="game-over"]')).not.toBeNull();
   });
 
   it('does not show the game-over overlay while a game is ongoing', () => {

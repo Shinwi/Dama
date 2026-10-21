@@ -19,6 +19,9 @@
   overflow: hidden;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
   touch-action: manipulation;
+  /* Keeps z-index inside the board (the lifted, moving piece) inside it, so nothing on the
+     board is ever drawn over what App lays on top, like the game-over card. */
+  isolation: isolate;
 }
 
 .squares {
