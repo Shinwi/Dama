@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node22 --packages=external --outfile=dist/main.js",
+    "start:prod": "node dist/main.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -17,6 +19,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.20.5",
+    "esbuild": "^0.25.12",
     "socket.io-client": "^4.8.1",
     "tsx": "^4.20.6",
     "typescript": "^5.9.3",

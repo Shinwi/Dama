@@ -1,0 +1,7 @@
+# Only what server/Dockerfile copies is needed; keep the build context small.
+**/node_modules
+**/dist
+web/.angular
+web/test-results
+web/playwright-report
+.git

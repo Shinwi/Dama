@@ -1,4 +1,5 @@
 import { checkOnlineServer, onlineServerUrl } from './online-client';
+import { HOSTED_SERVER_URL } from './server-config';
 
 const answer = (body: unknown, status = 200) =>
   (async () => new Response(JSON.stringify(body), { status })) as unknown as typeof fetch;
@@ -37,7 +38,12 @@ describe('checkOnlineServer', () => {
 });
 
 describe('onlineServerUrl', () => {
-  it('is port 3000 on the host the page came from, unless ?server= says otherwise', () => {
+  it('is the hosted server on an https page (the live site)', () => {
+    expect(onlineServerUrl({ search: '', protocol: 'https:', hostname: 'shinwi.github.io' })).toBe(HOSTED_SERVER_URL);
+    expect(HOSTED_SERVER_URL).toMatch(/^https:\/\//);
+  });
+
+  it('is port 3000 on the host the page came from over http, unless ?server= says otherwise', () => {
     expect(onlineServerUrl({ search: '', protocol: 'http:', hostname: '192.168.1.20' })).toBe('http://192.168.1.20:3000');
     expect(onlineServerUrl({ search: '?server=http://localhost:3001', protocol: 'http:', hostname: 'localhost' })).toBe(
       'http://localhost:3001',

@@ -22,10 +22,26 @@ export interface DamaServer {
 }
 
 /**
+ * Which web pages may connect: `true` for any (fine on your own machine), or a list of
+ * origins such as `https://shinwi.github.io` (when hosted).
+ */
+export type AllowedOrigins = true | string[];
+
+/**
+ * Whether a connection from `origin` (the page's Origin header) is allowed. Socket.IO's CORS
+ * setting alone doesn't stop WebSocket connections, which browsers don't apply CORS to, so
+ * this is checked on every connection as well.
+ */
+export function originAllowed(allowed: AllowedOrigins, origin: string | undefined): boolean {
+  return allowed === true || (origin !== undefined && allowed.includes(origin));
+}
+
+/**
  * The online server: Socket.IO in front of RoomManager. Each player's socket joins a
  * Socket.IO room per seat (`AB12:light`), so each side can be sent its own view.
  */
-export function createDamaServer(options: { corsOrigin?: string | string[] | boolean } = {}): DamaServer {
+export function createDamaServer(options: { allowedOrigins?: AllowedOrigins } = {}): DamaServer {
+  const allowedOrigins = options.allowedOrigins ?? true;
   const rooms = new RoomManager();
   const http = createServer((req, res) => {
     if (req.url === '/health') {
@@ -40,7 +56,8 @@ export function createDamaServer(options: { corsOrigin?: string | string[] | boo
     res.end(`Dama server: ${rooms.size} room(s) open\n`);
   });
   const io = new Server<ClientToServerEvents, ServerToClientEvents, Record<string, never>, Partial<SocketData>>(http, {
-    cors: { origin: options.corsOrigin ?? true },
+    cors: { origin: allowedOrigins },
+    allowRequest: (req, callback) => callback(null, originAllowed(allowedOrigins, req.headers.origin)),
   });
 
   const channel = (code: string, side: Side) => `${code}:${side === LIGHT ? 'light' : 'dark'}`;

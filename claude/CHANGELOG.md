@@ -31,7 +31,16 @@ The polish round (#28 and its sub-issues) is parked until after this.
   the server turns up (unless the player picked something else). An invite link with no server
   says "Online games aren't available right now." So the live site, which has no server yet,
   shows no Online option, and the branch can be merged before hosting.
-- Tests: 14 server tests (rooms, /health, real Socket.IO clients), GameService online spec with a
+- **Hosting on Fly.io** (same branch): `server/Dockerfile` (two stages: an esbuild bundle of
+  server + engine, then node:22-alpine with only Socket.IO), `fly.toml` at the repo root
+  (Madrid, one machine, never auto-stopped, health check on /health, CORS_ORIGIN set to the
+  GitHub Pages origin), `.github/workflows/deploy-server.yml` (tests on PRs; on master tests
+  then `flyctl deploy --remote-only --ha=false`, skipped with a notice until FLY_API_TOKEN
+  exists). Socket.IO's `cors` option doesn't stop WebSocket connections (browsers don't apply
+  CORS to them), so the server also checks the Origin header in `allowRequest`. The app
+  connects to `HOSTED_SERVER_URL` on https pages. The image was built and run locally:
+  /health, a create/join/move round trip, and a refused foreign origin all checked out.
+- Tests: 16 server tests (rooms, /health, allowed origins, real Socket.IO clients), GameService online spec with a
   fake client, wording tests, and `e2e/online.spec.ts` (two browser contexts through the real
   server; Playwright now starts the server too).
 

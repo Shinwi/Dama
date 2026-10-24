@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseSquare } from '../../web/src/engine/board';
 import { DARK, LIGHT } from '../../web/src/engine/types';
 import { ClientToServerEvents, JoinedReply, RoomView, ServerToClientEvents } from '../../web/src/protocol/online';
-import { createDamaServer, DamaServer } from './server';
+import { createDamaServer, DamaServer, originAllowed } from './server';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
 
@@ -101,5 +101,37 @@ describe('Dama server over Socket.IO', () => {
     const back = await client().emitWithAck('room:rejoin', { code: created.view.code, token: joined.token });
     expect(back.ok && back.view.yourSide).toBe(DARK);
     expect((await whiteSeesReturn).opponentConnected).toBe(true);
+  });
+});
+
+describe('originAllowed', () => {
+  it('allows any page when no list is set, and only listed pages otherwise', () => {
+    expect(originAllowed(true, undefined)).toBe(true);
+    expect(originAllowed(['https://shinwi.github.io'], 'https://shinwi.github.io')).toBe(true);
+    expect(originAllowed(['https://shinwi.github.io'], 'https://evil.example')).toBe(false);
+    expect(originAllowed(['https://shinwi.github.io'], undefined)).toBe(false);
+  });
+});
+
+describe('Dama server with a list of allowed pages', () => {
+  it('turns away connections from other pages', async () => {
+    const server = createDamaServer({ allowedOrigins: ['https://shinwi.github.io'] });
+    await new Promise<void>((resolve) => server.http.listen(0, resolve));
+    const url = `http://localhost:${(server.http.address() as AddressInfo).port}`;
+    const connectFrom = (origin: string) =>
+      new Promise<boolean>((resolve) => {
+        const socket = connect(url, { transports: ['websocket'], forceNew: true, extraHeaders: { origin }, reconnection: false });
+        socket.on('connect', () => {
+          socket.disconnect();
+          resolve(true);
+        });
+        socket.on('connect_error', () => resolve(false));
+      });
+    try {
+      expect(await connectFrom('https://shinwi.github.io')).toBe(true);
+      expect(await connectFrom('https://evil.example')).toBe(false);
+    } finally {
+      await server.close();
+    }
   });
 });

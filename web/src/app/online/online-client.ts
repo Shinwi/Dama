@@ -9,6 +9,7 @@ import {
   RoomView,
   ServerToClientEvents,
 } from '../../protocol/online';
+import { HOSTED_SERVER_URL } from './server-config';
 
 /** How long to wait for the server to answer before giving up on a request. */
 const REPLY_TIMEOUT_MS = 5000;
@@ -16,13 +17,17 @@ const REPLY_TIMEOUT_MS = 5000;
 export type ConnectionState = 'connected' | 'reconnecting';
 
 /**
- * Where the online server is. `?server=http://host:port` in the page URL wins; otherwise
- * it's port 3000 on the same machine the page came from, so a phone on the same Wi-Fi that
- * opened http://<your-computer>:4200 finds the server on <your-computer>:3000 too.
+ * Where the online server is:
+ * - `?server=http://host:port` in the page URL, if given;
+ * - otherwise, on an https page (the live site, PR previews), the hosted server;
+ * - otherwise (http: your own machine), port 3000 on the same host the page came from, so
+ *   a phone on the same Wi-Fi that opened http://<your-computer>:4200 finds the server on
+ *   <your-computer>:3000 too.
  */
 export function onlineServerUrl(location: Pick<Location, 'search' | 'protocol' | 'hostname'> = window.location): string {
   const fromQuery = new URLSearchParams(location.search).get('server');
   if (fromQuery) return fromQuery;
+  if (location.protocol === 'https:') return HOSTED_SERVER_URL;
   return `${location.protocol}//${location.hostname}:${DEFAULT_SERVER_PORT}`;
 }
 
