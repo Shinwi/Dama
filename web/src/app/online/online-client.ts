@@ -17,6 +17,17 @@ const REPLY_TIMEOUT_MS = 5000;
 export type ConnectionState = 'connected' | 'reconnecting';
 
 /**
+ * The server didn't answer in time (the connection is down, or it's gone). Not a refusal:
+ * the request may still arrive once the connection is back, so the caller shouldn't treat
+ * it as "the server said no".
+ */
+export interface Unreachable {
+  ok: false;
+  error: string;
+  unreachable: true;
+}
+
+/**
  * Where the online server is:
  * - `?server=http://host:port` in the page URL, if given;
  * - otherwise, on an https page (the live site, PR previews), the hosted server;
@@ -82,20 +93,21 @@ export class OnlineClient {
     this.socket.on('disconnect', () => this.onConnection('reconnecting', false));
   }
 
-  create(side: Side, strictMode: boolean): Promise<JoinedReply> {
+  create(side: Side, strictMode: boolean): Promise<JoinedReply | Unreachable> {
     return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:create', { side, strictMode }));
   }
 
-  join(code: string): Promise<JoinedReply> {
+  join(code: string): Promise<JoinedReply | Unreachable> {
     return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:join', { code }));
   }
 
-  rejoin(code: string, token: string): Promise<JoinedReply> {
+  rejoin(code: string, token: string): Promise<JoinedReply | Unreachable> {
     return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:rejoin', { code, token }));
   }
 
-  act(action: OnlineAction): Promise<ActionReply> {
-    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:action', { action }));
+  /** Sends an action for the seat `code`/`token` (see ActionRequest for why it says which). */
+  act(code: string, token: string, action: OnlineAction): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:action', { code, token, action }));
   }
 
   /** Leaves the room and closes the connection. */
@@ -104,11 +116,11 @@ export class OnlineClient {
     this.socket.disconnect();
   }
 
-  private async request<T extends { ok: boolean }>(send: () => Promise<T>): Promise<T | { ok: false; error: string }> {
+  private async request<T extends { ok: boolean }>(send: () => Promise<T>): Promise<T | Unreachable> {
     try {
       return await send();
     } catch {
-      return { ok: false, error: "Can't reach the online server. Is it running?" };
+      return { ok: false, error: "Can't reach the online server. Is it running?", unreachable: true };
     }
   }
 }

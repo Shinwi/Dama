@@ -100,6 +100,7 @@ export class App {
 
     if (settings.mode === 'online' && online && outcome.kind === 'ongoing') {
       if (online.connection === 'reconnecting') return 'Connection lost. Reconnecting…';
+      if (online.connection === 'lost') return 'This game is no longer on the server. Leave the room to start a new one.';
       if (!online.opponentJoined) return `Waiting for your friend to join room ${online.code}…`;
       if (!online.opponentConnected) return 'Your opponent lost connection. Waiting for them to come back…';
       if (this.game.selection().target !== null) return 'More than one way to get there: tap the way to go.';

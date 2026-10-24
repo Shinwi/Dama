@@ -14,6 +14,8 @@ const SETTLE_TIMEOUT_MS = 5000;
 const NFIKH_PAUSE_MS = 600;
 /** This tab's seat in an online room, kept per tab: two tabs on one computer are two players. */
 const ONLINE_SESSION_KEY = 'dama.online.v1';
+/** After a reconnect, how long to wait before asking for the seat again if the server didn't answer. */
+const REJOIN_RETRY_MS = 2000;
 
 /** Where this player is in an online game, for the screen. Null when not playing online. */
 export interface OnlineStatus {
@@ -21,7 +23,11 @@ export interface OnlineStatus {
   side: Side;
   opponentJoined: boolean;
   opponentConnected: boolean;
-  connection: 'connected' | 'reconnecting';
+  /**
+   * 'reconnecting' from the moment the connection drops until the server has confirmed this
+   * player is back in their seat; 'lost' if the server no longer has the game (it restarted).
+   */
+  connection: 'connected' | 'reconnecting' | 'lost';
   /** The latest problem to tell the player about (e.g. a move the server refused). */
   error: string | null;
 }
@@ -106,8 +112,15 @@ export class GameService {
   /** Made when an online game starts; replaceable in tests. */
   private onlineClientFactory = () => new OnlineClient(onlineServerUrl());
   private onlineClient: OnlineClient | null = null;
+  /** This tab's seat, also kept in sessionStorage for reloads. Every action is sent with it. */
+  private onlineSession: OnlineSession | null = null;
   /** How many of the room's actions this copy of the game has played (RoomView.seq). */
   private onlineSeq = 0;
+  /**
+   * The player's own action the server hasn't confirmed yet, and the room's `seq` before it.
+   * If the connection drops, the server may never get it: then it's sent again on rejoin.
+   */
+  private pendingAction: { action: OnlineAction; seqBefore: number } | null = null;
   readonly online = signal<OnlineStatus | null>(null);
   readonly onlineServer = signal<OnlineServerState>('checking');
   /** Replaceable in tests. */
@@ -287,7 +300,7 @@ export class GameService {
       this.leaveOnline();
       return reply.error;
     }
-    saveSession({ code: reply.view.code, token: reply.token });
+    this.setSession({ code: reply.view.code, token: reply.token });
     this.enterRoom(reply.view);
     return null;
   }
@@ -303,6 +316,7 @@ export class GameService {
       this.leaveOnline();
       return false;
     }
+    this.setSession(session);
     this.enterRoom(reply.view);
     return true;
   }
@@ -319,10 +333,16 @@ export class GameService {
 
   /** Leaves the online room, if in one. The friend sees this player as disconnected. */
   leaveOnline(): void {
+    this.pendingAction = null;
     this.onlineClient?.close();
     this.onlineClient = null;
     this.online.set(null);
-    saveSession(null);
+    this.setSession(null);
+  }
+
+  private setSession(session: OnlineSession | null): void {
+    this.onlineSession = session;
+    saveSession(session);
   }
 
   private connectOnline(): OnlineClient {
@@ -332,22 +352,41 @@ export class GameService {
       if (client === this.onlineClient && this.online()) this.applyRoomView(view, false);
     };
     client.onConnection = (connection, reconnected) => {
-      if (client !== this.onlineClient) return;
-      const online = this.online();
-      if (online) this.online.set({ ...online, connection });
-      if (reconnected) void this.rejoinAfterDrop(client);
+      if (client !== this.onlineClient || !this.online()) return;
+      if (connection === 'reconnecting') this.updateOnline({ connection: 'reconnecting' });
+      // Back, but not in the seat yet: still "reconnecting" until the server says so.
+      else if (reconnected) void this.rejoinAfterDrop(client);
     };
     return client;
   }
 
   /** Socket.IO reconnects by itself; then the server has to be told which seat this is. */
   private async rejoinAfterDrop(client: OnlineClient): Promise<void> {
-    const session = loadSession();
+    const session = this.onlineSession;
     if (!session) return;
     const reply = await client.rejoin(session.code, session.token);
     if (client !== this.onlineClient) return;
-    if (reply.ok) this.applyRoomView(reply.view, false);
-    else this.setOnlineError(reply.error);
+    if (reply.ok) {
+      this.updateOnline({ connection: 'connected', error: null });
+      const pending = this.pendingAction;
+      if (pending && reply.view.seq === pending.seqBefore) {
+        // The server never got the move made just before the drop (its queued copy was given
+        // up on). This copy of the game is still at that move: send it again.
+        this.onlineSeq = pending.seqBefore;
+        this.sendAction(pending.action);
+        return;
+      }
+      this.pendingAction = null;
+      this.applyRoomView(reply.view, false);
+    } else if (!('unreachable' in reply)) {
+      // The server is back but doesn't have the game (it restarted, or the room expired).
+      this.updateOnline({ connection: 'lost', error: reply.error });
+    }
+    // Unreachable: still reconnecting. If the connection drops again, Socket.IO says so when
+    // it's back; if it stayed up and this request just went unanswered, ask again shortly.
+    else setTimeout(() => {
+      if (client === this.onlineClient && this.online()?.connection === 'reconnecting') void this.rejoinAfterDrop(client);
+    }, REJOIN_RETRY_MS);
   }
 
   private enterRoom(view: RoomView): void {
@@ -372,10 +411,13 @@ export class GameService {
   private applyRoomView(view: RoomView, snap: boolean): void {
     const online = this.online();
     if (!online) return;
+    // The game has moved on since the last problem: the message is old news.
+    const movedOn = !snap && view.seq !== this.onlineSeq;
     this.online.set({
       ...online,
       opponentJoined: view.opponentJoined,
       opponentConnected: view.opponentConnected,
+      error: movedOn ? null : online.error,
     });
 
     const opponentsNext =
@@ -409,23 +451,43 @@ export class GameService {
 
   /** Tells the server about the player's own action, already shown on the board. */
   private sendOnline(result: 'move' | 'nfikh'): void {
-    const client = this.onlineClient;
-    if (!client) return;
     const action: OnlineAction =
       result === 'nfikh'
         ? { kind: 'nfikh', square: this.controller.lastNfikh!.square }
         : { kind: 'move', path: this.controller.lastMove!.path };
+    this.sendAction(action);
+  }
+
+  private sendAction(action: OnlineAction): void {
+    const client = this.onlineClient;
+    const session = this.onlineSession;
+    if (!client || !session) return;
+    const pending = { action, seqBefore: this.onlineSeq };
+    this.pendingAction = pending;
     this.onlineSeq++;
-    void client.act(action).then((reply) => {
-      if (client !== this.onlineClient || reply.ok) return;
-      this.setOnlineError(reply.error);
-      if (reply.view) this.applyRoomView(reply.view, true);
+    void client.act(session.code, session.token, action).then((reply) => {
+      if (client !== this.onlineClient) return;
+      // No answer in time: the connection dropped. The action may still get there once it's
+      // back, or be sent again on rejoin (see rejoinAfterDrop), so this isn't a refusal.
+      if (!reply.ok && 'unreachable' in reply) return;
+      if (this.pendingAction === pending) this.pendingAction = null;
+      if (reply.ok) {
+        this.updateOnline({ error: null });
+        return;
+      }
+      if (reply.view) {
+        this.updateOnline({ error: reply.error });
+        this.applyRoomView(reply.view, true);
+      } else {
+        // Refused without a position: the server doesn't have this game any more.
+        this.updateOnline({ connection: 'lost', error: reply.error });
+      }
     });
   }
 
-  private setOnlineError(error: string): void {
+  private updateOnline(change: Partial<OnlineStatus>): void {
     const online = this.online();
-    if (online) this.online.set({ ...online, error });
+    if (online) this.online.set({ ...online, ...change });
   }
 
   /** Settings as "you" see them: online, `playerSide` is the side the server gave you. */

@@ -101,3 +101,31 @@ test('an invite link with no online server says online games are unavailable', a
   await expect(page.getByTestId('online-unavailable')).toContainText("Online games aren't available right now.");
   await expect(page.getByTestId('room-code-input')).toHaveCount(0);
 });
+
+// Issue #36: a phone loses its connection (screen locked, app switched, signal gone) and the
+// page doesn't know yet. A move made then must still reach the opponent once it's back.
+test('a move made while the connection is down reaches the opponent once it is back', async ({ browser }) => {
+  test.setTimeout(90_000); // noticing a dead connection takes up to ~20 s (the heartbeat)
+  const white = await player(browser);
+  const code = await createRoom(white);
+  const blackContext = await browser.newContext();
+  const black = await blackContext.newPage();
+  await black.goto('/');
+  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await joinRoom(black, code);
+  await tap(white, 'b4', 'a5');
+  await expect(piece(black, 'a5', 'light')).toBeVisible();
+
+  await blackContext.setOffline(true);
+  await tap(black, 'c7', 'd6');
+  await expect(piece(black, 'd6', 'dark')).toBeVisible(); // shown at once, as always
+  // White's page finds out Black is gone (the server's heartbeat).
+  await expect(white.getByTestId('status')).toHaveText(/Your opponent lost connection/, { timeout: 40_000 });
+
+  await blackContext.setOffline(false);
+  await expect(piece(white, 'd6', 'dark')).toBeVisible({ timeout: 40_000 });
+  await expect(white.getByTestId('status')).toHaveText('Your move.');
+  await expect(black.getByTestId('status')).toHaveText("Opponent's move.");
+  await expect(piece(black, 'd6', 'dark')).toBeVisible(); // never jumped back
+  await expect(black.getByTestId('online-error')).toHaveCount(0);
+});

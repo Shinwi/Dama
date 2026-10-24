@@ -13,9 +13,10 @@ describe('Dama server over Socket.IO', () => {
   let server: DamaServer;
   let url: string;
   const clients: Client[] = [];
+  let logged: Record<string, unknown>[] = [];
 
   beforeEach(async () => {
-    server = createDamaServer();
+    server = createDamaServer({ log: (event, details) => logged.push({ event, ...details }) });
     await new Promise<void>((resolve) => server.http.listen(0, resolve));
     url = `http://localhost:${(server.http.address() as AddressInfo).port}`;
   });
@@ -23,6 +24,7 @@ describe('Dama server over Socket.IO', () => {
   afterEach(async () => {
     for (const client of clients.splice(0)) client.disconnect();
     await server.close();
+    logged = [];
   });
 
   function client(): Client {
@@ -65,6 +67,8 @@ describe('Dama server over Socket.IO', () => {
 
     const blackSeesMove = updateWhere(black, (v) => v.seq === 1);
     const played = await white.emitWithAck('room:action', {
+      code: created.view.code,
+      token: created.token,
       action: { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')] },
     });
     expect(played).toEqual({ ok: true });
@@ -81,10 +85,72 @@ describe('Dama server over Socket.IO', () => {
     await client().emitWithAck('room:join', { code: created.view.code });
 
     const reply = await white.emitWithAck('room:action', {
+      code: created.view.code,
+      token: created.token,
       action: { kind: 'move', path: [parseSquare('b4'), parseSquare('b5')] },
     });
     expect(reply.ok).toBe(false);
     expect(!reply.ok && reply.view?.seq).toBe(0);
+  });
+
+  // Issue #36: on a phone, the connection drops (screen locked, app switched); a move made
+  // then is queued and sent on reconnect *before* the room:rejoin that seats the connection.
+  it('accepts a move sent while the connection was down, once it is back', async () => {
+    const white = client();
+    const created = (await white.emitWithAck('room:create', { side: LIGHT, strictMode: false })) as Extract<JoinedReply, { ok: true }>;
+    const black = client();
+    const joined = (await black.emitWithAck('room:join', { code: created.view.code })) as Extract<JoinedReply, { ok: true }>;
+    const code = created.view.code;
+    // Like the web app: on every reconnect, tell the server which seat this is.
+    black.on('connect', () => void black.emitWithAck('room:rejoin', { code, token: joined.token }));
+    await white.emitWithAck('room:action', { code, token: created.token, action: { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')] } });
+
+    black.io.engine.close(); // the connection drops
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(black.connected).toBe(false);
+    const whiteSeesReply = updateWhere(white, (v) => v.seq === 2);
+    const reply = await black.timeout(5000).emitWithAck('room:action', {
+      code,
+      token: joined.token,
+      action: { kind: 'move', path: [parseSquare('c7'), parseSquare('d6')] },
+    });
+
+    expect(reply).toEqual({ ok: true });
+    const view = await whiteSeesReply;
+    expect(view.state.board[parseSquare('d6')]).toBe(-1);
+    // Black's room:rejoin arrives after the move seated it: Black stays connected.
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(server.rooms.view(server.rooms.get(code)!, LIGHT).opponentConnected).toBe(true);
+    expect(logged.some((l) => l['event'] === 'player_rejoined' && l['byAction'] === true)).toBe(true);
+  });
+
+  it('refuses a move whose token is not the seat it claims', async () => {
+    const white = client();
+    const created = (await white.emitWithAck('room:create', { side: LIGHT, strictMode: false })) as Extract<JoinedReply, { ok: true }>;
+    await client().emitWithAck('room:join', { code: created.view.code });
+
+    const stranger = client();
+    const reply = await stranger.emitWithAck('room:action', {
+      code: created.view.code,
+      token: 'not-the-token',
+      action: { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')] },
+    });
+    expect(reply).toEqual({ ok: false, error: 'That game is no longer available.' });
+  });
+
+  it('logs rooms being created, joined and left, without the secret tokens', async () => {
+    const white = client();
+    const created = (await white.emitWithAck('room:create', { side: LIGHT, strictMode: false })) as Extract<JoinedReply, { ok: true }>;
+    const black = client();
+    const joined = (await black.emitWithAck('room:join', { code: created.view.code })) as Extract<JoinedReply, { ok: true }>;
+    const whiteSeesDrop = updateWhere(white, (v) => !v.opponentConnected);
+    black.disconnect();
+    await whiteSeesDrop;
+
+    expect(logged.map((l) => l['event'])).toEqual(['room_created', 'room_joined', 'player_left']);
+    expect(logged[2]).toMatchObject({ room: created.view.code, side: 'black', reason: 'client namespace disconnect' });
+    expect(JSON.stringify(logged)).not.toContain(created.token);
+    expect(JSON.stringify(logged)).not.toContain(joined.token);
   });
 
   it('tells a player when the opponent drops, and lets the opponent back in', async () => {
@@ -115,7 +181,7 @@ describe('originAllowed', () => {
 
 describe('Dama server with a list of allowed pages', () => {
   it('turns away connections from other pages', async () => {
-    const server = createDamaServer({ allowedOrigins: ['https://shinwi.github.io'] });
+    const server = createDamaServer({ allowedOrigins: ['https://shinwi.github.io'], log: () => {} });
     await new Promise<void>((resolve) => server.http.listen(0, resolve));
     const url = `http://localhost:${(server.http.address() as AddressInfo).port}`;
     const connectFrom = (origin: string) =>

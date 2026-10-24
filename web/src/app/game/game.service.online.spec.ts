@@ -10,18 +10,26 @@ const sq = parseSquare;
 
 /** Stands in for OnlineClient: records what the game sends, and replies as told. */
 class FakeOnlineClient {
-  readonly sent: OnlineAction[] = [];
+  readonly sent: { code: string; token: string; action: OnlineAction }[] = [];
+  rejoins = 0;
   closed = false;
   onUpdate: (view: RoomView) => void = () => {};
   onConnection: (state: 'connected' | 'reconnecting', reconnected: boolean) => void = () => {};
   joinedReply: JoinedReply = { ok: false, error: 'not set up' };
-  actionReply: ActionReply = { ok: true };
+  actionReply: ActionReply | { ok: false; error: string; unreachable: true } = { ok: true };
+  /** When set, rejoin waits for the test to answer it. */
+  pendingRejoin: ((reply: JoinedReply) => void) | null = null;
+  holdRejoins = false;
 
   create = async () => this.joinedReply;
   join = async () => this.joinedReply;
-  rejoin = async () => this.joinedReply;
-  act = async (action: OnlineAction) => {
-    this.sent.push(action);
+  rejoin = () => {
+    this.rejoins++;
+    if (!this.holdRejoins) return Promise.resolve(this.joinedReply);
+    return new Promise<JoinedReply>((resolve) => (this.pendingRejoin = resolve));
+  };
+  act = async (code: string, token: string, action: OnlineAction) => {
+    this.sent.push({ code, token, action });
     return this.actionReply;
   };
   close = () => {
@@ -91,7 +99,7 @@ describe('GameService online', () => {
     service.tapSquare(sq('b4'));
     service.tapSquare(sq('a5'));
     expect(service.state().board[sq('a5')]).toBe(1);
-    expect(client.sent).toEqual([{ kind: 'move', path: [sq('b4'), sq('a5')] }]);
+    expect(client.sent).toEqual([{ code: 'K7QX', token: 'secret', action: { kind: 'move', path: [sq('b4'), sq('a5')] } }]);
 
     // The server's echo of the same move changes nothing: the slide isn't cut short.
     const after = play(createInitialState(), 'b4', 'a5');
@@ -159,12 +167,56 @@ describe('GameService online', () => {
     expect(service.online()).toBeNull();
   });
 
-  it('blocks moves while the connection is down', async () => {
+  it('blocks moves while the connection is down, until the server has the player back in their seat', async () => {
     await enterRoom(LIGHT, true);
     client.onConnection('reconnecting', false);
     expect(service.isHumanTurn()).toBe(false);
+
+    client.holdRejoins = true;
     client.onConnection('connected', true);
+    expect(client.rejoins).toBe(1);
+    expect(service.online()?.connection).toBe('reconnecting'); // connected, but not seated yet
+    expect(service.isHumanTurn()).toBe(false);
+
+    client.pendingRejoin!({ ok: true, token: 'secret', view: view(createInitialState(), LIGHT, 0) });
+    await flush();
+    expect(service.online()?.connection).toBe('connected');
     expect(service.isHumanTurn()).toBe(true);
+  });
+
+  it('says so when the server no longer has the game after a reconnect', async () => {
+    await enterRoom(LIGHT, true);
+    client.onConnection('reconnecting', false);
+    client.joinedReply = { ok: false, error: 'That game is no longer available.' };
+    client.onConnection('connected', true);
+    await flush();
+    expect(service.online()).toMatchObject({ connection: 'lost', error: 'That game is no longer available.' });
+    expect(service.isHumanTurn()).toBe(false);
+  });
+
+  it('does not call an unanswered move a refusal (the connection dropped)', async () => {
+    await enterRoom(LIGHT, true);
+    client.actionReply = { ok: false, error: "Can't reach the online server. Is it running?", unreachable: true };
+    service.tapSquare(sq('b4'));
+    service.tapSquare(sq('a5'));
+    await flush();
+    expect(service.online()?.error).toBeNull();
+    expect(service.state().board[sq('a5')]).toBe(1); // still shown; the rejoin will confirm it
+  });
+
+  it('clears an old error once the game moves on', async () => {
+    await enterRoom(LIGHT, true);
+    client.actionReply = { ok: false, error: 'Illegal move.', view: view(createInitialState(), LIGHT, 0) };
+    service.tapSquare(sq('b4'));
+    service.tapSquare(sq('a5'));
+    await flush();
+    expect(service.online()?.error).toBe('Illegal move.');
+
+    client.actionReply = { ok: true };
+    service.tapSquare(sq('b4'));
+    service.tapSquare(sq('a5'));
+    await flush();
+    expect(service.online()?.error).toBeNull();
   });
 
   it('starting an offline game leaves the room', async () => {
@@ -187,5 +239,53 @@ describe('GameService online', () => {
     answers[0](false); // an older, slower check: ignored
     await first;
     expect(service.onlineServer()).toBe('up');
+  });
+
+  it('sends a move again after a reconnect if the server never got it', async () => {
+    await enterRoom(LIGHT, true);
+    client.actionReply = { ok: false, error: "Can't reach the online server. Is it running?", unreachable: true };
+    service.tapSquare(sq('b4'));
+    service.tapSquare(sq('a5'));
+    await flush();
+    service.boardSettled();
+    client.onConnection('reconnecting', false);
+
+    // Back: the server is still at seq 0, without the move.
+    client.actionReply = { ok: true };
+    client.joinedReply = { ok: true, token: 'secret', view: view(createInitialState(), LIGHT, 0) };
+    client.onConnection('connected', true);
+    await flush();
+
+    expect(client.sent.map((s) => s.action)).toEqual([
+      { kind: 'move', path: [sq('b4'), sq('a5')] },
+      { kind: 'move', path: [sq('b4'), sq('a5')] },
+    ]);
+    expect(service.state().board[sq('a5')]).toBe(1); // never jumped back
+    expect(service.online()?.connection).toBe('connected');
+
+    // The server's update for the re-sent move is in step: nothing snaps.
+    const after = play(createInitialState(), 'b4', 'a5');
+    client.onUpdate(view(after, LIGHT, 1, { lastAction: { kind: 'move', path: [sq('b4'), sq('a5')], by: LIGHT } }));
+    expect(service.updateKind()).not.toBe('reset');
+  });
+
+  it('does not send a move twice if the server got it before the drop', async () => {
+    await enterRoom(LIGHT, true);
+    client.actionReply = { ok: false, error: "Can't reach the online server. Is it running?", unreachable: true };
+    service.tapSquare(sq('b4'));
+    service.tapSquare(sq('a5'));
+    await flush();
+    client.onConnection('reconnecting', false);
+
+    const after = play(createInitialState(), 'b4', 'a5');
+    client.joinedReply = {
+      ok: true,
+      token: 'secret',
+      view: view(after, LIGHT, 1, { lastAction: { kind: 'move', path: [sq('b4'), sq('a5')], by: LIGHT } }),
+    };
+    client.onConnection('connected', true);
+    await flush();
+    expect(client.sent).toHaveLength(1);
+    expect(service.updateKind()).not.toBe('reset');
   });
 });
