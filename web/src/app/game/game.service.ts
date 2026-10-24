@@ -1,8 +1,10 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
+import { OnlineClient, onlineServerUrl } from '../online/online-client';
 import { isKing, squareName } from '../../engine/board';
-import { DARK, LIGHT, Move } from '../../engine/types';
+import { DARK, GameState, LIGHT, Move, Side } from '../../engine/types';
+import { OnlineAction, RoomView, WireState } from '../../protocol/online';
 import { defaultSettings, GameController, Settings, UpdateKind } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
@@ -10,6 +12,27 @@ const STORAGE_KEY = 'dama.settings.v1';
 const SETTLE_TIMEOUT_MS = 5000;
 /** When the computer takes a piece by nfikh, how long it pauses before making its move. */
 const NFIKH_PAUSE_MS = 600;
+/** This tab's seat in an online room, kept per tab: two tabs on one computer are two players. */
+const ONLINE_SESSION_KEY = 'dama.online.v1';
+
+/** Where this player is in an online game, for the screen. Null when not playing online. */
+export interface OnlineStatus {
+  code: string;
+  side: Side;
+  opponentJoined: boolean;
+  opponentConnected: boolean;
+  connection: 'connected' | 'reconnecting';
+  /** The latest problem to tell the player about (e.g. a move the server refused). */
+  error: string | null;
+}
+
+/** How to get into an online room, from the home screen. */
+export type OnlineEntry = { kind: 'create' } | { kind: 'join'; code: string };
+
+interface OnlineSession {
+  code: string;
+  token: string;
+}
 
 function loadSettings(): Settings {
   const fallback = defaultSettings();
@@ -20,6 +43,24 @@ function loadSettings(): Settings {
     return { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {
     return fallback;
+  }
+}
+
+function loadSession(): OnlineSession | null {
+  try {
+    const raw = sessionStorage.getItem(ONLINE_SESSION_KEY);
+    return raw ? (JSON.parse(raw) as OnlineSession) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(session: OnlineSession | null): void {
+  try {
+    if (session) sessionStorage.setItem(ONLINE_SESSION_KEY, JSON.stringify(session));
+    else sessionStorage.removeItem(ONLINE_SESSION_KEY);
+  } catch {
+    // No storage: a reload just won't find its way back into the room.
   }
 }
 
@@ -58,6 +99,16 @@ export class GameService {
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Bumped for every question put to the computer, and to abandon the one in flight. */
   private aiRequest = 0;
+
+  /** Made when an online game starts; replaceable in tests. */
+  private onlineClientFactory = () => new OnlineClient(onlineServerUrl());
+  private onlineClient: OnlineClient | null = null;
+  /** How many of the room's actions this copy of the game has played (RoomView.seq). */
+  private onlineSeq = 0;
+  readonly online = signal<OnlineStatus | null>(null);
+
+  /** The side "you" play: the server's say online, the setting vs the computer. */
+  readonly playerSide = computed(() => this.online()?.side ?? this.settings().playerSide);
 
   readonly settings = computed(() => {
     this.version();
@@ -114,7 +165,7 @@ export class GameService {
 
     effect(() => {
       const move = this.lastMove();
-      const settings = this.settings();
+      const settings = this.perspective();
       // Undo brings back an older `lastMove`, but nothing was just played: no sound for it.
       const justPlayed = this.updateKind() === 'move';
       if (move && move !== this.lastAnnouncedMove) {
@@ -128,13 +179,13 @@ export class GameService {
 
     effect(() => {
       const outcome = this.outcome();
-      const settings = this.settings();
+      const settings = this.perspective();
       // `outcome()` is a fresh object on every update, so compare what it says, not identity:
       // only the move that ends the game plays the jingle, not every tap or toggle after it.
       const justEnded = outcome.kind !== 'ongoing' && !this.wasOver;
       this.wasOver = outcome.kind !== 'ongoing';
       if (justEnded && outcome.kind === 'win') {
-        const playerLost = settings.mode === 'computer' && outcome.winner !== settings.playerSide;
+        const playerLost = settings.mode !== 'pvp' && outcome.winner !== settings.playerSide;
         if (playerLost) this.audio.loss();
         else this.audio.win();
       }
@@ -148,6 +199,7 @@ export class GameService {
     if (result === 'move') this.startMove();
     if (result === 'nfikh') this.showNfikh();
     this.bump();
+    if (result !== 'none' && this.online()) this.sendOnline(result);
   }
 
   /**
@@ -170,7 +222,9 @@ export class GameService {
     this.bump();
   }
 
+  /** A new offline game (vs the computer or 1v1). Leaves the online room, if in one. */
   newGame(partial?: Partial<Settings>): void {
+    this.leaveOnline();
     this.controller.newGame(partial);
     this.abandonComputerMove();
     this.stopMoving();
@@ -182,6 +236,11 @@ export class GameService {
   }
 
   updateSettings(partial: Partial<Settings>): void {
+    // Online, the rules were fixed when the room was made: both players play the same game.
+    if (this.online() && partial.strictMode !== undefined) {
+      const { strictMode: _ignored, ...rest } = partial;
+      partial = rest;
+    }
     this.controller.updateSettings(partial);
     this.bump();
     saveSettings(this.controller.settings);
@@ -195,7 +254,166 @@ export class GameService {
   isHumanTurn(): boolean {
     const settings = this.controller.settings;
     if (settings.mode === 'pvp') return true;
+    if (settings.mode === 'online') {
+      const online = this.online();
+      return !!online && online.opponentJoined && online.connection === 'connected' && this.controller.state.toMove === online.side;
+    }
     return this.controller.state.toMove === settings.playerSide;
+  }
+
+  /**
+   * Creates or joins an online room. Resolves with an error to show the player, or null once
+   * they're in the room (which may still be waiting for the friend to join).
+   */
+  async startOnline(entry: OnlineEntry, partial: Partial<Settings> = {}): Promise<string | null> {
+    this.leaveOnline();
+    this.controller.updateSettings(partial);
+    saveSettings(this.controller.settings);
+
+    const client = this.connectOnline();
+    const settings = this.controller.settings;
+    const reply =
+      entry.kind === 'create' ? await client.create(settings.playerSide, settings.strictMode) : await client.join(entry.code);
+    if (client !== this.onlineClient) return 'Cancelled.'; // left again before the server answered
+    if (!reply.ok) {
+      this.leaveOnline();
+      return reply.error;
+    }
+    saveSession({ code: reply.view.code, token: reply.token });
+    this.enterRoom(reply.view);
+    return null;
+  }
+
+  /** Back into this tab's online room after a page reload, if it had one. Resolves true if so. */
+  async resumeOnline(): Promise<boolean> {
+    const session = loadSession();
+    if (!session) return false;
+    const client = this.connectOnline();
+    const reply = await client.rejoin(session.code, session.token);
+    if (client !== this.onlineClient) return false;
+    if (!reply.ok) {
+      this.leaveOnline();
+      return false;
+    }
+    this.enterRoom(reply.view);
+    return true;
+  }
+
+  /** Leaves the online room, if in one. The friend sees this player as disconnected. */
+  leaveOnline(): void {
+    this.onlineClient?.close();
+    this.onlineClient = null;
+    this.online.set(null);
+    saveSession(null);
+  }
+
+  private connectOnline(): OnlineClient {
+    const client = this.onlineClientFactory();
+    this.onlineClient = client;
+    client.onUpdate = (view) => {
+      if (client === this.onlineClient && this.online()) this.applyRoomView(view, false);
+    };
+    client.onConnection = (connection, reconnected) => {
+      if (client !== this.onlineClient) return;
+      const online = this.online();
+      if (online) this.online.set({ ...online, connection });
+      if (reconnected) void this.rejoinAfterDrop(client);
+    };
+    return client;
+  }
+
+  /** Socket.IO reconnects by itself; then the server has to be told which seat this is. */
+  private async rejoinAfterDrop(client: OnlineClient): Promise<void> {
+    const session = loadSession();
+    if (!session) return;
+    const reply = await client.rejoin(session.code, session.token);
+    if (client !== this.onlineClient) return;
+    if (reply.ok) this.applyRoomView(reply.view, false);
+    else this.setOnlineError(reply.error);
+  }
+
+  private enterRoom(view: RoomView): void {
+    this.abandonComputerMove();
+    this.controller.newGame({ mode: 'online' });
+    this.online.set({
+      code: view.code,
+      side: view.yourSide,
+      opponentJoined: view.opponentJoined,
+      opponentConnected: view.opponentConnected,
+      connection: 'connected',
+      error: null,
+    });
+    this.applyRoomView(view, true);
+  }
+
+  /**
+   * Brings this copy of the game in line with the server's. The opponent's latest action is
+   * played here like a computer move, so it animates and makes its sound; anything else
+   * that doesn't add up (a missed update, a refused move) snaps to the server's position.
+   */
+  private applyRoomView(view: RoomView, snap: boolean): void {
+    const online = this.online();
+    if (!online) return;
+    this.online.set({
+      ...online,
+      opponentJoined: view.opponentJoined,
+      opponentConnected: view.opponentConnected,
+    });
+
+    const opponentsNext =
+      !snap && view.seq === this.onlineSeq + 1 && view.lastAction !== null && view.lastAction.by !== online.side;
+    if (opponentsNext && view.lastAction) {
+      this.onlineSeq = view.seq;
+      this.playOpponentAction(view.lastAction);
+    }
+
+    const inStep = !snap && view.seq === this.onlineSeq && sameState(this.controller.state, view.state);
+    if (!inStep) {
+      this.controller.loadPosition(fromWire(view.state));
+      this.onlineSeq = view.seq;
+      this.stopMoving();
+      this.updateKindValue = 'reset';
+    }
+    this.bump();
+  }
+
+  private playOpponentAction(action: OnlineAction): void {
+    if (action.kind === 'nfikh') {
+      this.controller.takeForfeit(action.square);
+      this.showNfikh();
+      return;
+    }
+    const move = this.controller.legalMoves.find((m) => samePath(m.path, action.path));
+    if (!move) return; // applyRoomView sees the mismatch and snaps to the server's position
+    this.controller.applyExternalMove(move);
+    this.startMove();
+  }
+
+  /** Tells the server about the player's own action, already shown on the board. */
+  private sendOnline(result: 'move' | 'nfikh'): void {
+    const client = this.onlineClient;
+    if (!client) return;
+    const action: OnlineAction =
+      result === 'nfikh'
+        ? { kind: 'nfikh', square: this.controller.lastNfikh!.square }
+        : { kind: 'move', path: this.controller.lastMove!.path };
+    this.onlineSeq++;
+    void client.act(action).then((reply) => {
+      if (client !== this.onlineClient || reply.ok) return;
+      this.setOnlineError(reply.error);
+      if (reply.view) this.applyRoomView(reply.view, true);
+    });
+  }
+
+  private setOnlineError(error: string): void {
+    const online = this.online();
+    if (online) this.online.set({ ...online, error });
+  }
+
+  /** Settings as "you" see them: online, `playerSide` is the side the server gave you. */
+  private perspective(): Settings {
+    const settings = this.settings();
+    return { ...settings, playerSide: this.playerSide() };
   }
 
   private async maybeTriggerComputer(): Promise<void> {
@@ -264,7 +482,7 @@ export class GameService {
    * Picks which sound(s) a just-played move gets: a capture plays a hit per piece taken
    * (louder/heavier if the mover is a king), and a captured king additionally layers a
    * triumphant or ominous cue on top, depending on whether the move was ours or the
-   * opponent's (in vs-computer mode; there's no "ours" in 1v1, so it stays neutral there).
+   * opponent's (vs the computer or online; there's no "ours" in 1v1, so it stays neutral there).
    */
   private announceMove(move: Move, settings: Settings): void {
     if (move.captures.length === 0) {
@@ -277,7 +495,7 @@ export class GameService {
 
     if (move.capturedKing) {
       const moverSide = Math.sign(move.piece);
-      const moveWasOpponents = settings.mode === 'computer' && moverSide !== settings.playerSide;
+      const moveWasOpponents = settings.mode !== 'pvp' && moverSide !== settings.playerSide;
       if (moveWasOpponents) this.audio.kingLost();
       else this.audio.kingCaptured();
     }
@@ -292,16 +510,18 @@ export class GameService {
 
 /**
  * A move in words, e.g. "Computer played c7 to b6." or "You played c3 takes e5 takes g7,
- * 2 pieces captured, promoted to king." Vs the computer it says "You"/"Computer"; in 1v1
- * it names the side.
+ * 2 pieces captured, promoted to king." Vs the computer it says "You"/"Computer", online
+ * "You"/"Opponent"; in 1v1 it names the side.
  */
 export function describeMove(move: Move, settings: Settings): string {
   const side = Math.sign(move.piece);
   const who =
-    settings.mode === 'computer'
+    settings.mode !== 'pvp'
       ? side === settings.playerSide
         ? 'You'
-        : 'Computer'
+        : settings.mode === 'online'
+          ? 'Opponent'
+          : 'Computer'
       : side === LIGHT
         ? 'White'
         : 'Black';
@@ -315,6 +535,24 @@ export function describeMove(move: Move, settings: Settings): string {
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function fromWire(state: WireState): GameState {
+  return { ...state, board: Int8Array.from(state.board) };
+}
+
+function sameState(local: GameState, remote: WireState): boolean {
+  return (
+    local.toMove === remote.toMove &&
+    local.board.length === remote.board.length &&
+    local.board.every((cell, i) => cell === remote.board[i]) &&
+    local.forfeitable.length === remote.forfeitable.length &&
+    local.forfeitable.every((square) => remote.forfeitable.includes(square))
+  );
+}
+
+function samePath(a: number[], b: number[]): boolean {
+  return a.length === b.length && a.every((square, i) => square === b[i]);
 }
 
 function sameMove(a: Move, b: Move): boolean {

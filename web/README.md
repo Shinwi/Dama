@@ -1,6 +1,7 @@
 # Dama — web app
 
-Moroccan checkers, phase 1: a static Angular SPA (vs computer + local 1v1), no backend. See
+Moroccan checkers: an Angular SPA (vs computer, local 1v1, and an **online** prototype that
+talks to `../server`, see `server/README.md` for running both). See
 the repo root `CLAUDE.md` for project context, `docs/RULES.md` for the rules, and
 `claude/PLAN.md` for what's next.
 
@@ -14,7 +15,8 @@ npm run build          # production build -> dist/web/browser
 
 npm run test:engine    # pure rules/AI engine tests (Vitest)
 npm test               # Angular component tests (ng test, Vitest runner)
-npm run e2e            # Playwright e2e (starts its own dev server on :4300)
+npm run e2e            # Playwright e2e (starts its own dev server on :4300 and the online
+                       # server on :3000; run `npm install` in ../server once first)
 ```
 
 ## Project layout
@@ -26,6 +28,8 @@ npm run e2e            # Playwright e2e (starts its own dev server on :4300)
   an output).
 - `src/app/ai/` — the AI web worker and its client, with a main-thread fallback.
 - `src/app/audio/` — synthesized sound effects and background music (Web Audio, no files).
+- `src/app/online/` — the Socket.IO client for online rooms, and the room-code panel.
+- `src/protocol/online.ts` — the messages between this app and the online server.
 - `e2e/` — Playwright tests, run against Desktop Chrome and a Pixel 7 profile.
 
 ## Deploying to Cloudflare Pages

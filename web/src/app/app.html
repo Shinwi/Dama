@@ -4,7 +4,13 @@
   </header>
 
   @if (screen() === 'home') {
-    <app-home [settings]="game.settings()" (start)="startGame($event)"></app-home>
+    <app-home
+      [settings]="game.settings()"
+      [inviteCode]="inviteCode()"
+      [busy]="homeBusy()"
+      [error]="homeError()"
+      (start)="startGame($event)"
+    ></app-home>
   } @else {
     <div class="layout">
       <div class="board-column">
@@ -50,7 +56,11 @@
               >
                 <p class="game-over-title" id="game-over-title">{{ result.title }}</p>
                 <p class="game-over-subtitle" id="game-over-subtitle">{{ result.subtitle }}</p>
-                <button type="button" #gameOverButton (click)="newGameFromGameOver()">New game</button>
+                @if (game.online()) {
+                  <button type="button" #gameOverButton (click)="openMenu()">Back to menu</button>
+                } @else {
+                  <button type="button" #gameOverButton (click)="newGameFromGameOver()">New game</button>
+                }
               </div>
             </div>
           }
@@ -60,9 +70,15 @@
       <aside class="sidebar">
         <p class="setup-summary" data-testid="setup-summary">{{ setupSummary() }}</p>
 
+        @if (game.online(); as online) {
+          <app-room-panel [status]="online"></app-room-panel>
+        }
+
         <section class="actions">
-          <button type="button" (click)="openMenu()">Menu</button>
-          <button type="button" (click)="newGame()">New game</button>
+          <button type="button" (click)="openMenu()">{{ game.online() ? 'Leave room' : 'Menu' }}</button>
+          @if (!game.online()) {
+            <button type="button" (click)="newGame()">New game</button>
+          }
           @if (game.settings().mode === 'computer') {
             <button type="button" (click)="undo()" [disabled]="!game.canUndo() || game.thinking()">Undo</button>
           }
@@ -81,7 +97,12 @@
             <li>You lose if you have no legal move. 50 quiet moves in a row (no capture, no man move) is a draw.</li>
           </ul>
           <label class="strict-toggle">
-            <input type="checkbox" [checked]="game.settings().strictMode" (change)="toggleStrictMode()">
+            <input
+              type="checkbox"
+              [checked]="game.state().strictMode"
+              [disabled]="!!game.online()"
+              (change)="toggleStrictMode()"
+            >
             Strict mode — if you capture, you must take the most pieces you can
           </label>
         </details>

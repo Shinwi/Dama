@@ -3,6 +3,31 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-24
+
+Online rooms prototype, branch `feature/online-rooms-prototype` (local only, not hosted yet).
+The polish round (#28 and its sub-issues) is parked until after this.
+
+- **`server/`**: Node.js + Socket.IO, run with `tsx` (no build step). `RoomManager` (pure,
+  unit tested) holds rooms in memory: 4-character codes without look-alike characters, a
+  secret token per seat for rejoining, a 30-minute cleanup of empty rooms. Every action is
+  checked with the engine imported straight from `web/src/engine`. The server runs as
+  CommonJS because the engine files sit under `web/`, whose package.json isn't ESM: importing
+  them from an ESM server failed on named exports.
+- **Protocol** (`web/src/protocol/online.ts`): `room:create/join/rejoin/action/leave` with
+  acknowledgements, and `room:update` with a per-player `RoomView` (state, `seq`, last action,
+  whether the opponent has joined / is connected).
+- **Client**: an Online mode on the home screen (create, with a colour choice, or join by
+  code; `?room=` invite links fill the code in). GameService plays the player's own action at
+  once and sends it, and plays the opponent's like a computer move, so it animates and makes
+  its sound. If its copy is out of step (a missed update, a refused action) it snaps to the
+  server's position. The seat is kept per tab in sessionStorage, so a reload rejoins and two
+  tabs can be two players. The server URL is `<page host>:3000` unless `?server=` says
+  otherwise, so a phone on the same Wi-Fi works.
+- Tests: 13 server tests (rooms + real Socket.IO clients), GameService online spec with a
+  fake client, wording tests, and `e2e/online.spec.ts` (two browser contexts through the real
+  server; Playwright now starts the server too).
+
 ## 2026-10-21
 
 Issue #21 (feature request), branch `feature/nfikh-home-screen-classic-board`:

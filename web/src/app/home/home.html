@@ -4,8 +4,46 @@
     <div class="segmented" role="group" aria-label="Opponent">
       <button type="button" [attr.aria-pressed]="mode() === 'computer'" (click)="mode.set('computer')">Vs computer</button>
       <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="mode.set('pvp')">1v1</button>
+      <button type="button" [attr.aria-pressed]="mode() === 'online'" (click)="mode.set('online')">Online</button>
     </div>
   </div>
+
+  @if (mode() === 'online') {
+    <div class="step">
+      <h2 class="step-title">Room</h2>
+      <div class="segmented" role="group" aria-label="Room">
+        <button type="button" [attr.aria-pressed]="onlineEntry() === 'create'" (click)="onlineEntry.set('create')">Create room</button>
+        <button type="button" [attr.aria-pressed]="onlineEntry() === 'join'" (click)="onlineEntry.set('join')">Join room</button>
+      </div>
+    </div>
+
+    @if (onlineEntry() === 'create') {
+      <div class="step">
+        <h2 class="step-title">Play as</h2>
+        <div class="segmented" role="group" aria-label="Play as">
+          <button type="button" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
+          <button type="button" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
+        </div>
+      </div>
+    } @else {
+      <div class="step">
+        <label class="step-title" for="room-code">Room code</label>
+        <input
+          id="room-code"
+          class="room-code-input"
+          data-testid="room-code-input"
+          autocomplete="off"
+          autocapitalize="characters"
+          spellcheck="false"
+          maxlength="8"
+          placeholder="K7QX"
+          [value]="roomCode()"
+          (input)="setRoomCode($event)"
+          (keydown.enter)="startGame()"
+        />
+      </div>
+    }
+  }
 
   @if (mode() === 'computer') {
     <div class="step">
@@ -48,5 +86,9 @@
     </div>
   </div>
 
-  <button type="button" class="start" (click)="startGame()">Start game</button>
+  @if (error(); as message) {
+    <p class="error" role="alert" data-testid="home-error">{{ message }}</p>
+  }
+
+  <button type="button" class="start" [disabled]="!canStart()" (click)="startGame()">{{ startLabel() }}</button>
 </section>
