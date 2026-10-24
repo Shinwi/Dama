@@ -14,6 +14,7 @@ primary_region = "ams"
 
 [env]
   PORT = "8080"
+  METRICS_PORT = "9091"
   # Only the game's own pages may connect (the live site and its PR previews).
   CORS_ORIGIN = "https://shinwi.github.io"
 
@@ -35,3 +36,9 @@ primary_region = "ams"
 [[vm]]
   size = "shared-cpu-1x"
   memory = "256mb"
+
+# Fly collects the server's Prometheus metrics from this port, inside its own network (it's not
+# exposed to the internet). Charts: https://fly-metrics.net, see server/README.md "Metrics".
+[metrics]
+  port = 9091
+  path = "/metrics"

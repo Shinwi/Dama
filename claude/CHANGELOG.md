@@ -3,7 +3,31 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
-## 2026-10-25
+## 2026-10-24 (night)
+
+Issue #38, branch `feature/online-server-metrics`: usage metrics for the online server.
+
+- **Fly trial note first:** a game "disappearing after a while" turned out to be Fly's trial
+  stopping the machine after 5 minutes (no card on the account yet). The user has since added
+  a card.
+- **`/metrics`** (prom-client, own registry): rooms created, games started/finished (+ result),
+  moves by kind, refusals by reason, rejoins/failures, game duration + moves histograms,
+  gauges read from `RoomManager.counts()` when scraped (open / waiting / active rooms,
+  players connected, unique players today), and Node default metrics.
+  - It's served on METRICS_PORT 9091, a separate HTTP server. Fly scrapes it via `[metrics]` in
+    fly.toml; it isn't reachable from the internet.
+- **`/stats` + `/stats.json`**, public: right-now and today counts, refreshing every 30 s, no
+  codes, tokens or IDs.
+- **Anonymous player ID:** `crypto.randomUUID()` once per browser in localStorage
+  (`dama.player.v1`), sent on create/join/rejoin (an optional `playerId` in the protocol).
+  - The server validates the format, keeps a per-UTC-day Set (capped at 100k) and never logs it.
+- `RoomManager` now records `startedAt` and `finishedAt`, and `play()` reports a game that just
+  finished (once), which the server logs as `game_finished`.
+- `server/grafana-dashboard.json` to import into https://fly-metrics.net.
+- The image was built and run locally: /stats.json and /metrics both answer, and it used about
+  74 MB of memory idle.
+
+## 2026-10-24 (evening)
 
 Issue #36, branch `fix/online-reconnect-not-in-room`. On a phone, after a while: "You are not
 in a room."

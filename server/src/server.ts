@@ -2,7 +2,9 @@ import { createServer, Server as HttpServer } from 'node:http';
 import { Server, Socket } from 'socket.io';
 import { LIGHT, DARK, Side } from '../../web/src/engine/types';
 import { ClientToServerEvents, ServerToClientEvents } from '../../web/src/protocol/online';
+import { ServerMetrics } from './metrics';
 import { Room, RoomManager } from './rooms';
+import { statsPage, statsSnapshot } from './stats';
 
 const sideName = (side: Side) => (side === LIGHT ? 'white' : 'black');
 
@@ -27,6 +29,7 @@ export interface DamaServer {
   http: HttpServer;
   io: Server<ClientToServerEvents, ServerToClientEvents>;
   rooms: RoomManager;
+  metrics: ServerMetrics;
   close(): Promise<void>;
 }
 
@@ -45,10 +48,6 @@ export function originAllowed(allowed: AllowedOrigins, origin: string | undefine
   return allowed === true || (origin !== undefined && allowed.includes(origin));
 }
 
-/**
- * The online server: Socket.IO in front of RoomManager. Each player's socket joins a
- * Socket.IO room per seat (`AB12:light`), so each side can be sent its own view.
- */
 /** One line of the server's log: an event name plus details, printed as JSON. */
 export type Logger = (event: string, details?: Record<string, unknown>) => void;
 
@@ -56,11 +55,33 @@ export type Logger = (event: string, details?: Record<string, unknown>) => void;
 export const jsonLogger: Logger = (event, details = {}) =>
   console.log(JSON.stringify({ time: new Date().toISOString(), event, ...details }));
 
-export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log?: Logger } = {}): DamaServer {
+/**
+ * The online server: Socket.IO in front of RoomManager. Each player's socket joins a
+ * Socket.IO room per seat (`AB12:light`), so each side can be sent its own view.
+ */
+export function createDamaServer(
+  options: { allowedOrigins?: AllowedOrigins; log?: Logger; nodeMetrics?: boolean; now?: () => number } = {},
+): DamaServer {
   const allowedOrigins = options.allowedOrigins ?? true;
   const log = options.log ?? jsonLogger;
-  const rooms = new RoomManager();
+  const now = options.now ?? Date.now;
+  const startedAt = now();
+  const rooms = new RoomManager(Math.random, now);
+  const metrics = new ServerMetrics(() => rooms.counts(), { now, nodeMetrics: options.nodeMetrics });
   const http = createServer((req, res) => {
+    const path = (req.url ?? '/').split('?')[0];
+    if (path === '/stats.json' || path === '/stats') {
+      // Public: counts only, nothing about who is playing.
+      const snapshot = statsSnapshot(rooms.counts(), metrics.today, startedAt, now());
+      const json = path === '/stats.json';
+      res.writeHead(200, {
+        'content-type': json ? 'application/json' : 'text/html; charset=utf-8',
+        'cache-control': 'no-store',
+        'access-control-allow-origin': '*',
+      });
+      res.end(json ? JSON.stringify(snapshot) : statsPage(snapshot));
+      return;
+    }
     if (req.url === '/health') {
       // The web app asks this before it shows its Online button, from another origin (the
       // page's), so the answer has to allow that.
@@ -122,6 +143,8 @@ export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log
       const side: Side = request?.side === DARK ? DARK : LIGHT;
       const { room, token } = rooms.create(side, request?.strictMode === true);
       seat(socket, room, side);
+      metrics.roomCreated();
+      metrics.playerSeen(request?.playerId);
       log('room_created', { room: room.code, side: sideName(side), strictMode: room.state.strictMode, rooms: rooms.size });
       reply({ ok: true, token, view: rooms.view(room, side) });
     });
@@ -134,6 +157,8 @@ export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log
       }
       const { room, side, token } = joined.value;
       seat(socket, room, side);
+      metrics.gameStarted();
+      metrics.playerSeen(request?.playerId);
       log('room_joined', { room: room.code, side: sideName(side) });
       reply({ ok: true, token, view: rooms.view(room, side) });
       broadcast(room); // the creator learns their friend is here
@@ -143,11 +168,14 @@ export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log
       const back = rooms.rejoin(String(request?.code ?? ''), String(request?.token ?? ''));
       if (!back.ok) {
         log('rejoin_refused', { room: String(request?.code ?? ''), error: back.error });
+        metrics.rejoinFailed();
         return reply(back);
       }
       const { room, side } = back.value;
       const already = socket.data.code === room.code && socket.data.side === side;
       seat(socket, room, side);
+      if (!already) metrics.rejoined();
+      metrics.playerSeen(request?.playerId);
       log('player_rejoined', { room: room.code, side: sideName(side), alreadySeated: already });
       reply({ ok: true, token: request.token, view: rooms.view(room, side) });
       broadcast(room);
@@ -163,9 +191,11 @@ export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log
         const back = rooms.rejoin(requestedCode, String(request?.token ?? ''));
         if (!back.ok) {
           log('action_refused', { room: requestedCode, error: back.error });
+          metrics.actionRefused(back.error);
           return reply({ ok: false, error: back.error });
         }
         seat(socket, back.value.room, back.value.side);
+        metrics.rejoined();
         log('player_rejoined', { room: back.value.room.code, side: sideName(back.value.side), byAction: true });
         broadcast(back.value.room);
       }
@@ -175,8 +205,12 @@ export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log
       const played = rooms.play(room, side, request?.action);
       if (!played.ok) {
         log('action_refused', { room: room.code, side: sideName(side), error: played.error });
+        metrics.actionRefused(played.error);
         return reply({ ok: false, error: played.error, view: rooms.view(room, side) });
       }
+      const finished = played.value.finished;
+      metrics.actionPlayed(request.action.kind, finished);
+      if (finished) log('game_finished', { room: room.code, result: finished.result, seconds: Math.round(finished.durationMs / 1000), actions: finished.actions });
       reply({ ok: true });
       broadcast(room);
     });
@@ -195,6 +229,7 @@ export function createDamaServer(options: { allowedOrigins?: AllowedOrigins; log
     http,
     io,
     rooms,
+    metrics,
     close: () =>
       new Promise<void>((resolve) => {
         clearInterval(sweeper);

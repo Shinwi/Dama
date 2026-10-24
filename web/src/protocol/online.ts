@@ -40,17 +40,25 @@ export interface RoomView {
   lastAction: (OnlineAction & { by: Side }) | null;
 }
 
-export interface CreateRoomRequest {
+/**
+ * A browser's anonymous player ID: random, made on the device, nothing personal. The server
+ * only uses it to count different players per day (`/stats`, metrics); it's never shown.
+ */
+interface WithPlayerId {
+  playerId?: string;
+}
+
+export interface CreateRoomRequest extends WithPlayerId {
   /** The side the room's creator plays; the friend who joins gets the other one. */
   side: Side;
   strictMode: boolean;
 }
 
-export interface JoinRoomRequest {
+export interface JoinRoomRequest extends WithPlayerId {
   code: string;
 }
 
-export interface RejoinRoomRequest {
+export interface RejoinRoomRequest extends WithPlayerId {
   code: string;
   /** The secret handed out on create/join: proves it's the same player coming back. */
   token: string;

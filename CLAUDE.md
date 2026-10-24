@@ -56,7 +56,9 @@ dama/
   server/              online rooms prototype: Node.js + Socket.IO, rooms in memory, every
                        action checked with web/src/engine (imported directly). See its README.
                        Hosted on Fly.io (fly.toml at the repo root, server/Dockerfile): exactly
-                       one machine, never auto-stopped, since rooms live in memory.
+                       one machine, never auto-stopped, since rooms live in memory. Public
+                       /stats page; Prometheus /metrics on a private port (9091) for Fly's
+                       Grafana (server/grafana-dashboard.json).
 ```
 
 ## Conventions
@@ -73,6 +75,8 @@ dama/
 - Settings (mode, difficulty, colour, board pattern, sound/music, strict mode) persist to
   `localStorage`. Online seats (room code + token) are kept in `localStorage` too
   (`SeatStore`), so closing Safari doesn't lose them; all tabs of one browser are one player.
+  Each browser also has an anonymous random player ID (`dama.player.v1`), sent on
+  create/join/rejoin only to count different players per day; never logged or shown.
 - Online server address: `?server=` if given; else the hosted server on https pages
   (`web/src/app/online/server-config.ts`, must match `app` in fly.toml); else
   `<page host>:3000` (local dev). The Online button shows only if `/health` answers.

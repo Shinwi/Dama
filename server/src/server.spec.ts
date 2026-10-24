@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { parseSquare } from '../../web/src/engine/board';
 import { DARK, LIGHT } from '../../web/src/engine/types';
 import { ClientToServerEvents, JoinedReply, RoomView, ServerToClientEvents } from '../../web/src/protocol/online';
+import { createMetricsServer } from './metrics';
 import { createDamaServer, DamaServer, originAllowed } from './server';
 
 type Client = Socket<ServerToClientEvents, ClientToServerEvents>;
@@ -16,7 +17,7 @@ describe('Dama server over Socket.IO', () => {
   let logged: Record<string, unknown>[] = [];
 
   beforeEach(async () => {
-    server = createDamaServer({ log: (event, details) => logged.push({ event, ...details }) });
+    server = createDamaServer({ log: (event, details) => logged.push({ event, ...details }), nodeMetrics: false });
     await new Promise<void>((resolve) => server.http.listen(0, resolve));
     url = `http://localhost:${(server.http.address() as AddressInfo).port}`;
   });
@@ -49,6 +50,49 @@ describe('Dama server over Socket.IO', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('access-control-allow-origin')).toBe('*');
     expect(await response.json()).toEqual({ ok: true });
+  });
+
+  it('counts a game on /stats.json and /metrics, without codes, tokens or player IDs', async () => {
+    const white = client();
+    const created = (await white.emitWithAck('room:create', {
+      side: LIGHT,
+      strictMode: false,
+      playerId: 'aaaaaaaa-1111',
+    })) as Extract<JoinedReply, { ok: true }>;
+    const joined = (await client().emitWithAck('room:join', {
+      code: created.view.code,
+      playerId: 'bbbbbbbb-2222',
+    })) as Extract<JoinedReply, { ok: true }>;
+    await white.emitWithAck('room:action', {
+      code: created.view.code,
+      token: created.token,
+      action: { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')] },
+    });
+
+    const response = await fetch(`${url}/stats.json`);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    const stats = await response.json();
+    expect(stats.now).toEqual({ roomsOpen: 1, roomsWaiting: 0, roomsActive: 1, playersConnected: 2 });
+    expect(stats.today).toMatchObject({ roomsCreated: 1, gamesStarted: 1, gamesFinished: 0, uniquePlayers: 2 });
+
+    const page = await (await fetch(`${url}/stats`)).text();
+    expect(page).toContain('Players connected');
+
+    const metricsServer = createMetricsServer(server.metrics);
+    await new Promise<void>((resolve) => metricsServer.listen(0, resolve));
+    try {
+      const metricsUrl = `http://localhost:${(metricsServer.address() as AddressInfo).port}`;
+      const text = await (await fetch(`${metricsUrl}/metrics`)).text();
+      expect(text).toContain('dama_moves_total{kind="move"} 1');
+      expect(text).toContain('dama_unique_players_today 2');
+      expect((await fetch(`${metricsUrl}/other`)).status).toBe(404);
+      for (const secret of [created.view.code, created.token, joined.token, 'aaaaaaaa-1111']) {
+        expect(text).not.toContain(secret);
+        expect(JSON.stringify(stats) + page).not.toContain(secret);
+      }
+    } finally {
+      metricsServer.close();
+    }
   });
 
   it('two players create and join a room, and a move reaches the other player', async () => {
@@ -181,7 +225,7 @@ describe('originAllowed', () => {
 
 describe('Dama server with a list of allowed pages', () => {
   it('turns away connections from other pages', async () => {
-    const server = createDamaServer({ allowedOrigins: ['https://shinwi.github.io'], log: () => {} });
+    const server = createDamaServer({ allowedOrigins: ['https://shinwi.github.io'], log: () => {}, nodeMetrics: false });
     await new Promise<void>((resolve) => server.http.listen(0, resolve));
     const url = `http://localhost:${(server.http.address() as AddressInfo).port}`;
     const connectFrom = (origin: string) =>

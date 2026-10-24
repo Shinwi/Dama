@@ -111,11 +111,64 @@ Each time the home screen is shown, the app asks `GET /health` (answer: `{"ok": 
 from any page). The **Online** button only shows if that answer arrives within 2 seconds. An
 invite link opened while the server isn't there says "Online games aren't available right now."
 
+## Metrics and stats
+
+How the online game is used, in two places:
+
+- **`/stats`, a public page:** https://dama-server.fly.dev/stats (locally
+  http://localhost:3000/stats), plus the same numbers as JSON at `/stats.json`. It shows
+  players connected, games being played and rooms waiting right now, and, for today (UTC),
+  different players, rooms created, and games started and finished. It refreshes every
+  30 seconds. Counts only: no room codes, tokens or player IDs.
+- **`/metrics`, Prometheus, for charts:** served on its own port (`METRICS_PORT`, 9091). Fly
+  collects it from inside its network (`[metrics]` in `fly.toml`); that port isn't reachable
+  from the internet. Locally: http://localhost:9091/metrics.
+
+**Seeing the charts on Fly:**
+
+1. Open https://fly-metrics.net and log in with your Fly account.
+2. **Dashboards → New → Import**, and upload `server/grafana-dashboard.json`. Choose Fly's
+   Prometheus data source when asked.
+3. The **Dama online** dashboard shows:
+   - players connected and games being played over time;
+   - rooms created and games started and finished, per hour;
+   - different players per day, and game length;
+   - reconnects and refused moves;
+   - the server's memory and event-loop delay.
+
+| Metric | What it counts |
+|---|---|
+| `dama_rooms_created_total` | Rooms created |
+| `dama_games_started_total` | Rooms where the friend joined, so a game started |
+| `dama_games_finished_total{result}` | Games played to the end (`win` / `draw`) |
+| `dama_moves_total{kind}` | Actions accepted (`move` / `nfikh`) |
+| `dama_rooms_open` / `_waiting` / `_active` | Rooms right now: all / one player waiting / game on |
+| `dama_players_connected` | Players in a room right now ("active users") |
+| `dama_unique_players_today` | Different anonymous players seen today (UTC) |
+| `dama_game_duration_seconds`, `dama_game_moves` | Length of finished games (histograms) |
+| `dama_rejoins_total`, `dama_rejoin_failures_total` | Players back in their seat after a drop / rejoins refused |
+| `dama_actions_refused_total{reason}` | Refused actions: `not_your_turn`, `illegal`, `game_over`, `no_room`, … |
+| `process_*`, `nodejs_*` | Node.js: memory, CPU, event-loop delay, garbage collection |
+
+**Good to know:**
+
+- **Counters start from zero on each restart** (every deploy). The dashboard uses `increase()`,
+  which allows for that.
+- **"Today" counts** (on `/stats` and `dama_unique_players_today`) also start again at midnight
+  UTC, and after a restart.
+- **Different players** are counted by an **anonymous ID**: a random UUID the web app makes
+  once per browser and keeps in `localStorage` (`dama.player.v1`). It's sent when creating,
+  joining or rejoining a room, held in memory for the day, and never logged or shown. One
+  person on two devices counts twice.
+- **History:** Fly keeps metrics for a limited time (see Fly's docs). All-time totals would
+  need a database.
+
 ## Settings (environment variables)
 
 | Variable      | Default | What it does                                                         |
 |---------------|---------|----------------------------------------------------------------------|
 | `PORT`        | `3000`  | Port to listen on.                                                   |
+| `METRICS_PORT`| `9091`  | Port for `/metrics` (Prometheus). Keep it private: Fly only scrapes it internally. |
 | `CORS_ORIGIN` | any     | Comma-separated list of web pages (origins) allowed to connect. Checked on every connection, WebSocket included. Fly sets it to `https://shinwi.github.io`. |
 
 ## Layout
@@ -123,7 +176,11 @@ invite link opened while the server isn't there says "Online games aren't availa
 - `src/rooms.ts`: `RoomManager`, the room logic (create, join, rejoin, play, clean up). No
   networking, so it's tested on its own.
 - `src/server.ts`: connects `RoomManager` to Socket.IO, and sends each player their own view of
-  the room after every change. Also answers `/health`.
+  the room after every change. Also answers `/health`, `/stats` and `/stats.json`.
+- `src/metrics.ts`: the Prometheus metrics, the "today" counts (unique players), and the
+  `/metrics` server.
+- `src/stats.ts`: what `/stats` shows, and the page itself.
+- `grafana-dashboard.json`: the dashboard to import into Fly's Grafana.
 - `src/main.ts`: starts the server.
 
 ## Hosting on Fly.io
