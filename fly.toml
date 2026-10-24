@@ -6,8 +6,8 @@
 # Fly app names are global. If this one is taken, pick another here AND in
 # web/src/app/online/server-config.ts (HOSTED_SERVER_URL).
 app = "dama-server"
-# Madrid: the closest region to Morocco. `fly platform regions` lists the others (e.g. cdg, Paris).
-primary_region = "mad"
+# Amsterdam: the closest available region to Morocco. `fly platform regions` lists the others (e.g. cdg, Paris).
+primary_region = "ams"
 
 [build]
   dockerfile = "server/Dockerfile"
