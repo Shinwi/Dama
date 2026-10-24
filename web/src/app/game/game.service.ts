@@ -1,7 +1,7 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
-import { OnlineClient, onlineServerUrl } from '../online/online-client';
+import { checkOnlineServer, OnlineClient, onlineServerUrl } from '../online/online-client';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, GameState, LIGHT, Move, Side } from '../../engine/types';
 import { OnlineAction, RoomView, WireState } from '../../protocol/online';
@@ -25,6 +25,9 @@ export interface OnlineStatus {
   /** The latest problem to tell the player about (e.g. a move the server refused). */
   error: string | null;
 }
+
+/** Whether the online server answered the last check. 'checking' only until the first answer. */
+export type OnlineServerState = 'checking' | 'up' | 'down';
 
 /** How to get into an online room, from the home screen. */
 export type OnlineEntry = { kind: 'create' } | { kind: 'join'; code: string };
@@ -106,6 +109,11 @@ export class GameService {
   /** How many of the room's actions this copy of the game has played (RoomView.seq). */
   private onlineSeq = 0;
   readonly online = signal<OnlineStatus | null>(null);
+  readonly onlineServer = signal<OnlineServerState>('checking');
+  /** Replaceable in tests. */
+  private onlineServerProbe = (url: string) => checkOnlineServer(url);
+  /** Bumped for every check, so only the latest one's answer counts. */
+  private onlineServerChecks = 0;
 
   /** The side "you" play: the server's say online, the setting vs the computer. */
   readonly playerSide = computed(() => this.online()?.side ?? this.settings().playerSide);
@@ -297,6 +305,16 @@ export class GameService {
     }
     this.enterRoom(reply.view);
     return true;
+  }
+
+  /**
+   * Asks whether the online server is there, for the home screen's Online button. Until the
+   * answer comes back, the previous one stands (so the button doesn't flicker on a re-check).
+   */
+  async checkOnlineServer(): Promise<void> {
+    const check = ++this.onlineServerChecks;
+    const up = await this.onlineServerProbe(onlineServerUrl());
+    if (check === this.onlineServerChecks) this.onlineServer.set(up ? 'up' : 'down');
   }
 
   /** Leaves the online room, if in one. The friend sees this player as disconnected. */

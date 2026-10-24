@@ -43,7 +43,8 @@ npm start          # http://localhost:4200
 **Play a game**
 
 1. Open http://localhost:4200, pick **Online → Create room**, then press **Create room**.
-   Note the room code.
+   Note the room code. (The **Online** button only shows up when the app can reach the
+   server: if it's missing, check that terminal 1 is running.)
 2. Open a **second window in private/incognito mode** (or another browser) at
    http://localhost:4200. Pick **Online → Join room**, type the code, and press **Join room**.
    Each tab remembers its own seat, but private mode keeps the two players fully apart, like two
@@ -56,6 +57,9 @@ Things to try:
 - **Stop the server** (Ctrl+C in terminal 1) and start it again. The pages show
   "Connection lost. Reconnecting…", then "That game is no longer available." This is expected:
   the rooms only live in memory.
+- **Stop the server and go back to the home screen.** The Online button is gone, and an invite
+  link says online games aren't available. Start the server again and the button comes back
+  the next time the home screen is shown.
 - **Copy invite link:** opens the game on "Join room" with the code already filled in.
 
 ### Play from a phone on the same Wi-Fi
@@ -87,6 +91,12 @@ npm run typecheck  # tsc, including the engine files it imports from web/
 The web app's Playwright suite (`cd web && npm run e2e`) starts this server by itself for
 `e2e/online.spec.ts`. You only need to have run `npm install` here once.
 
+## How the app knows the server is there
+
+Each time the home screen is shown, the app asks `GET /health` (answer: `{"ok": true}`, allowed
+from any page). The **Online** button only shows if that answer arrives within 2 seconds. An
+invite link opened while the server isn't there says "Online games aren't available right now."
+
 ## Settings (environment variables)
 
 | Variable      | Default | What it does                                                         |
@@ -99,13 +109,14 @@ The web app's Playwright suite (`cd web && npm run e2e`) starts this server by i
 - `src/rooms.ts`: `RoomManager`, the room logic (create, join, rejoin, play, clean up). No
   networking, so it's tested on its own.
 - `src/server.ts`: connects `RoomManager` to Socket.IO, and sends each player their own view of
-  the room after every change.
+  the room after every change. Also answers `/health`.
 - `src/main.ts`: starts the server.
 
 ## Not done yet (prototype)
 
-- **Hosting:** the live site on GitHub Pages can't reach a server on your machine. Until the
-  server is hosted somewhere and the app is pointed at it, Online only works locally.
+- **Hosting:** the live site on GitHub Pages can't reach a server on your machine, so it hides
+  the Online button. Until the server is hosted somewhere and the app is pointed at it, Online
+  only works locally.
 - **Game controls:** no rematch, resign, draw offer or move clock. Leave the room and create a
   new one for another game.
 - **Persistence:** rooms are lost when the server restarts. There's no database.

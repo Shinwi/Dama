@@ -79,8 +79,9 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 20b. 🚧 **Online rooms prototype** (branch `feature/online-rooms-prototype`), pulled ahead of
     the polish round (#28, parked): `server/` (Node + Socket.IO, rooms in memory, engine as
     referee) and an Online option in the app (create/join by code, invite link, reconnect and
-    reload). Runs locally; see `server/README.md`. Next: hosting (Fly.io/Render, EU), then
-    the app needs the hosted server's URL instead of `<host>:3000`.
+    reload). Runs locally; see `server/README.md`. The Online button only shows when the
+    server answers `/health`, so the live site (no server yet) hides it. Next: hosting
+    (Fly.io/Render, EU), then the app needs the hosted server's URL instead of `<host>:3000`.
 21. Once friends have played it and the rules feel right: phase 2 from `docs/ROADMAP.md`
     (a move list, installable PWA).
 22. Known rough edge, seen only at test-bot speed: taps queued during a move's animation that

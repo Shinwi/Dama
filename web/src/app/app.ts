@@ -8,6 +8,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { Board } from './board/board';
@@ -65,6 +66,12 @@ export class App {
     // When the game-over card appears, move keyboard (and screen reader) focus to its
     // "New game" button, rather than leaving it on the board behind the card.
     effect(() => this.gameOverButton()?.nativeElement.focus());
+
+    // Each time the home screen is shown, check the online server is there, so its Online
+    // button only shows when it is.
+    effect(() => {
+      if (this.screen() === 'home') untracked(() => void this.game.checkOnlineServer());
+    });
 
     // Reloaded during an online game: go straight back into it. (An invite link wins: that's
     // a new room to join.)
@@ -164,6 +171,7 @@ export class App {
     this.homeBusy.set(false);
     if (error) {
       this.homeError.set(error);
+      void this.game.checkOnlineServer(); // it may have gone since the home screen checked
       return;
     }
     if (this.inviteCode()) {

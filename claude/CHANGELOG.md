@@ -24,7 +24,14 @@ The polish round (#28 and its sub-issues) is parked until after this.
   server's position. The seat is kept per tab in sessionStorage, so a reload rejoins and two
   tabs can be two players. The server URL is `<page host>:3000` unless `?server=` says
   otherwise, so a phone on the same Wi-Fi works.
-- Tests: 13 server tests (rooms + real Socket.IO clients), GameService online spec with a
+- **Online only shows when the server is there**: the server answers `GET /health` (with a
+  CORS header), and the app asks it each time the home screen is shown (2 s timeout,
+  `checkOnlineServer()`; only the latest check's answer counts). The Online button is hidden
+  until it answers; a saved "online" mode falls back to Vs computer meanwhile and comes back if
+  the server turns up (unless the player picked something else). An invite link with no server
+  says "Online games aren't available right now." So the live site, which has no server yet,
+  shows no Online option, and the branch can be merged before hosting.
+- Tests: 14 server tests (rooms, /health, real Socket.IO clients), GameService online spec with a
   fake client, wording tests, and `e2e/online.spec.ts` (two browser contexts through the real
   server; Playwright now starts the server too).
 

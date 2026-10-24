@@ -2,10 +2,17 @@
   <div class="step">
     <h2 class="step-title">Opponent</h2>
     <div class="segmented" role="group" aria-label="Opponent">
-      <button type="button" [attr.aria-pressed]="mode() === 'computer'" (click)="mode.set('computer')">Vs computer</button>
-      <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="mode.set('pvp')">1v1</button>
-      <button type="button" [attr.aria-pressed]="mode() === 'online'" (click)="mode.set('online')">Online</button>
+      <button type="button" [attr.aria-pressed]="mode() === 'computer'" (click)="setMode('computer')">Vs computer</button>
+      <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="setMode('pvp')">1v1</button>
+      @if (onlineAvailable()) {
+        <button type="button" [attr.aria-pressed]="mode() === 'online'" (click)="setMode('online')">Online</button>
+      }
     </div>
+    @if (inviteUnavailable()) {
+      <p class="notice" role="status" data-testid="online-unavailable">
+        Online games aren't available right now. You can still play the computer or a friend on this device.
+      </p>
+    }
   </div>
 
   @if (mode() === 'online') {

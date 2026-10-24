@@ -149,3 +149,11 @@
   font-weight: 600;
   text-align: center;
 }
+
+.notice {
+  margin: 4px 0 0;
+  max-width: 34ch;
+  color: var(--color-text-muted);
+  font-size: 0.92rem;
+  text-align: center;
+}

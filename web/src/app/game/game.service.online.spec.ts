@@ -173,4 +173,19 @@ describe('GameService online', () => {
     expect(service.online()).toBeNull();
     expect(client.closed).toBe(true);
   });
+
+  it('keeps only the latest answer about whether the server is there', async () => {
+    const answers: ((up: boolean) => void)[] = [];
+    (service as unknown as { onlineServerProbe: () => Promise<boolean> }).onlineServerProbe = () =>
+      new Promise((resolve) => answers.push(resolve));
+    expect(service.onlineServer()).toBe('checking');
+
+    const first = service.checkOnlineServer();
+    const second = service.checkOnlineServer();
+    answers[1](true);
+    await second;
+    answers[0](false); // an older, slower check: ignored
+    await first;
+    expect(service.onlineServer()).toBe('up');
+  });
 });

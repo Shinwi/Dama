@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, outp
 import { Difficulty } from '../../engine/ai';
 import { DARK, LIGHT, Side } from '../../engine/types';
 import { BoardTheme, GameMode, Settings } from '../game/game-controller';
-import { OnlineEntry } from '../game/game.service';
+import { OnlineEntry, OnlineServerState } from '../game/game.service';
 
 export type GameSetup = Pick<Settings, 'mode' | 'difficulty' | 'playerSide' | 'boardTheme'> & {
   /** Set when mode is 'online': make a new room, or join a friend's. */
@@ -29,6 +29,8 @@ export class Home {
   readonly settings = input.required<Settings>();
   /** A room code from an invite link (`?room=K7QX`): opens on "Join room" with it filled in. */
   readonly inviteCode = input<string | null>(null);
+  /** Whether the online server is there: the Online option only shows when it is. */
+  readonly onlineServer = input<OnlineServerState>('checking');
   /** Connecting to the online server: the start button waits. */
   readonly busy = input(false);
   /** Why the last attempt to get into a room failed. */
@@ -44,7 +46,19 @@ export class Home {
     { id: 'green', label: 'Green' },
   ];
 
-  protected readonly mode = linkedSignal<GameMode>(() => (this.inviteCode() ? 'online' : this.settings().mode));
+  /** The opponent the player picked (or last played, or an invite link's "online"). */
+  private readonly chosenMode = linkedSignal<GameMode>(() => (this.inviteCode() ? 'online' : this.settings().mode));
+  /**
+   * What's actually selected: Online falls back to Vs computer while the server isn't there,
+   * and comes back by itself if the server turns up, unless the player has picked since.
+   */
+  protected readonly mode = computed<GameMode>(() => {
+    const mode = this.chosenMode();
+    return mode === 'online' && this.onlineServer() !== 'up' ? 'computer' : mode;
+  });
+  protected readonly onlineAvailable = computed(() => this.onlineServer() === 'up');
+  /** An invite link was opened, but there's no server to join through. */
+  protected readonly inviteUnavailable = computed(() => !!this.inviteCode() && this.onlineServer() === 'down');
   protected readonly onlineEntry = linkedSignal<'create' | 'join'>(() => (this.inviteCode() ? 'join' : 'create'));
   protected readonly roomCode = linkedSignal(() => this.inviteCode() ?? '');
   protected readonly difficulty = linkedSignal<Difficulty>(() => this.settings().difficulty);
@@ -63,6 +77,10 @@ export class Home {
   protected readonly canStart = computed(
     () => !this.busy() && !(this.mode() === 'online' && this.onlineEntry() === 'join' && this.roomCode().trim().length === 0),
   );
+
+  setMode(mode: GameMode): void {
+    this.chosenMode.set(mode);
+  }
 
   setRoomCode(event: Event): void {
     this.roomCode.set((event.target as HTMLInputElement).value.toUpperCase());

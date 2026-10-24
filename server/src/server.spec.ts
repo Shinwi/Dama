@@ -42,6 +42,13 @@ describe('Dama server over Socket.IO', () => {
       socket.on('room:update', listener);
     });
 
+  it('answers /health, readable from any web page', async () => {
+    const response = await fetch(`${url}/health`);
+    expect(response.status).toBe(200);
+    expect(response.headers.get('access-control-allow-origin')).toBe('*');
+    expect(await response.json()).toEqual({ ok: true });
+  });
+
   it('two players create and join a room, and a move reaches the other player', async () => {
     const white = client();
     const black = client();

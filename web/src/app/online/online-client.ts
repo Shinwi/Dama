@@ -26,6 +26,33 @@ export function onlineServerUrl(location: Pick<Location, 'search' | 'protocol' |
   return `${location.protocol}//${location.hostname}:${DEFAULT_SERVER_PORT}`;
 }
 
+/** How long the "is the server there?" check waits before taking silence for a no. */
+export const SERVER_CHECK_TIMEOUT_MS = 2000;
+
+/**
+ * Asks the server's `/health` address whether it's up. Resolves false on any error, an
+ * answer that isn't the server's, or no answer within `timeoutMs`; it never throws. Plain
+ * HTTP, not Socket.IO, so it's cheap to ask each time the home screen is shown.
+ */
+export async function checkOnlineServer(
+  url: string,
+  timeoutMs = SERVER_CHECK_TIMEOUT_MS,
+  fetchFn: typeof fetch = (...args) => fetch(...args),
+): Promise<boolean> {
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), timeoutMs);
+  try {
+    const response = await fetchFn(`${url.replace(/\/+$/, '')}/health`, { signal: abort.signal, cache: 'no-store' });
+    if (!response.ok) return false;
+    const body = (await response.json()) as { ok?: unknown } | null;
+    return body?.ok === true;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /**
  * Thin wrapper around the Socket.IO connection to the online server. Requests come back as
  * promises; a server that doesn't answer in time counts as unreachable. GameService owns

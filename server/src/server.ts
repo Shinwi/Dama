@@ -28,7 +28,14 @@ export interface DamaServer {
 export function createDamaServer(options: { corsOrigin?: string | string[] | boolean } = {}): DamaServer {
   const rooms = new RoomManager();
   const http = createServer((req, res) => {
-    // A plain page for "is the server up?" checks (and later, the host's health check).
+    if (req.url === '/health') {
+      // The web app asks this before it shows its Online button, from another origin (the
+      // page's), so the answer has to allow that.
+      res.writeHead(200, { 'content-type': 'application/json', 'access-control-allow-origin': '*' });
+      res.end(JSON.stringify({ ok: true }));
+      return;
+    }
+    // A plain page for a person checking the server is up.
     res.writeHead(200, { 'content-type': 'text/plain' });
     res.end(`Dama server: ${rooms.size} room(s) open\n`);
   });

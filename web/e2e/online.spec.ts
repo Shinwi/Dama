@@ -82,3 +82,22 @@ test('an invite link fills in the room code, and a reload after joining goes bac
   await expect(black.getByTestId('room-code')).toHaveText(code);
   await expect(black.getByTestId('status')).toHaveText("Opponent's move.");
 });
+
+// Nothing listens on this port, so these pages find no online server.
+const NO_SERVER = 'server=http://localhost:3999';
+
+test('with no online server, the home screen has no Online option', async ({ page }) => {
+  await page.goto(`/?${NO_SERVER}`);
+  const opponent = page.getByRole('group', { name: 'Opponent' });
+  await expect(opponent.getByRole('button', { name: 'Vs computer' })).toBeVisible();
+  // Give the check time to give up (2 s), then make sure the button never appeared.
+  await page.waitForTimeout(2500);
+  await expect(opponent.getByRole('button', { name: 'Online' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Start game', exact: true })).toBeVisible();
+});
+
+test('an invite link with no online server says online games are unavailable', async ({ page }) => {
+  await page.goto(`/?room=K7QX&${NO_SERVER}`);
+  await expect(page.getByTestId('online-unavailable')).toContainText("Online games aren't available right now.");
+  await expect(page.getByTestId('room-code-input')).toHaveCount(0);
+});
