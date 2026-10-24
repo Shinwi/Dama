@@ -3,6 +3,45 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-25
+
+Issue #36, branch `fix/online-reconnect-not-in-room`. On a phone, after a while: "You are not
+in a room."
+
+- **Cause:** socket.io-client sends the messages it queued while disconnected (`emitBuffered()`)
+  *before* firing `connect`, which is where the app sent `room:rejoin`. A move made during a
+  drop therefore reached the server on a connection that wasn't seated yet. Reproduced with
+  scripted clients, and in Playwright with `context.setOffline()`.
+- **A second way to lose a move:** an acknowledged emit that times out (5 s) is taken out of
+  the client's send buffer. After a longer drop, the server never got the move, and the board
+  snapped back on rejoin.
+- **Fix:**
+  - `room:action` carries the seat's code + token, and the server seats an unseated
+    connection from it. Seating the same seat twice is a no-op; before, a rejoin on an
+    already-seated socket marked the player disconnected.
+  - The client stays "reconnecting" (moves blocked) until the rejoin reply. It keeps its last
+    unconfirmed action and re-sends it if the rejoined position doesn't have it.
+  - An unanswered request isn't shown as an error.
+  - Errors clear once the game moves on, and a game the server no longer has shows as 'lost'.
+  - Server heartbeat is now 10 s + 10 s (was the default 25 + 20 s): Chromium offline
+    emulation showed neither side noticing a dead connection for over 12 s.
+  - JSON event logs (no tokens).
+  - Region docs updated: the server runs in `ams`, since Madrid wasn't available.
+- **Issue #39, same PR:** closing Safari mid-game lost the seat (home screen on reopening, and
+  "room is full" when joining the own room's code), because iPhone Safari empties a tab's
+  sessionStorage when it's closed. Seats now live in localStorage (`SeatStore`: the current
+  game to return to, plus every seat by code, forgotten after a day or once the room is gone).
+  Joining a code you hold a seat in rejoins. Leave room keeps the seat but stops the automatic
+  return. Clearer full-room message, and "lost connection N min ago" for the waiting player.
+  Trade-off: all tabs of one browser are one player (local testing needs a private window,
+  which the README already said). Two new e2e tests, both failing on the previous code.
+- **Tests:**
+  - Server: a move sent during a drop is accepted after reconnect (fails on the old code),
+    a wrong token is refused, and logs carry no tokens.
+  - Client: holds 'reconnecting' until the rejoin, 'lost', unreachable isn't an error, errors
+    clear, re-send if missed, no double send.
+  - e2e: black goes offline, moves, and comes back; white gets the move. Fails on master.
+
 ## 2026-10-24
 
 Online rooms prototype, branch `feature/online-rooms-prototype` (local only, not hosted yet).

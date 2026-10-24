@@ -57,6 +57,13 @@ export interface RejoinRoomRequest {
 }
 
 export interface ActionRequest {
+  /**
+   * The seat this action is for, as for room:rejoin. Every action carries it, so the server
+   * can seat a connection it doesn't know yet: after a reconnect, a move queued while the
+   * connection was down is sent before the room:rejoin that would otherwise have seated it.
+   */
+  code: string;
+  token: string;
   action: OnlineAction;
 }
 

@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { App, describeGameOver, describeNfikh, describeSetup, inviteCodeFrom } from './app';
+import { App, describeGameOver, describeNfikh, describeOpponentGone, describeSetup, inviteCodeFrom } from './app';
 import { defaultSettings } from './game/game-controller';
 import { GameService } from './game/game.service';
 import { boardFrom, parseSquare } from '../engine/board';
@@ -184,5 +184,15 @@ describe('online wording', () => {
     expect(inviteCodeFrom('?room=k7qx')).toBe('K7QX');
     expect(inviteCodeFrom('?room=')).toBeNull();
     expect(inviteCodeFrom('')).toBeNull();
+  });
+});
+
+describe('describeOpponentGone', () => {
+  it('says how long the opponent has been gone, once it is a minute or more', () => {
+    expect(describeOpponentGone(0, 30_000)).toBe('Your opponent lost connection. Waiting for them to come back…');
+    expect(describeOpponentGone(0, 3 * 60_000 + 5_000)).toBe(
+      'Your opponent lost connection 3 min ago. Waiting for them to come back…',
+    );
+    expect(describeOpponentGone(null, 10 * 60_000)).toBe('Your opponent lost connection. Waiting for them to come back…');
   });
 });

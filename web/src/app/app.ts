@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   Injector,
   afterNextRender,
@@ -43,6 +44,9 @@ export class App {
   /** A room code from an invite link, `?room=K7QX`. */
   protected readonly inviteCode = signal(inviteCodeFrom(typeof location === 'undefined' ? '' : location.search));
 
+  /** Ticks every 15 s, for "lost connection 3 min ago". */
+  private readonly clock = signal(Date.now());
+
   /** The settings as "you" see them: online, `playerSide` is the side the server gave you. */
   private readonly perspective = computed(() => ({ ...this.game.settings(), playerSide: this.game.playerSide() }));
 
@@ -73,6 +77,9 @@ export class App {
       if (this.screen() === 'home') untracked(() => void this.game.checkOnlineServer());
     });
 
+    const tick = setInterval(() => this.clock.set(Date.now()), 15_000);
+    inject(DestroyRef).onDestroy(() => clearInterval(tick));
+
     // Reloaded during an online game: go straight back into it. (An invite link wins: that's
     // a new room to join.)
     if (!this.inviteCode()) {
@@ -100,8 +107,9 @@ export class App {
 
     if (settings.mode === 'online' && online && outcome.kind === 'ongoing') {
       if (online.connection === 'reconnecting') return 'Connection lost. Reconnecting…';
+      if (online.connection === 'lost') return 'This game is no longer on the server. Leave the room to start a new one.';
       if (!online.opponentJoined) return `Waiting for your friend to join room ${online.code}…`;
-      if (!online.opponentConnected) return 'Your opponent lost connection. Waiting for them to come back…';
+      if (!online.opponentConnected) return describeOpponentGone(online.opponentGoneSince, this.clock());
       if (this.game.selection().target !== null) return 'More than one way to get there: tap the way to go.';
       return state.toMove === online.side ? 'Your move.' : "Opponent's move.";
     }
@@ -241,6 +249,13 @@ const DIFFICULTY_NAMES: Record<Difficulty, string> = {
   novice: 'Novice',
   'very-good': 'Very good',
 };
+
+/** "Your opponent lost connection 3 min ago. Waiting for them to come back…" */
+export function describeOpponentGone(since: number | null, now: number): string {
+  const minutes = since === null ? 0 : Math.floor((now - since) / 60_000);
+  const when = minutes < 1 ? '' : ` ${minutes} min ago`;
+  return `Your opponent lost connection${when}. Waiting for them to come back…`;
+}
 
 /** A room code from the page's query string (`?room=K7QX`), or null. */
 export function inviteCodeFrom(search: string): string | null {

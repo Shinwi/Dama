@@ -71,7 +71,8 @@ dama/
 - No hints about which piece to move (no "must capture" rings): spotting captures, and missed
   ones to take by nfikh, is up to the player.
 - Settings (mode, difficulty, colour, board pattern, sound/music, strict mode) persist to
-  `localStorage`. An online seat (room code + token) is kept per tab in `sessionStorage`.
+  `localStorage`. Online seats (room code + token) are kept in `localStorage` too
+  (`SeatStore`), so closing Safari doesn't lose them; all tabs of one browser are one player.
 - Online server address: `?server=` if given; else the hosted server on https pages
   (`web/src/app/online/server-config.ts`, must match `app` in fly.toml); else
   `<page host>:3000` (local dev). The Online button shows only if `/health` answers.
