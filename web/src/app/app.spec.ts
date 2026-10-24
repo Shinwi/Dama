@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { App, describeGameOver, describeNfikh } from './app';
+import { App, describeGameOver, describeNfikh, describeSetup, inviteCodeFrom } from './app';
 import { defaultSettings } from './game/game-controller';
 import { GameService } from './game/game.service';
 import { boardFrom, parseSquare } from '../engine/board';
@@ -162,5 +162,27 @@ describe('describeNfikh', () => {
     expect(describeNfikh({ square: e5, by: LIGHT }, { ...settings, mode: 'pvp' })).toBe(
       "Nfikh! White took Black's piece on e5: it missed a capture.",
     );
+  });
+});
+
+describe('online wording', () => {
+  const online = { ...defaultSettings(), mode: 'online' as const, playerSide: DARK };
+
+  it('talks about "your opponent", not the computer', () => {
+    expect(describeNfikh({ square: 44, by: LIGHT }, online)).toBe(
+      'Nfikh! Your opponent took your piece on e5: you missed a capture.',
+    );
+    expect(describeGameOver({ kind: 'win', winner: DARK }, online)?.subtitle).toBe('Your opponent has no legal move left.');
+    expect(describeGameOver({ kind: 'win', winner: LIGHT }, online)?.title).toBe('You lose');
+  });
+
+  it('says which side you play', () => {
+    expect(describeSetup(online)).toBe('Online · You play Black');
+  });
+
+  it('reads a room code from an invite link', () => {
+    expect(inviteCodeFrom('?room=k7qx')).toBe('K7QX');
+    expect(inviteCodeFrom('?room=')).toBeNull();
+    expect(inviteCodeFrom('')).toBeNull();
   });
 });

@@ -7,12 +7,21 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:4300',
   },
-  webServer: {
-    command: 'npx ng serve --port 4300',
-    url: 'http://localhost:4300',
-    reuseExistingServer: !process.env['CI'],
-    timeout: 120_000,
-  },
+  webServer: [
+    {
+      command: 'npx ng serve --port 4300',
+      url: 'http://localhost:4300',
+      reuseExistingServer: !process.env['CI'],
+      timeout: 120_000,
+    },
+    {
+      // The online server, for e2e/online.spec.ts. Needs `npm install` in ../server first.
+      command: 'npm --prefix ../server start',
+      url: 'http://localhost:3000',
+      reuseExistingServer: !process.env['CI'],
+      timeout: 60_000,
+    },
+  ],
   projects: [
     {
       name: 'Desktop Chrome',

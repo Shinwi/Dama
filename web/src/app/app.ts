@@ -8,10 +8,12 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { Board } from './board/board';
 import { GameSetup, Home } from './home/home';
+import { RoomPanel } from './online/room-panel';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
 import { squareName } from '../engine/board';
@@ -21,7 +23,7 @@ import { Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Home],
+  imports: [Board, Home, RoomPanel],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -35,15 +37,23 @@ export class App {
 
   /** The home screen comes first; Start game (or Menu, from the game) switches between them. */
   protected readonly screen = signal<'home' | 'game'>('home');
+  /** Getting into an online room: the home screen's start button waits. */
+  protected readonly homeBusy = signal(false);
+  protected readonly homeError = signal<string | null>(null);
+  /** A room code from an invite link, `?room=K7QX`. */
+  protected readonly inviteCode = signal(inviteCodeFrom(typeof location === 'undefined' ? '' : location.search));
 
-  protected readonly setupSummary = computed(() => describeSetup(this.game.settings()));
+  /** The settings as "you" see them: online, `playerSide` is the side the server gave you. */
+  private readonly perspective = computed(() => ({ ...this.game.settings(), playerSide: this.game.playerSide() }));
+
+  protected readonly setupSummary = computed(() => describeSetup(this.perspective()));
 
   /** Says what a piece taken by nfikh means, while it's still news. */
-  protected readonly nfikhNote = computed(() => describeNfikh(this.game.lastNfikh(), this.game.settings()));
+  protected readonly nfikhNote = computed(() => describeNfikh(this.game.lastNfikh(), this.perspective()));
 
   protected readonly flipped = computed(() => {
-    const settings = this.game.settings();
-    return settings.mode === 'computer' && settings.playerSide === DARK;
+    const settings = this.perspective();
+    return settings.mode !== 'pvp' && settings.playerSide === DARK;
   });
 
   protected readonly selection = computed(() => this.game.selection());
@@ -56,6 +66,20 @@ export class App {
     // When the game-over card appears, move keyboard (and screen reader) focus to its
     // "New game" button, rather than leaving it on the board behind the card.
     effect(() => this.gameOverButton()?.nativeElement.focus());
+
+    // Each time the home screen is shown, check the online server is there, so its Online
+    // button only shows when it is.
+    effect(() => {
+      if (this.screen() === 'home') untracked(() => void this.game.checkOnlineServer());
+    });
+
+    // Reloaded during an online game: go straight back into it. (An invite link wins: that's
+    // a new room to join.)
+    if (!this.inviteCode()) {
+      void this.game.resumeOnline().then((back) => {
+        if (back) this.screen.set('game');
+      });
+    }
   }
 
   /** Pieces jumped so far by a multi-jump that's still being tapped out, hop by hop. */
@@ -69,12 +93,21 @@ export class App {
   protected readonly captureRings = computed(() => this.nextSquares(true));
 
   protected readonly statusText = computed(() => {
-    const settings = this.game.settings();
+    const settings = this.perspective();
     const state = this.game.state();
     const outcome = this.game.outcome();
+    const online = this.game.online();
+
+    if (settings.mode === 'online' && online && outcome.kind === 'ongoing') {
+      if (online.connection === 'reconnecting') return 'Connection lost. Reconnecting…';
+      if (!online.opponentJoined) return `Waiting for your friend to join room ${online.code}…`;
+      if (!online.opponentConnected) return 'Your opponent lost connection. Waiting for them to come back…';
+      if (this.game.selection().target !== null) return 'More than one way to get there: tap the way to go.';
+      return state.toMove === online.side ? 'Your move.' : "Opponent's move.";
+    }
 
     if (outcome.kind === 'win') {
-      if (settings.mode === 'computer') {
+      if (settings.mode !== 'pvp') {
         return outcome.winner === settings.playerSide ? 'You win!' : 'You lose.';
       }
       return `${sideName(outcome.winner)} wins!`;
@@ -98,7 +131,7 @@ export class App {
    * slide across it).
    */
   protected readonly gameOver = computed(() =>
-    this.game.moving() ? null : describeGameOver(this.game.outcome(), this.game.settings()),
+    this.game.moving() ? null : describeGameOver(this.game.outcome(), this.perspective()),
   );
 
   /**
@@ -124,17 +157,40 @@ export class App {
     this.game.tapSquare(square);
   }
 
-  startGame(setup: GameSetup): void {
+  async startGame(setup: GameSetup): Promise<void> {
     this.audio.unlock();
-    this.game.newGame(setup);
+    this.homeError.set(null);
+    const { online, ...settings } = setup;
+    if (!online) {
+      this.game.newGame(settings);
+      this.screen.set('game');
+      return;
+    }
+    this.homeBusy.set(true);
+    const error = await this.game.startOnline(online, settings);
+    this.homeBusy.set(false);
+    if (error) {
+      this.homeError.set(error);
+      void this.game.checkOnlineServer(); // it may have gone since the home screen checked
+      return;
+    }
+    if (this.inviteCode()) {
+      // Done with the invite: without this, a reload would land on "Join room" again
+      // instead of going back into the game.
+      this.inviteCode.set(null);
+      history.replaceState(null, '', location.pathname);
+    }
     this.screen.set('game');
   }
 
-  /** Back to the home screen. The game is set aside; Start game begins a fresh one. */
+  /** Back to the home screen. An online game is left; Start game begins a fresh one. */
   openMenu(): void {
     this.audio.unlock();
+    this.game.leaveOnline();
+    this.homeError.set(null);
     this.screen.set('home');
   }
+
 
   newGame(): void {
     this.audio.unlock();
@@ -172,6 +228,10 @@ export class App {
   }
 }
 
+function capitalize(text: string): string {
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 function sideName(side: typeof LIGHT | typeof DARK): string {
   return side === LIGHT ? 'White' : 'Black';
 }
@@ -182,9 +242,16 @@ const DIFFICULTY_NAMES: Record<Difficulty, string> = {
   'very-good': 'Very good',
 };
 
+/** A room code from the page's query string (`?room=K7QX`), or null. */
+export function inviteCodeFrom(search: string): string | null {
+  const code = new URLSearchParams(search).get('room')?.trim().toUpperCase();
+  return code ? code : null;
+}
+
 /** One line for the game screen saying what was picked on the home screen. */
 export function describeSetup(settings: Settings): string {
   if (settings.mode === 'pvp') return '1v1';
+  if (settings.mode === 'online') return `Online · You play ${sideName(settings.playerSide)}`;
   return `Vs computer · ${DIFFICULTY_NAMES[settings.difficulty]} · You play ${sideName(settings.playerSide)}`;
 }
 
@@ -192,10 +259,11 @@ export function describeSetup(settings: Settings): string {
 export function describeNfikh(nfikh: Nfikh | null, settings: Settings): string | null {
   if (!nfikh) return null;
   const square = squareName(nfikh.square);
-  if (settings.mode === 'computer') {
+  if (settings.mode !== 'pvp') {
+    const them = settings.mode === 'online' ? 'your opponent' : 'the computer';
     return nfikh.by === settings.playerSide
-      ? `Nfikh! You took the computer's piece on ${square}: it missed a capture.`
-      : `Nfikh! The computer took your piece on ${square}: you missed a capture.`;
+      ? `Nfikh! You took ${them}'s piece on ${square}: it missed a capture.`
+      : `Nfikh! ${capitalize(them)} took your piece on ${square}: you missed a capture.`;
   }
   const loser = nfikh.by === LIGHT ? DARK : LIGHT;
   return `Nfikh! ${sideName(nfikh.by)} took ${sideName(loser)}'s piece on ${square}: it missed a capture.`;
@@ -218,12 +286,13 @@ export function describeGameOver(outcome: Outcome, settings: Settings): GameOver
   }
   if (outcome.kind !== 'win') return null;
 
-  if (settings.mode === 'computer') {
+  if (settings.mode !== 'pvp') {
     const youWon = outcome.winner === settings.playerSide;
+    const them = settings.mode === 'online' ? 'Your opponent' : 'The computer';
     return {
       variant: youWon ? 'win' : 'loss',
       title: youWon ? 'You win!' : 'You lose',
-      subtitle: youWon ? 'The computer has no legal move left.' : 'You have no legal move left.',
+      subtitle: youWon ? `${them} has no legal move left.` : 'You have no legal move left.',
     };
   }
 

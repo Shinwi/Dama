@@ -1,0 +1,37 @@
+# Fly.io config for the online server (server/). Deploy from the repo root:
+#   fly deploy --ha=false
+# --ha=false matters: rooms live in the server's memory, so there must be exactly one machine.
+# See server/README.md, "Hosting on Fly.io".
+
+# Fly app names are global. If this one is taken, pick another here AND in
+# web/src/app/online/server-config.ts (HOSTED_SERVER_URL).
+app = "dama-server"
+# Amsterdam: the closest available region to Morocco. `fly platform regions` lists the others (e.g. cdg, Paris).
+primary_region = "ams"
+
+[build]
+  dockerfile = "server/Dockerfile"
+
+[env]
+  PORT = "8080"
+  # Only the game's own pages may connect (the live site and its PR previews).
+  CORS_ORIGIN = "https://shinwi.github.io"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Keep the one machine running: stopping it would end every game in progress.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

@@ -2,7 +2,7 @@ import { Difficulty } from '../../engine/ai';
 import { advanceState, createInitialState, legalMoves as engineLegalMoves, outcome as engineOutcome, pieceCounts as enginePieceCounts, takeForfeit } from '../../engine/game';
 import { GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
 
-export type GameMode = 'computer' | 'pvp';
+export type GameMode = 'computer' | 'pvp' | 'online';
 export type BoardTheme = 'classic' | 'wood' | 'green';
 
 /** How the board got to its latest position (see GameService.updateKind). */
@@ -20,7 +20,10 @@ export interface Nfikh {
 export interface Settings {
   mode: GameMode;
   difficulty: Difficulty;
-  /** Side the human plays when mode === 'computer'. In 'pvp' this is unused. */
+  /**
+   * Side the human plays when mode === 'computer'. Unused in 'pvp'; in 'online' the server
+   * says which side you play (GameService.playerSide), and this setting is left alone.
+   */
   playerSide: Side;
   strictMode: boolean;
   soundOn: boolean;
@@ -228,6 +231,18 @@ export class GameController {
       if (this.history[i].state.toMove === this.settings.playerSide) return i;
     }
     return -1;
+  }
+
+  /**
+   * Jumps straight to a position that came from elsewhere (the online server, when this
+   * copy has fallen out of step with it). No history: there's nothing to undo online.
+   */
+  loadPosition(state: GameState): void {
+    this.state = state;
+    this.lastMove = null;
+    this.lastNfikh = null;
+    this.history = [];
+    this.resetSelection();
   }
 
   newGame(partial?: Partial<Settings>): void {

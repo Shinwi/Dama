@@ -50,7 +50,13 @@ dama/
     src/app/board/     board component (inputs in, square-tap output)
     src/app/ai/        web worker + client wrapping src/engine/ai.ts
     src/app/audio/     synthesized sound engine (Web Audio, no audio files)
+    src/app/online/    Socket.IO client for online rooms + the room-code panel
+    src/protocol/      online.ts: the client/server message types (plain types only)
     e2e/               Playwright tests
+  server/              online rooms prototype: Node.js + Socket.IO, rooms in memory, every
+                       action checked with web/src/engine (imported directly). See its README.
+                       Hosted on Fly.io (fly.toml at the repo root, server/Dockerfile): exactly
+                       one machine, never auto-stopped, since rooms live in memory.
 ```
 
 ## Conventions
@@ -65,4 +71,10 @@ dama/
 - No hints about which piece to move (no "must capture" rings): spotting captures, and missed
   ones to take by nfikh, is up to the player.
 - Settings (mode, difficulty, colour, board pattern, sound/music, strict mode) persist to
-  `localStorage`.
+  `localStorage`. An online seat (room code + token) is kept per tab in `sessionStorage`.
+- Online server address: `?server=` if given; else the hosted server on https pages
+  (`web/src/app/online/server-config.ts`, must match `app` in fly.toml); else
+  `<page host>:3000` (local dev). The Online button shows only if `/health` answers.
+- Online: the server is the referee; the client plays its own action at once and sends it,
+  plays the opponent's actions from `room:update` like computer moves, and snaps to the
+  server's position whenever its copy is out of step (`RoomView.seq`).

@@ -3,6 +3,47 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-24
+
+Online rooms prototype, branch `feature/online-rooms-prototype` (local only, not hosted yet).
+The polish round (#28 and its sub-issues) is parked until after this.
+
+- **`server/`**: Node.js + Socket.IO, run with `tsx` (no build step). `RoomManager` (pure,
+  unit tested) holds rooms in memory: 4-character codes without look-alike characters, a
+  secret token per seat for rejoining, a 30-minute cleanup of empty rooms. Every action is
+  checked with the engine imported straight from `web/src/engine`. The server runs as
+  CommonJS because the engine files sit under `web/`, whose package.json isn't ESM: importing
+  them from an ESM server failed on named exports.
+- **Protocol** (`web/src/protocol/online.ts`): `room:create/join/rejoin/action/leave` with
+  acknowledgements, and `room:update` with a per-player `RoomView` (state, `seq`, last action,
+  whether the opponent has joined / is connected).
+- **Client**: an Online mode on the home screen (create, with a colour choice, or join by
+  code; `?room=` invite links fill the code in). GameService plays the player's own action at
+  once and sends it, and plays the opponent's like a computer move, so it animates and makes
+  its sound. If its copy is out of step (a missed update, a refused action) it snaps to the
+  server's position. The seat is kept per tab in sessionStorage, so a reload rejoins and two
+  tabs can be two players. The server URL is `<page host>:3000` unless `?server=` says
+  otherwise, so a phone on the same Wi-Fi works.
+- **Online only shows when the server is there**: the server answers `GET /health` (with a
+  CORS header), and the app asks it each time the home screen is shown (2 s timeout,
+  `checkOnlineServer()`; only the latest check's answer counts). The Online button is hidden
+  until it answers; a saved "online" mode falls back to Vs computer meanwhile and comes back if
+  the server turns up (unless the player picked something else). An invite link with no server
+  says "Online games aren't available right now." So the live site, which has no server yet,
+  shows no Online option, and the branch can be merged before hosting.
+- **Hosting on Fly.io** (same branch): `server/Dockerfile` (two stages: an esbuild bundle of
+  server + engine, then node:22-alpine with only Socket.IO), `fly.toml` at the repo root
+  (Madrid, one machine, never auto-stopped, health check on /health, CORS_ORIGIN set to the
+  GitHub Pages origin), `.github/workflows/deploy-server.yml` (tests on PRs; on master tests
+  then `flyctl deploy --remote-only --ha=false`, skipped with a notice until FLY_API_TOKEN
+  exists). Socket.IO's `cors` option doesn't stop WebSocket connections (browsers don't apply
+  CORS to them), so the server also checks the Origin header in `allowRequest`. The app
+  connects to `HOSTED_SERVER_URL` on https pages. The image was built and run locally:
+  /health, a create/join/move round trip, and a refused foreign origin all checked out.
+- Tests: 16 server tests (rooms, /health, allowed origins, real Socket.IO clients), GameService online spec with a
+  fake client, wording tests, and `e2e/online.spec.ts` (two browser contexts through the real
+  server; Playwright now starts the server too).
+
 ## 2026-10-21
 
 Issue #21 (feature request), branch `feature/nfikh-home-screen-classic-board`:
