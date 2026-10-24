@@ -63,7 +63,6 @@ describe('GameService online', () => {
 
   beforeEach(() => {
     localStorage.clear();
-    sessionStorage.clear();
     TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
     service = TestBed.inject(GameService);
     client = new FakeOnlineClient();
@@ -86,12 +85,70 @@ describe('GameService online', () => {
     expect(service.isHumanTurn()).toBe(true);
   });
 
-  it('remembers the room in this tab, so a reload can rejoin it', async () => {
+  const storedSeats = () => JSON.parse(localStorage.getItem('dama.online.seats.v1') ?? 'null');
+
+  it('keeps the seat in localStorage, so closing Safari does not lose it (issue #39)', async () => {
     await enterRoom(LIGHT, true);
-    expect(JSON.parse(sessionStorage.getItem('dama.online.v1')!)).toEqual({ code: 'K7QX', token: 'secret' });
+    expect(storedSeats()).toMatchObject({ current: 'K7QX', seats: { K7QX: { token: 'secret' } } });
+
+    // Leaving on purpose: no jumping back in on the next visit, but the seat is kept for its code.
     service.leaveOnline();
-    expect(sessionStorage.getItem('dama.online.v1')).toBeNull();
     expect(client.closed).toBe(true);
+    expect(storedSeats()).toMatchObject({ current: null, seats: { K7QX: { token: 'secret' } } });
+  });
+
+  it('goes back into the game when the site is opened again', async () => {
+    await enterRoom(LIGHT, true);
+    // A new page: a fresh service, with only what's in localStorage.
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ providers: [provideZonelessChangeDetection()] });
+    const reopened = TestBed.inject(GameService);
+    const newClient = new FakeOnlineClient();
+    (reopened as unknown as { onlineClientFactory: () => unknown }).onlineClientFactory = () => newClient;
+    newClient.joinedReply = { ok: true, token: 'secret', view: view(createInitialState(), LIGHT, 0) };
+
+    expect(await reopened.resumeOnline()).toBe(true);
+    expect(newClient.rejoins).toBe(1);
+    expect(reopened.online()?.code).toBe('K7QX');
+  });
+
+  it('forgets the seat when the room is gone on reopening', async () => {
+    await enterRoom(LIGHT, true);
+    client.joinedReply = { ok: false, error: 'That game is no longer available.' };
+    expect(await service.resumeOnline()).toBe(false);
+    expect(storedSeats()).toBeNull();
+  });
+
+  it('joining a room you have a seat in takes the seat back, instead of "room is full"', async () => {
+    await enterRoom(LIGHT, true);
+    service.leaveOnline();
+    let joins = 0;
+    client = new FakeOnlineClient();
+    client.join = async () => {
+      joins++;
+      return { ok: false, error: 'That room already has two players.' };
+    };
+    client.joinedReply = { ok: true, token: 'secret', view: view(createInitialState(), LIGHT, 0) };
+    (service as unknown as { onlineClientFactory: () => unknown }).onlineClientFactory = () => client;
+
+    expect(await service.startOnline({ kind: 'join', code: 'k7qx' })).toBeNull();
+    expect(client.rejoins).toBe(1);
+    expect(joins).toBe(0);
+    expect(service.online()?.side).toBe(LIGHT);
+  });
+
+  it('notes when the opponent lost their connection, and forgets it when they are back', async () => {
+    await enterRoom(LIGHT, true);
+    (service as unknown as { now: () => number }).now = () => 1000;
+    client.onUpdate(view(createInitialState(), LIGHT, 0, { opponentConnected: false }));
+    expect(service.online()?.opponentGoneSince).toBe(1000);
+
+    (service as unknown as { now: () => number }).now = () => 5000;
+    client.onUpdate(view(createInitialState(), LIGHT, 0, { opponentConnected: false }));
+    expect(service.online()?.opponentGoneSince).toBe(1000); // still since the first time
+
+    client.onUpdate(view(createInitialState(), LIGHT, 0));
+    expect(service.online()?.opponentGoneSince).toBeNull();
   });
 
   it("plays the player's own move at once and sends it to the server", async () => {

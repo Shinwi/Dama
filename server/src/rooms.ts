@@ -5,6 +5,11 @@ import { OnlineAction, RoomView, WireState } from '../../web/src/protocol/online
 /** No 0/O or 1/I/L: a code is read off one screen and typed on another. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 4;
+/**
+ * A third player, or a player who lost their seat's token (e.g. on another device). The
+ * seat stays reserved for whoever holds the token, so it can't simply be taken over.
+ */
+export const ROOM_FULL = 'That room already has two players. If one of them is you, open the game on the device you started it on.';
 
 interface Seat {
   token: string;
@@ -67,7 +72,7 @@ export class RoomManager {
     const room = this.rooms.get(normalizeCode(code));
     if (!room) return { ok: false, error: 'No room with that code.' };
     const side = !room.seats.light ? LIGHT : !room.seats.dark ? DARK : null;
-    if (side === null) return { ok: false, error: 'That room is full.' };
+    if (side === null) return { ok: false, error: ROOM_FULL };
     const token = this.newToken();
     room.seats[seatKey(side)] = { token, connected: true };
     room.emptySince = null;

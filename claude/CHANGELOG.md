@@ -27,6 +27,14 @@ in a room."
     emulation showed neither side noticing a dead connection for over 12 s.
   - JSON event logs (no tokens).
   - Region docs updated: the server runs in `ams`, since Madrid wasn't available.
+- **Issue #39, same PR:** closing Safari mid-game lost the seat (home screen on reopening, and
+  "room is full" when joining the own room's code), because iPhone Safari empties a tab's
+  sessionStorage when it's closed. Seats now live in localStorage (`SeatStore`: the current
+  game to return to, plus every seat by code, forgotten after a day or once the room is gone).
+  Joining a code you hold a seat in rejoins. Leave room keeps the seat but stops the automatic
+  return. Clearer full-room message, and "lost connection N min ago" for the waiting player.
+  Trade-off: all tabs of one browser are one player (local testing needs a private window,
+  which the README already said). Two new e2e tests, both failing on the previous code.
 - **Tests:**
   - Server: a move sent during a drop is accepted after reconnect (fails on the old code),
     a wrong token is refused, and logs carry no tokens.

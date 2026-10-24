@@ -129,3 +129,53 @@ test('a move made while the connection is down reaches the opponent once it is b
   await expect(piece(black, 'd6', 'dark')).toBeVisible(); // never jumped back
   await expect(black.getByTestId('online-error')).toHaveCount(0);
 });
+
+// Issue #39: closing Safari mid-game empties the tab's storage. Closing the page and opening
+// a new one in the same browser profile is the same thing (localStorage stays, sessionStorage
+// goes).
+test('a player who closes the browser mid-game is put back in the game on opening it again', async ({ browser }) => {
+  const white = await player(browser);
+  const code = await createRoom(white);
+  const blackContext = await browser.newContext();
+  const black = await blackContext.newPage();
+  await black.goto('/');
+  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await joinRoom(black, code);
+  await tap(white, 'b4', 'a5');
+  await expect(piece(black, 'a5', 'light')).toBeVisible();
+
+  await black.close();
+  await expect(white.getByTestId('status')).toHaveText(/Your opponent lost connection/);
+
+  const reopened = await blackContext.newPage();
+  await reopened.goto('/');
+  await expect(reopened.getByTestId('room-code')).toHaveText(code);
+  await expect(piece(reopened, 'a5', 'light')).toBeVisible();
+  await expect(reopened.getByTestId('status')).toHaveText('Your move.');
+  await expect(white.getByTestId('status')).toHaveText("Opponent's move.");
+});
+
+test('joining your own room with its code takes your seat back; a third player is turned away', async ({ browser }) => {
+  const white = await player(browser);
+  const code = await createRoom(white);
+  const blackContext = await browser.newContext();
+  const black = await blackContext.newPage();
+  await black.goto('/');
+  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await joinRoom(black, code);
+  await expect(white.getByTestId('status')).toHaveText('Your move.');
+
+  // Black leaves, then types the code in again.
+  await black.getByRole('button', { name: 'Leave room' }).click();
+  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await joinRoom(black, code);
+  await expect(black.getByTestId('room-code')).toHaveText(code);
+  await expect(black.getByTestId('status')).toHaveText("Opponent's move.");
+  await expect(white.getByTestId('status')).toHaveText('Your move.');
+
+  const stranger = await player(browser);
+  await joinRoom(stranger, code);
+  await expect(stranger.getByTestId('home-error')).toHaveText(
+    'That room already has two players. If one of them is you, open the game on the device you started it on.',
+  );
+});

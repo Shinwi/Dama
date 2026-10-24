@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
 import { checkOnlineServer, OnlineClient, onlineServerUrl } from '../online/online-client';
+import { Seat, SeatStore } from '../online/seat-store';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, GameState, LIGHT, Move, Side } from '../../engine/types';
 import { OnlineAction, RoomView, WireState } from '../../protocol/online';
@@ -12,8 +13,6 @@ const STORAGE_KEY = 'dama.settings.v1';
 const SETTLE_TIMEOUT_MS = 5000;
 /** When the computer takes a piece by nfikh, how long it pauses before making its move. */
 const NFIKH_PAUSE_MS = 600;
-/** This tab's seat in an online room, kept per tab: two tabs on one computer are two players. */
-const ONLINE_SESSION_KEY = 'dama.online.v1';
 /** After a reconnect, how long to wait before asking for the seat again if the server didn't answer. */
 const REJOIN_RETRY_MS = 2000;
 
@@ -30,6 +29,8 @@ export interface OnlineStatus {
   connection: 'connected' | 'reconnecting' | 'lost';
   /** The latest problem to tell the player about (e.g. a move the server refused). */
   error: string | null;
+  /** When (Date.now()) the opponent was seen to lose their connection, while they're gone. */
+  opponentGoneSince: number | null;
 }
 
 /** Whether the online server answered the last check. 'checking' only until the first answer. */
@@ -38,10 +39,6 @@ export type OnlineServerState = 'checking' | 'up' | 'down';
 /** How to get into an online room, from the home screen. */
 export type OnlineEntry = { kind: 'create' } | { kind: 'join'; code: string };
 
-interface OnlineSession {
-  code: string;
-  token: string;
-}
 
 function loadSettings(): Settings {
   const fallback = defaultSettings();
@@ -52,24 +49,6 @@ function loadSettings(): Settings {
     return { ...fallback, ...(JSON.parse(raw) as Partial<Settings>) };
   } catch {
     return fallback;
-  }
-}
-
-function loadSession(): OnlineSession | null {
-  try {
-    const raw = sessionStorage.getItem(ONLINE_SESSION_KEY);
-    return raw ? (JSON.parse(raw) as OnlineSession) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveSession(session: OnlineSession | null): void {
-  try {
-    if (session) sessionStorage.setItem(ONLINE_SESSION_KEY, JSON.stringify(session));
-    else sessionStorage.removeItem(ONLINE_SESSION_KEY);
-  } catch {
-    // No storage: a reload just won't find its way back into the room.
   }
 }
 
@@ -112,8 +91,12 @@ export class GameService {
   /** Made when an online game starts; replaceable in tests. */
   private onlineClientFactory = () => new OnlineClient(onlineServerUrl());
   private onlineClient: OnlineClient | null = null;
-  /** This tab's seat, also kept in sessionStorage for reloads. Every action is sent with it. */
-  private onlineSession: OnlineSession | null = null;
+  /** The seat in the room being played. Every action is sent with it. */
+  private onlineSession: Seat | null = null;
+  /** Every seat this browser holds, kept across closing the page (see SeatStore). */
+  private seats = new SeatStore();
+  /** Replaceable in tests. */
+  private now = () => Date.now();
   /** How many of the room's actions this copy of the game has played (RoomView.seq). */
   private onlineSeq = 0;
   /**
@@ -293,6 +276,25 @@ export class GameService {
 
     const client = this.connectOnline();
     const settings = this.controller.settings;
+
+    // A room this browser already has a seat in (e.g. Safari was closed mid-game): take the
+    // seat back, rather than ask to join and be told the room is full.
+    const ownSeat = entry.kind === 'join' ? this.seats.seatIn(entry.code) : null;
+    if (ownSeat) {
+      const back = await client.rejoin(ownSeat.code, ownSeat.token);
+      if (client !== this.onlineClient) return 'Cancelled.';
+      if (back.ok) {
+        this.setSession(ownSeat);
+        this.enterRoom(back.view);
+        return null;
+      }
+      if ('unreachable' in back) {
+        this.leaveOnline();
+        return back.error;
+      }
+      this.seats.forget(ownSeat.code); // that game is over: try joining as a new player
+    }
+
     const reply =
       entry.kind === 'create' ? await client.create(settings.playerSide, settings.strictMode) : await client.join(entry.code);
     if (client !== this.onlineClient) return 'Cancelled.'; // left again before the server answered
@@ -305,18 +307,23 @@ export class GameService {
     return null;
   }
 
-  /** Back into this tab's online room after a page reload, if it had one. Resolves true if so. */
+  /**
+   * Back into the game this browser was playing when the page was reloaded or closed, if
+   * there was one and the player didn't leave it. Resolves true if so.
+   */
   async resumeOnline(): Promise<boolean> {
-    const session = loadSession();
-    if (!session) return false;
+    const seat = this.seats.current();
+    if (!seat) return false;
     const client = this.connectOnline();
-    const reply = await client.rejoin(session.code, session.token);
+    const reply = await client.rejoin(seat.code, seat.token);
     if (client !== this.onlineClient) return false;
     if (!reply.ok) {
       this.leaveOnline();
+      // The room is gone: forget the seat. (Unreachable: keep it, the server may be back later.)
+      if (!('unreachable' in reply)) this.seats.forget(seat.code);
       return false;
     }
-    this.setSession(session);
+    this.setSession(seat);
     this.enterRoom(reply.view);
     return true;
   }
@@ -331,18 +338,29 @@ export class GameService {
     if (check === this.onlineServerChecks) this.onlineServer.set(up ? 'up' : 'down');
   }
 
-  /** Leaves the online room, if in one. The friend sees this player as disconnected. */
+  /**
+   * Leaves the online room, if in one. The friend sees this player as disconnected. The seat
+   * is kept, so joining the same code again takes it back; but opening the site again no
+   * longer jumps into this game.
+   */
   leaveOnline(): void {
     this.pendingAction = null;
     this.onlineClient?.close();
     this.onlineClient = null;
     this.online.set(null);
-    this.setSession(null);
+    this.onlineSession = null;
+    this.seats.leave();
   }
 
-  private setSession(session: OnlineSession | null): void {
-    this.onlineSession = session;
-    saveSession(session);
+  private setSession(seat: Seat): void {
+    this.onlineSession = seat;
+    this.seats.enter(seat);
+  }
+
+  /** The server doesn't have this game any more: forget its seat. */
+  private gameGone(error: string): void {
+    this.updateOnline({ connection: 'lost', error });
+    if (this.onlineSession) this.seats.forget(this.onlineSession.code);
   }
 
   private connectOnline(): OnlineClient {
@@ -380,7 +398,7 @@ export class GameService {
       this.applyRoomView(reply.view, false);
     } else if (!('unreachable' in reply)) {
       // The server is back but doesn't have the game (it restarted, or the room expired).
-      this.updateOnline({ connection: 'lost', error: reply.error });
+      this.gameGone(reply.error);
     }
     // Unreachable: still reconnecting. If the connection drops again, Socket.IO says so when
     // it's back; if it stayed up and this request just went unanswered, ask again shortly.
@@ -399,6 +417,7 @@ export class GameService {
       opponentConnected: view.opponentConnected,
       connection: 'connected',
       error: null,
+      opponentGoneSince: null,
     });
     this.applyRoomView(view, true);
   }
@@ -413,11 +432,13 @@ export class GameService {
     if (!online) return;
     // The game has moved on since the last problem: the message is old news.
     const movedOn = !snap && view.seq !== this.onlineSeq;
+    const opponentGone = view.opponentJoined && !view.opponentConnected;
     this.online.set({
       ...online,
       opponentJoined: view.opponentJoined,
       opponentConnected: view.opponentConnected,
       error: movedOn ? null : online.error,
+      opponentGoneSince: opponentGone ? (online.opponentGoneSince ?? this.now()) : null,
     });
 
     const opponentsNext =
@@ -480,7 +501,7 @@ export class GameService {
         this.applyRoomView(reply.view, true);
       } else {
         // Refused without a position: the server doesn't have this game any more.
-        this.updateOnline({ connection: 'lost', error: reply.error });
+        this.gameGone(reply.error);
       }
     });
   }

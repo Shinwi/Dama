@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { boardFrom, parseSquare } from '../../web/src/engine/board';
 import { DARK, LIGHT } from '../../web/src/engine/types';
-import { RoomManager } from './rooms';
+import { ROOM_FULL, RoomManager } from './rooms';
 
 const sq = parseSquare;
 
@@ -34,7 +34,7 @@ describe('RoomManager', () => {
   it('turns away a wrong code and a third player', () => {
     const { manager, room } = twoPlayers();
     expect(manager.join('ZZZZ')).toEqual({ ok: false, error: 'No room with that code.' });
-    expect(manager.join(room.code)).toEqual({ ok: false, error: 'That room is full.' });
+    expect(manager.join(room.code)).toEqual({ ok: false, error: ROOM_FULL });
   });
 
   it('never hands out a code that is already in use', () => {

@@ -13,8 +13,10 @@ in (or opens an invite link). From then on, each move goes through the server.
 - **Rooms live in memory.** Restarting the server forgets every room. A room nobody has been
   connected to for 30 minutes is removed.
 - **Reconnecting:** if a player's connection drops, Socket.IO reconnects by itself and the page
-  rejoins its seat. A page reload rejoins too: the seat's secret token is kept in that tab's
-  `sessionStorage`. Every move also carries the room code and token, so a move made during a
+  rejoins its seat. Reloading the page, or closing the browser and opening the game again,
+  goes back into the game too: the seat's secret token is kept in the browser's `localStorage`.
+  Typing the code of a room you already have a seat in takes that seat back. Leave room stops
+  the automatic return, but keeps the seat for its code. Every move also carries the room code and token, so a move made during a
   drop is accepted once the connection is back, whatever order the messages arrive in. If the
   server never got it, the page sends it again after rejoining.
 - **Heartbeat:** the server pings every 10 s and drops a connection that hasn't answered
@@ -54,8 +56,8 @@ npm start          # http://localhost:4200
    server: if it's missing, check that terminal 1 is running.)
 2. Open a **second window in private/incognito mode** (or another browser) at
    http://localhost:4200. Pick **Online → Join room**, type the code, and press **Join room**.
-   Each tab remembers its own seat, but private mode keeps the two players fully apart, like two
-   devices.
+   It has to be a separate private window or browser: all normal tabs of one browser share the
+   saved seat, so they count as the same player.
 3. Play. White moves first, and each move appears on the other screen straight away.
 
 Things to try:
@@ -68,6 +70,8 @@ Things to try:
   link says online games aren't available. Start the server again and the button comes back
   the next time the home screen is shown.
 - **Copy invite link:** opens the game on "Join room" with the code already filled in.
+- **Close the player's browser window and open the game again:** they're back in the game.
+  The other player sees "Your opponent lost connection N min ago" in the meantime.
 
 ### Play from a phone on the same Wi-Fi
 
