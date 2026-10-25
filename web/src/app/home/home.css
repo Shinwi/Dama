@@ -1,81 +1,199 @@
+/* Design A, "Riad": opponent cards, a level picker, a settings list, one big Start. */
 .home {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 22px;
   max-width: 460px;
-  margin: 12px auto 0;
-  padding: 24px 16px 28px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  margin: 0 auto;
+  padding-bottom: 96px;
 }
 
-.step {
+.intro {
+  margin: 0 0 18px;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+}
+
+.modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.mode {
+  position: relative;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 
-.step-title {
-  margin: 0;
+.mode[aria-pressed='true'] {
+  border: 2px solid var(--color-accent);
+  padding: 15px 13px;
+  background: var(--color-accent-soft);
+}
+
+.mode-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 6px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--color-saffron-soft);
+  color: #8a5a0a;
+}
+
+.mode[aria-pressed='true'] .mode-icon {
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+}
+
+.mode-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mode-name {
+  font-weight: 700;
   font-size: 1rem;
+}
+
+.mode-detail {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.new {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #c2410c;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.section-title {
+  margin: 24px 0 10px;
+  font-family: var(--font-body);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--color-text-muted);
 }
 
 .segmented {
-  display: inline-flex;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  background: var(--color-surface);
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 14px;
+  background: var(--color-surface-sunk);
 }
 
 .segmented button {
+  height: 44px;
   border: none;
+  border-radius: 10px;
   background: transparent;
-  color: var(--color-text);
-  padding: 10px 14px;
-  font-size: 0.95rem;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 600;
   cursor: pointer;
-}
-
-.segmented button + button {
-  border-left: 1px solid var(--color-border);
 }
 
 .segmented button[aria-pressed='true'] {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  font-weight: 600;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 700;
+  box-shadow: 0 1px 3px rgba(40, 30, 10, 0.15);
 }
 
-.themes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-}
-
-.theme {
+.settings {
   display: flex;
   flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+}
+
+.setting {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 6px 8px 6px 16px;
+}
+
+.setting + .setting {
+  border-top: 1px solid var(--color-border);
+}
+
+.setting-name {
+  font-size: 0.95rem;
+}
+
+.choices {
+  display: flex;
+  gap: 4px;
+}
+
+.choices button {
+  display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 8px;
-  border: 2px solid var(--color-border);
-  border-radius: var(--radius-md);
+  min-width: 44px;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
   background: transparent;
-  color: var(--color-text);
-  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
   cursor: pointer;
 }
 
-.theme[aria-pressed='true'] {
+.choices button[aria-pressed='true'] {
   border-color: var(--color-accent);
-  font-weight: 600;
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+.disc {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 32%, var(--piece-black-shine), var(--piece-black-fill) 70%);
+  border: 1px solid var(--piece-black-edge);
+}
+
+.disc.light {
+  background: radial-gradient(circle at 38% 32%, var(--piece-white-shine), var(--piece-white-fill) 70%);
+  border-color: var(--piece-white-edge);
 }
 
 /* Same colours as the board patterns in board.css. */
@@ -99,9 +217,9 @@
 
 .swatch {
   display: grid;
-  grid-template-columns: repeat(4, 16px);
-  grid-template-rows: repeat(4, 16px);
-  border: 4px solid var(--swatch-frame);
+  grid-template-columns: repeat(2, 10px);
+  grid-template-rows: repeat(2, 10px);
+  border: 3px solid var(--swatch-frame);
   border-radius: 4px;
 }
 
@@ -113,55 +231,68 @@
   background: var(--swatch-dark);
 }
 
+.code-label {
+  margin: 14px 0 6px;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.room-code-input {
+  height: 52px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-title);
+  font-size: 1.5rem;
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.hint,
+.notice {
+  margin: 10px 4px 0;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+}
+
+.error {
+  margin: 14px 0 0;
+  color: #c0392b;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* The Start button stays at the bottom of the screen on a phone. */
+.start-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10;
+  padding: 12px max(16px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: linear-gradient(to top, var(--color-bg) 70%, transparent);
+  display: flex;
+  justify-content: center;
+}
+
 .start {
-  border: 1px solid var(--color-accent);
+  width: min(100%, 460px);
+  height: 58px;
+  border: none;
+  border-radius: var(--radius-lg);
   background: var(--color-accent);
   color: var(--color-accent-contrast);
-  padding: 12px 32px;
-  border-radius: var(--radius-md);
-  font-size: 1.05rem;
-  font-weight: 600;
+  font-family: var(--font-title);
+  font-size: 1.25rem;
+  letter-spacing: 0.02em;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--color-accent) 30%, transparent);
   cursor: pointer;
 }
 
 .start:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.room-code-input {
-  width: 9ch;
-  padding: 10px 12px;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font-family: var(--font-title);
-  font-size: 1.4rem;
-  letter-spacing: 0.15em;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.error {
-  margin: 0;
-  color: #c0392b;
-  font-weight: 600;
-  text-align: center;
-}
-
-.notice {
-  margin: 4px 0 0;
-  max-width: 34ch;
-  color: var(--color-text-muted);
-  font-size: 0.92rem;
-  text-align: center;
-}
-
-.hint {
-  margin: 0;
-  max-width: 34ch;
-  color: var(--color-text-muted);
-  font-size: 0.82rem;
-  text-align: center;
 }

@@ -9,6 +9,9 @@ export type GameSetup = Pick<Settings, 'mode' | 'difficulty' | 'playerSide' | 'b
   online?: OnlineEntry;
 };
 
+/** What the player picked to play against: a mode, or "Play someone" (an online room with a random opponent). */
+export type HomeChoice = GameMode | 'match';
+
 interface ThemeOption {
   id: BoardTheme;
   label: string;
@@ -47,14 +50,14 @@ export class Home {
   ];
 
   /** The opponent the player picked (or last played, or an invite link's "online"). */
-  private readonly chosenMode = linkedSignal<GameMode>(() => (this.inviteCode() ? 'online' : this.settings().mode));
+  private readonly chosenMode = linkedSignal<HomeChoice>(() => (this.inviteCode() ? 'online' : this.settings().mode));
   /**
    * What's actually selected: Online falls back to Vs computer while the server isn't there,
    * and comes back by itself if the server turns up, unless the player has picked since.
    */
-  protected readonly mode = computed<GameMode>(() => {
+  protected readonly mode = computed<HomeChoice>(() => {
     const mode = this.chosenMode();
-    return mode === 'online' && this.onlineServer() !== 'up' ? 'computer' : mode;
+    return (mode === 'online' || mode === 'match') && this.onlineServer() !== 'up' ? 'computer' : mode;
   });
   protected readonly onlineAvailable = computed(() => this.onlineServer() === 'up');
   /** An invite link was opened, but there's no server to join through. */
@@ -73,11 +76,12 @@ export class Home {
   /** Joining a room plays by its creator's timer, so there's nothing to pick then. */
   protected readonly showMoveTime = computed(() => this.mode() !== 'online' || this.onlineEntry() === 'create');
 
-  /** The 4×4 corner of the board drawn in each pattern's swatch. */
-  protected readonly swatchSquares = Array.from({ length: 16 }, (_, i) => (Math.floor(i / 4) + i) % 2 === 1);
+  /** The 2×2 corner of the board drawn in each pattern's swatch. */
+  protected readonly miniSwatch = [false, true, true, false];
 
   protected readonly startLabel = computed(() => {
     if (this.busy()) return 'Connecting…';
+    if (this.mode() === 'match') return 'Find a player';
     if (this.mode() !== 'online') return 'Start game';
     return this.onlineEntry() === 'create' ? 'Create room' : 'Join room';
   });
@@ -86,7 +90,7 @@ export class Home {
     () => !this.busy() && !(this.mode() === 'online' && this.onlineEntry() === 'join' && this.roomCode().trim().length === 0),
   );
 
-  setMode(mode: GameMode): void {
+  setMode(mode: HomeChoice): void {
     this.chosenMode.set(mode);
   }
 
@@ -96,14 +100,17 @@ export class Home {
 
   startGame(): void {
     if (!this.canStart()) return;
+    const choice = this.mode();
     const online: OnlineEntry | undefined =
-      this.mode() !== 'online'
-        ? undefined
-        : this.onlineEntry() === 'create'
-          ? { kind: 'create' }
-          : { kind: 'join', code: this.roomCode().trim() };
+      choice === 'match'
+        ? { kind: 'match' }
+        : choice !== 'online'
+          ? undefined
+          : this.onlineEntry() === 'create'
+            ? { kind: 'create' }
+            : { kind: 'join', code: this.roomCode().trim() };
     this.start.emit({
-      mode: this.mode(),
+      mode: choice === 'match' ? 'online' : choice,
       difficulty: this.difficulty(),
       playerSide: this.playerSide(),
       boardTheme: this.boardTheme(),

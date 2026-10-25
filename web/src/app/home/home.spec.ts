@@ -24,33 +24,35 @@ describe('Home and the online server', () => {
   }
 
   const el = () => fixture.nativeElement as HTMLElement;
-  const button = (name: string) => [...el().querySelectorAll('button')].find((b) => b.textContent?.trim() === name);
-  const pressed = () => el().querySelector('[aria-label="Opponent"] [aria-pressed="true"]')?.textContent?.trim();
+  /** The opponent picked, by its data-mode (each design words the options its own way). */
+  const pressed = () => el().querySelector('[data-mode][aria-pressed="true"]')?.getAttribute('data-mode');
+  const modeButton = (mode: string) => el().querySelector<HTMLButtonElement>(`[data-mode="${mode}"]`) ?? undefined;
+  const startButton = () => el().querySelector<HTMLButtonElement>('[data-testid="start"]') ?? undefined;
 
   it('shows Online only once the server has answered', async () => {
     await show('checking');
-    expect(button('Online')).toBeUndefined();
+    expect(modeButton('online')).toBeUndefined();
     await show('down');
-    expect(button('Online')).toBeUndefined();
+    expect(modeButton('online')).toBeUndefined();
     await show('up');
-    expect(button('Online')).toBeDefined();
+    expect(modeButton('online')).toBeDefined();
   });
 
   it('falls back to Vs computer when the last game was online but the server is not there', async () => {
     await show('down', { mode: 'online' });
-    expect(pressed()).toBe('Vs computer');
-    expect(button('Start game')).toBeDefined();
+    expect(pressed()).toBe('computer');
+    expect(startButton()).toBeDefined();
 
     // The server turns up while the home screen is open: Online comes back.
     await show('up');
-    expect(pressed()).toBe('Online');
+    expect(pressed()).toBe('online');
   });
 
   it("keeps the player's own pick when the server turns up later", async () => {
     await show('checking', { mode: 'online' });
-    button('1v1')!.click();
+    modeButton('pvp')!.click();
     await show('up');
-    expect(pressed()).toBe('1v1');
+    expect(pressed()).toBe('pvp');
   });
 
   it('explains an invite link that cannot be used', async () => {
@@ -72,15 +74,15 @@ describe('Home and the online server', () => {
     const emitted: unknown[] = [];
     fixture.componentInstance.start.subscribe((setup) => emitted.push(setup.moveTime));
     const timer = () => el().querySelector('[aria-label="Move timer"]');
-    expect(timer()?.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('30s');
-    button('1 min')!.click();
-    button('Start game')!.click();
+    expect(timer()?.querySelector('[aria-pressed="true"]')?.getAttribute('data-move-time')).toBe('30');
+    el().querySelector<HTMLButtonElement>('[data-move-time="60"]')!.click();
+    startButton()!.click();
     expect(emitted).toEqual([60]);
 
-    button('Online')!.click();
+    modeButton('online')!.click();
     await fixture.whenStable();
     expect(timer()).not.toBeNull(); // creating a room
-    button('Join room')!.click();
+    el().querySelector<HTMLButtonElement>('[data-entry="join"]')!.click();
     await fixture.whenStable();
     expect(timer()).toBeNull();
   });

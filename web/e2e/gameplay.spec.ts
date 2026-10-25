@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { startGame, tap } from './start';
+import { home, startGame, tap } from './start';
 
 test('start position has 20 white and 20 black pieces', async ({ page }) => {
   await startGame(page);
@@ -77,9 +77,9 @@ test('the home screen sets the board pattern, and Menu goes back to it', async (
   await expect(page.getByTestId('setup-summary')).toHaveText('1v1');
 
   await page.getByRole('button', { name: 'Menu', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Start game', exact: true })).toBeVisible();
+  await expect(home.start(page)).toBeVisible();
   // The choices are remembered.
-  await expect(page.getByRole('group', { name: 'Board pattern' }).getByRole('button', { name: 'Green' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('[data-theme="green"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
 test('the scoreboard counts captures, and the move list names who played', async ({ page }) => {

@@ -1,8 +1,11 @@
 :root {
+  /* Design A, "Riad": calm and refined. Ivory ground, deep indigo, saffron highlights. */
   /* Brand */
-  --color-accent: #4a3fc4;
+  --color-accent: #3d33a8;
   --color-accent-contrast: #ffffff;
-  --color-saffron: #e0a21c;
+  --color-accent-soft: #ecebfb;
+  --color-saffron: #d6950f;
+  --color-saffron-soft: #fbf0d6;
 
   /* Pieces (the board's own colours are per pattern, in board.css) */
   --piece-white-fill: #ecebe6;
@@ -14,11 +17,13 @@
   --piece-shadow: rgba(0, 0, 0, 0.45);
 
   /* Surfaces */
-  --color-bg: #f6f1e7;
+  --color-bg: #f5f1e8;
   --color-surface: #ffffff;
-  --color-text: #221a10;
-  --color-text-muted: #6b5f4d;
-  --color-border: #ddd0b8;
+  --color-surface-sunk: #ebe4d4;
+  --color-text: #1d1b2e;
+  --color-text-muted: #625c70;
+  --color-border: #e2d9c6;
+  --shadow-soft: 0 4px 14px rgba(40, 30, 10, 0.08);
 
   --font-title: 'Reem Kufi', 'Segoe UI', sans-serif;
   --font-body: 'Figtree', 'Segoe UI', sans-serif;
@@ -27,20 +32,25 @@
   --coord-gutter: clamp(14px, 3.6vw, 20px);
   --coord-font: clamp(9px, 2.6vw, 12px);
 
-  --radius-md: 10px;
-  --radius-lg: 16px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --color-accent: #8a80ff;
+    --color-accent: #8f86ff;
     --color-accent-contrast: #15132b;
+    --color-accent-soft: #2a2652;
+    --color-saffron: #e8ae2c;
+    --color-saffron-soft: #3a2f18;
 
-    --color-bg: #15121b;
-    --color-surface: #211c2b;
-    --color-text: #efe9f5;
-    --color-text-muted: #ad9fc2;
-    --color-border: #3a3348;
+    --color-bg: #14121d;
+    --color-surface: #1f1c2c;
+    --color-surface-sunk: #2a2639;
+    --color-text: #efeaf6;
+    --color-text-muted: #aaa3bb;
+    --color-border: #37314a;
+    --shadow-soft: 0 4px 14px rgba(0, 0, 0, 0.35);
   }
 }
 
