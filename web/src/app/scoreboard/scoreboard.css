@@ -164,6 +164,15 @@
   color: var(--color-text-muted);
 }
 
+/* The clock stays put next to the score, however many captured pieces are beside it. */
+.tab:not(.right) .clock {
+  margin-left: auto;
+}
+
+.tab.right .clock {
+  margin-right: auto;
+}
+
 .tab.active .clock {
   background: var(--color-saffron);
   color: #2b1d00;

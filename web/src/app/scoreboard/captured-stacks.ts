@@ -10,8 +10,11 @@ const STACK_HEIGHT = 4;
 @Component({
   selector: 'app-captured-stacks',
   template: `
-    @for (stack of stacks(); track $index) {
+    @for (stack of stacks(); track $index; let last = $last) {
       <span class="stack">
+        @if (last && more()) {
+          <span class="more" aria-hidden="true">+</span>
+        }
         @for (piece of stack; track $index) {
           <span class="chip" [class.light]="color() === 'light'" [style.z-index]="10 - $index"></span>
         }
@@ -47,6 +50,14 @@ const STACK_HEIGHT = 4;
       margin-bottom: 0;
     }
 
+    /* More pieces than the stacks shown can hold. */
+    .more {
+      font-size: calc(var(--chip-height, 11px) * 1.6);
+      font-weight: 800;
+      line-height: 0.8;
+      color: var(--color-text-muted);
+    }
+
     .chip.light {
       background: linear-gradient(180deg, var(--piece-white-shine) 0%, var(--piece-white-fill) 45%, #c9c5bb 100%);
       border-color: var(--piece-white-edge);
@@ -59,10 +70,20 @@ const STACK_HEIGHT = 4;
 export class CapturedStacks {
   readonly color = input.required<'light' | 'dark'>();
   readonly count = input.required<number>();
+  /** At most this many stacks; if there are more pieces than they hold, the last gets a "+". */
+  readonly maxStacks = input<number | null>(null);
+
+  /** There are more pieces than the stacks shown. */
+  protected readonly more = computed(() => {
+    const max = this.maxStacks();
+    return max !== null && this.count() > max * STACK_HEIGHT;
+  });
 
   protected readonly stacks = computed(() => {
     const stacks: number[][] = [];
-    for (let left = this.count(); left > 0; left -= STACK_HEIGHT) {
+    const max = this.maxStacks();
+    const shown = max === null ? this.count() : Math.min(this.count(), max * STACK_HEIGHT);
+    for (let left = shown; left > 0; left -= STACK_HEIGHT) {
       stacks.push(Array.from({ length: Math.min(STACK_HEIGHT, left) }, (_, i) => i));
     }
     return stacks;

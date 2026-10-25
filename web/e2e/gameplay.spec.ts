@@ -109,3 +109,17 @@ test('the move timer skips a turn that runs out (1v1, kept by the browser)', asy
   await expect(page.getByTestId('timeout-note')).toHaveText('White ran out of time: Black to move. Time-outs in a row: 1 of 3.');
   await expect(page.getByTestId('status')).toHaveText('Black to move.');
 });
+
+test('the clocks stay put as captured pieces pile up beside them', async ({ page }) => {
+  await startGame(page, { mode: '1v1' });
+  const clock = page.getByTestId('clock-light');
+  const before = (await clock.boundingBox())!;
+  // b4-c5, e7-d6, then White takes d6 (c5xe7): one captured piece beside White's clock.
+  await tap(page, 'b4', 'c5');
+  await tap(page, 'e7', 'd6');
+  await tap(page, 'c5', 'e7');
+  await expect(page.getByTestId('score-light')).toHaveText('1');
+  const after = (await clock.boundingBox())!;
+  expect(Math.round(after.x)).toBe(Math.round(before.x));
+  expect(Math.round(after.y)).toBe(Math.round(before.y));
+});

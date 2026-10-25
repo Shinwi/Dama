@@ -73,3 +73,24 @@ describe('CapturedStacks', () => {
     expect((fixture.nativeElement as HTMLElement).getAttribute('aria-label')).toBe('7 black pieces captured');
   });
 });
+
+describe('CapturedStacks, with room for only so many stacks', () => {
+  async function stacks(count: number, maxStacks: number | null) {
+    TestBed.configureTestingModule({ imports: [CapturedStacks], providers: [provideZonelessChangeDetection()] });
+    const fixture = TestBed.createComponent(CapturedStacks);
+    fixture.componentRef.setInput('color', 'light');
+    fixture.componentRef.setInput('count', count);
+    fixture.componentRef.setInput('maxStacks', maxStacks);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    return { sizes: [...el.querySelectorAll('.stack')].map((s) => s.querySelectorAll('.chip').length), plus: el.querySelectorAll('.more').length };
+  }
+
+  it('shows them all while they fit', async () => {
+    expect(await stacks(12, 3)).toEqual({ sizes: [4, 4, 4], plus: 0 });
+  });
+
+  it('puts a "+" on the last stack when there are more', async () => {
+    expect(await stacks(13, 3)).toEqual({ sizes: [4, 4, 4], plus: 1 });
+  });
+});
