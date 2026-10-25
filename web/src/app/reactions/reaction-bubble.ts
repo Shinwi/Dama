@@ -15,8 +15,9 @@ import { ReactionFace } from './reaction-face';
     @if (shown(); as r) {
       <p class="bubble" [class.right]="align() === 'right'" [attr.data-from]="r.from" data-testid="reaction-bubble" aria-live="polite">
         @if (r.face) {
+          <span class="who">{{ r.from }}</span>
           <app-reaction-face class="face" [face]="r.id" [size]="faceSize()"></app-reaction-face>
-          <span class="visually-hidden">{{ r.from }}: {{ r.label }}</span>
+          <span class="visually-hidden">{{ r.label }}</span>
         } @else {
           <span class="who">{{ r.from }}:</span> {{ r.label }}
         }
@@ -31,43 +32,43 @@ import { ReactionFace } from './reaction-face';
       z-index: 5;
     }
 
+    /* Design B, "Night Café": a cream pill that drops in above the board. */
     .bubble {
       position: absolute;
-      left: 0;
-      top: 0;
+      left: 50%;
+      top: 4px;
       margin: 0;
       display: flex;
       align-items: center;
-      gap: 6px;
-      padding: 7px 12px;
-      border-radius: 4px 16px 16px 16px;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      box-shadow: 0 6px 16px rgba(40, 30, 10, 0.14);
+      gap: 8px;
+      padding: 6px 14px 6px 8px;
+      border-radius: 999px;
+      background: #f2e9d8;
+      color: #1b1408;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.45);
       font-weight: 700;
       font-size: 0.92rem;
       white-space: nowrap;
-      animation: pop 180ms ease-out;
-    }
-
-    .bubble.right {
-      left: auto;
-      right: 0;
-      border-radius: 16px 4px 16px 16px;
+      transform: translateX(-50%);
+      animation: drop 200ms ease-out;
     }
 
     .who {
-      color: var(--color-text-muted);
+      color: #5a4a2a;
       font-weight: 600;
     }
 
     .face {
-      color: var(--color-accent);
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: linear-gradient(180deg, #f0c878, #c48f37);
+      color: #2a1d05;
     }
 
-    @keyframes pop {
+    @keyframes drop {
       from {
-        transform: scale(0.6);
+        transform: translate(-50%, -10px);
         opacity: 0;
       }
     }

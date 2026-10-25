@@ -5,17 +5,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  --tint: #fbf0d6;
-  --tint-low: #fdebe8;
-  --low: #d23b42;
-}
-
-@media (prefers-color-scheme: dark) {
-  :host {
-    --tint: #3a3020;
-    --tint-low: #45222a;
-    --low: #e5484d;
-  }
+  /* Design B, "Night Café": a brass plaque. */
+  --tint: rgba(217, 166, 72, 0.16);
+  --tint-low: rgba(229, 72, 77, 0.2);
+  --low: #e5484d;
 }
 
 .bar {
@@ -23,11 +16,11 @@
   grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
   width: min(100%, 560px);
   height: 44px;
-  border-radius: 10px;
+  border-radius: 12px;
   overflow: hidden;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  box-shadow: 0 5px 16px rgba(40, 25, 5, 0.14);
+  background: linear-gradient(180deg, #1d3229, #14251f);
+  border: 1px solid #8a6a2c;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 220, 150, 0.15);
 }
 
 .name {
@@ -83,15 +76,18 @@
   width: 44px;
   display: grid;
   place-items: center;
-  background: var(--color-accent);
+  background: var(--brass);
   color: var(--color-accent-contrast);
   font-family: var(--font-title);
+  font-weight: 800;
   font-size: 1.6rem;
   font-variant-numeric: tabular-nums;
 }
 
 .score + .score {
-  border-left: 1px solid color-mix(in srgb, var(--color-accent-contrast) 25%, transparent);
+  background: #23382f;
+  color: var(--color-text);
+  border-left: 1px solid #3a554a;
 }
 
 .tabs {
@@ -132,7 +128,7 @@
   font-weight: 800;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: #a06f05;
+  color: var(--color-saffron);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -146,11 +142,6 @@
   color: var(--low);
 }
 
-@media (prefers-color-scheme: dark) {
-  .turn {
-    color: var(--color-saffron);
-  }
-}
 
 .clock {
   flex: none;
@@ -160,7 +151,7 @@
   font-variant-numeric: tabular-nums;
   padding: 5px 11px;
   border-radius: 0 0 9px 9px;
-  background: color-mix(in srgb, var(--color-border) 70%, transparent);
+  background: #23382f;
   color: var(--color-text-muted);
 }
 
@@ -174,8 +165,8 @@
 }
 
 .tab.active .clock {
-  background: var(--color-saffron);
-  color: #2b1d00;
+  background: var(--brass);
+  color: var(--color-accent-contrast);
 }
 
 .tab.active.low .clock {

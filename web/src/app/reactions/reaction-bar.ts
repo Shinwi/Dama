@@ -35,13 +35,14 @@ import { ReactionFace } from './reaction-face';
       gap: 8px;
     }
 
+    /* Design B, "Night Café": brass coins for the faces, dark pills for the phrases. */
     button {
       height: 44px;
       min-width: 44px;
       padding: 0 14px;
-      border-radius: 22px;
-      border: 1px solid var(--color-border);
-      background: var(--color-surface);
+      border-radius: 12px;
+      border: 1px solid var(--color-border-strong);
+      background: var(--color-surface-sunk);
       color: var(--color-text);
       font: inherit;
       font-size: 0.9rem;
@@ -50,8 +51,13 @@ import { ReactionFace } from './reaction-face';
     }
 
     button.face {
+      width: 48px;
+      height: 48px;
       padding: 0;
-      color: var(--color-accent);
+      border: none;
+      border-radius: 50%;
+      background: var(--brass);
+      color: var(--color-accent-contrast);
     }
 
     button:disabled {

@@ -22,6 +22,9 @@ export class Matchmaking {
 
   private readonly now = signal(Date.now());
 
+  /** The little board on the table: 4×4. */
+  protected readonly squares = Array.from({ length: 16 }, (_, i) => (Math.floor(i / 4) + i) % 2 === 1);
+
   protected readonly waited = computed(() => {
     const seconds = Math.max(0, Math.floor((this.now() - this.status().since) / 1000));
     return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;

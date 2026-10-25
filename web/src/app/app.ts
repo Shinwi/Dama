@@ -356,8 +356,11 @@ export class App {
 
   // ---- Quick reactions, and "Play someone" -------------------------------------------
 
-  /** The reactions this design offers during a game. */
-  protected readonly reactionChoices: readonly ReactionId[] = ['happy', 'wow', 'oops', 'good-move', 'hurry'];
+  /** The reactions this design offers during a game, behind the brass React button. */
+  protected readonly reactionChoices: readonly ReactionId[] = ['happy', 'wow', 'oops', 'thinking', 'good-move', 'take-your-time'];
+  protected readonly reactionsOpen = signal(false);
+  /** The quick replies on the game-over screen. */
+  protected readonly gameOverReactions: readonly ReactionId[] = ['good-game', 'well-played', 'one-more'];
 
   /** Who sent the reaction on screen, and which side of the scoreboard it comes from. */
   protected readonly reactionFrom = computed(() => {
@@ -370,6 +373,7 @@ export class App {
   sendReaction(reaction: ReactionId): void {
     this.audio.unlock();
     this.game.sendReaction(reaction);
+    this.reactionsOpen.set(false);
   }
 
   cancelMatch(): void {

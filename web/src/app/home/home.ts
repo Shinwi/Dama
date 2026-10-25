@@ -36,6 +36,8 @@ export class Home {
   readonly onlineServer = input<OnlineServerState>('checking');
   /** Connecting to the online server: the start button waits. */
   readonly busy = input(false);
+  /** Players in rooms on the server right now, if known. */
+  readonly playersOnline = input<number | null>(null);
   /** Why the last attempt to get into a room failed. */
   readonly error = input<string | null>(null);
   readonly start = output<GameSetup>();
@@ -76,8 +78,14 @@ export class Home {
   /** Joining a room plays by its creator's timer, so there's nothing to pick then. */
   protected readonly showMoveTime = computed(() => this.mode() !== 'online' || this.onlineEntry() === 'create');
 
-  /** The 4×4 corner of the board drawn in each pattern's swatch. */
-  protected readonly swatchSquares = Array.from({ length: 16 }, (_, i) => (Math.floor(i / 4) + i) % 2 === 1);
+  /** The 2×2 corner of the board drawn in each pattern's swatch. */
+  protected readonly miniSwatch = [false, true, true, false];
+
+  /** Under "Someone new": how many are playing, when the server says. */
+  protected readonly playersLine = computed(() => {
+    const n = this.playersOnline();
+    return n === null || n === 0 ? 'A random opponent' : `${n} player${n === 1 ? '' : 's'} at the tables`;
+  });
 
   protected readonly startLabel = computed(() => {
     if (this.busy()) return 'Connecting…';

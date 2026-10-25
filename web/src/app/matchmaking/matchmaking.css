@@ -1,18 +1,20 @@
+/* Design B, "Night Café": a wooden table with your piece on one side and an empty seat
+   opposite, waiting for someone to sit down. */
 :host {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 10px;
-  max-width: 420px;
-  margin: 24px auto 0;
-  padding: 24px 20px;
-  text-align: center;
+  align-items: flex-start;
+  max-width: 480px;
+  margin: 0 auto;
 }
 
 .title {
-  margin: 0;
-  font-size: 1.6rem;
-  color: var(--color-accent);
+  margin: 16px 0 6px;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 2.6rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
 }
 
 .detail {
@@ -20,27 +22,146 @@
   color: var(--color-text-muted);
 }
 
-.buttons {
+.table {
+  position: relative;
+  align-self: center;
+  width: 300px;
+  height: 300px;
+  margin-top: 26px;
+}
+
+.top {
+  position: absolute;
+  inset: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 40% 35%, #a26a3e, #6a4024 75%);
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6), inset 0 2px 0 rgba(255, 210, 150, 0.25);
+}
+
+.mini-board {
+  position: absolute;
+  left: 100px;
+  top: 100px;
+  width: 100px;
+  height: 100px;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  transform: rotate(45deg);
+  border-radius: 4px;
+  overflow: hidden;
+  opacity: 0.75;
+}
+
+.mini-board span {
+  background: #ecd3a5;
+}
+
+.mini-board span.dark {
+  background: #8a5a36;
+}
+
+.seat {
+  position: absolute;
+  left: 122px;
+  width: 56px;
+  height: 56px;
+  box-sizing: border-box;
+  border-radius: 50%;
+}
+
+.seat.you {
+  bottom: 0;
+  background: radial-gradient(circle at 38% 32%, var(--piece-white-shine), var(--piece-white-fill) 70%);
+  border: 2px solid var(--piece-white-edge);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.5);
+}
+
+.seat.empty {
+  top: 0;
+  border: 2px dashed var(--color-accent);
+}
+
+.halo {
+  position: absolute;
+  left: 110px;
+  top: -12px;
+  width: 80px;
+  height: 80px;
+  border-radius: 50%;
+  border: 1px solid rgba(217, 166, 72, 0.4);
+  animation: halo 2s ease-out infinite;
+}
+
+.idle .halo {
+  animation: none;
+  opacity: 0;
+}
+
+.you {
+  align-self: center;
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.bottom {
   display: flex;
   flex-direction: column;
   gap: 10px;
   align-self: stretch;
-  margin-top: 16px;
+  margin-top: 30px;
 }
 
 button {
-  height: 50px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
   font: inherit;
-  font-weight: 700;
   cursor: pointer;
 }
 
-button.primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-contrast);
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 56px;
+  padding: 0 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.95rem;
+}
+
+.row svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: var(--color-saffron);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.cancel {
+  height: 52px;
+  border: 1px solid var(--color-border-strong);
+  border-radius: 26px;
+  background: transparent;
+  color: var(--color-text);
+  font-weight: 700;
+}
+
+@keyframes halo {
+  from {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+
+  to {
+    transform: scale(1.25);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .halo {
+    animation: none;
+  }
 }

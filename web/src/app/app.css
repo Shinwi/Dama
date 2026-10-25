@@ -1,34 +1,90 @@
 .page {
   max-width: 1040px;
   margin-inline: auto;
-  padding: 16px 16px 48px;
+  padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
 }
 
 .header {
-  text-align: center;
-}
-
-/* In a game: the title on the left, the room chip (online) on the right. */
-.header.in-game {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 6px;
+}
+
+/* The home and matchmaking screens: the title over their one column. */
+.header:not(.in-game) {
+  max-width: 460px;
+  margin-inline: auto;
+}
+
+/* In a game: back on the left, the title in the middle, the room chip (online) on the right. */
+.header.in-game {
+  justify-content: space-between;
   margin-bottom: 12px;
 }
 
 .header.in-game .title {
   margin: 0;
-  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  font-size: 1.5rem;
+}
+
+.back,
+.header-spacer {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.back {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border);
+  border-radius: 22px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.back svg,
+.actions svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .title {
-  margin: 4px 0 14px;
-  font-size: clamp(1.8rem, 6vw, 2.4rem);
-  color: var(--color-accent);
+  margin: 8px 0 4px;
+  font-family: var(--font-title);
+  font-weight: 800;
+  font-size: 1.6rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+/* The home and matchmaking screens: a big "Dama", with ضامة above it in brass. */
+.header:not(.in-game) .title {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 4px;
+  margin-top: 28px;
+  font-size: 3.4rem;
+  line-height: 0.95;
+}
+
+.header:not(.in-game) .title .arabic {
+  margin: 0;
+  font-size: 1.25rem;
 }
 
 .title .arabic {
+  font-family: var(--font-arabic);
+  font-weight: 600;
   color: var(--color-saffron);
   font-size: 0.9em;
   margin-inline-start: 0.3em;
@@ -142,70 +198,134 @@
   }
 }
 
+/* The reactions tray, opened by the brass React button. */
+.react {
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-soft);
+  animation: tray-up 180ms ease-out;
+}
+
+/* The game's buttons: pills, round icon buttons, and the brass React button. */
 .actions {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
-  justify-content: center;
 }
 
 .actions button {
+  min-height: 48px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 16px;
   border: 1px solid var(--color-border);
+  border-radius: 24px;
   background: var(--color-surface);
   color: var(--color-text);
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  white-space: nowrap;
   cursor: pointer;
 }
 
+.actions button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.actions button:not(.round, .fab) svg {
+  display: none;
+}
+
+.actions button.round {
+  width: 48px;
+  padding: 0;
+}
+
 .actions button[aria-pressed='true'] {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  color: var(--color-saffron);
 }
 
-/* Phones: Sound and Music are just their icons, so all the buttons fit on one row. */
-@media (max-width: 679px) {
-  .actions {
-    flex-wrap: nowrap;
-    gap: 6px;
-  }
-
-  .actions button {
-    padding: 9px 11px;
-    font-size: 0.85rem;
-    white-space: nowrap;
-  }
-
-  .icon-button .button-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip: rect(0 0 0 0);
-    white-space: nowrap;
-  }
+.actions button.round[aria-pressed='false'] {
+  color: var(--color-text-muted);
 }
 
-.icon-button .button-label {
-  margin-inline-start: 0.35em;
+.actions .fab {
+  width: 58px;
+  height: 58px;
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--brass);
+  color: var(--color-accent-contrast);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+}
+
+.actions .fab svg {
+  width: 26px;
+  height: 26px;
+  stroke-width: 2.1;
 }
 
 .actions button.danger {
   border-color: #c0392b;
   background: #c0392b;
-  color: #fff;
+  color: #ffffff;
 }
 
-.actions button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+@media (max-width: 679px) {
+  .page {
+    padding-bottom: 110px;
+  }
+
+  .actions {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    padding: 10px max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+    background: linear-gradient(to top, var(--color-bg) 70%, transparent);
+  }
+
+  .actions button:not(.round, .fab) {
+    padding: 0 13px;
+  }
+
+  /* On a phone the tray floats over the board, just above the React button. */
+  .react {
+    position: fixed;
+    right: max(14px, env(safe-area-inset-right));
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    z-index: 11;
+    width: min(260px, calc(100vw - 28px));
+    box-sizing: border-box;
+  }
+}
+
+@keyframes tray-up {
+  from {
+    transform: translateY(12px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .react {
+    animation: none;
+  }
 }
 
 .rules {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   padding: 10px 16px;
 }
 
@@ -259,7 +379,7 @@
   }
 
   .actions {
-    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .setup-summary {

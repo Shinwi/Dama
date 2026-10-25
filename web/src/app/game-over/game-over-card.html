@@ -6,37 +6,71 @@
     aria-labelledby="game-over-title"
     aria-describedby="game-over-subtitle"
   >
+    <span class="grabber" aria-hidden="true"></span>
+    <span class="badge" aria-hidden="true">
+      @switch (info().variant) {
+        @case ('win') {
+          <svg class="laurel" viewBox="0 0 120 70">
+            <path d="M38 60c-14-6-22-20-20-36M82 60c14-6 22-20 20-36"></path>
+            <path d="M26 46c-6 0-10-3-12-8 5-1 9 1 12 8zM22 34c-5-2-7-6-7-11 5 1 7 5 7 11zM94 46c6 0 10-3 12-8-5-1-9 1-12 8zM98 34c5-2 7-6 7-11-5 1-7 5-7 11z"></path>
+            <circle class="coin" cx="60" cy="34" r="18"></circle>
+            <circle class="coin-ring" cx="60" cy="34" r="11"></circle>
+          </svg>
+        }
+        @case ('loss') {
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M8.5 16c1-1.3 2.2-2 3.5-2s2.5.7 3.5 2M9 9.5h.01M15 9.5h.01"></path></svg>
+        }
+        @default {
+          <svg viewBox="0 0 24 24"><path d="M4 12h16M7 8l-3 4 3 4M17 8l3 4-3 4"></path></svg>
+        }
+      }
+    </span>
     <p class="game-over-title" id="game-over-title">{{ info().title }}</p>
     <p class="game-over-subtitle" id="game-over-subtitle">{{ info().subtitle }}</p>
+
     @if (stats(); as stats) {
       <dl class="stats" data-testid="game-stats">
-        <div><dt>Pieces taken</dt><dd>{{ stats.taken }}</dd></div>
-        <div><dt>Moves</dt><dd>{{ stats.moves }}</dd></div>
-        <div><dt>Time</dt><dd>{{ stats.time }}</dd></div>
+        <div><dt>pieces taken</dt><dd>{{ stats.taken }}</dd></div>
+        <div><dt>moves</dt><dd>{{ stats.moves }}</dd></div>
+        <div><dt>game time</dt><dd>{{ stats.time }}</dd></div>
       </dl>
     }
 
     @if (rematch(); as rematch) {
       @if (rematch.you) {
-        <p class="request waiting" data-testid="rematch-status" aria-live="polite">Rematch asked. Waiting for your opponent…</p>
+        <p class="request" aria-live="polite"><span class="dot" aria-hidden="true"></span><span data-testid="rematch-status">Rematch asked. Waiting for your opponent…</span></p>
+      } @else if (rematch.opponent) {
+        <p class="request" aria-live="polite"><span class="dot" aria-hidden="true"></span><span data-testid="rematch-status">Your opponent wants a rematch.</span><span class="aside">Colours swap</span></p>
+      }
+    }
+
+    @if (reactions().length > 0) {
+      <p class="replies-title">Say something</p>
+      <app-reaction-bar class="replies" [reactions]="reactions()" (pick)="react.emit($event)"></app-reaction-bar>
+    }
+
+    @if (rematch(); as rematch) {
+      @if (rematch.you) {
         <div class="buttons">
           <button type="button" class="secondary" #first (click)="answerRematch.emit(false)">Cancel</button>
-          <button type="button" class="secondary" (click)="menu.emit()">Back to menu</button>
+          <button type="button" class="link" (click)="menu.emit()">Leave the table</button>
         </div>
       } @else if (rematch.opponent) {
-        <p class="request" data-testid="rematch-status" aria-live="polite">Your opponent wants a rematch.</p>
         <div class="buttons">
           <button type="button" #first (click)="answerRematch.emit(true)">Rematch</button>
-          <button type="button" class="secondary" (click)="answerRematch.emit(false)">No thanks</button>
+          <button type="button" class="link" (click)="answerRematch.emit(false)">No thanks</button>
         </div>
       } @else {
         <div class="buttons">
           <button type="button" #first (click)="answerRematch.emit(true)">Rematch</button>
-          <button type="button" class="secondary" (click)="menu.emit()">Back to menu</button>
+          <button type="button" class="link" (click)="menu.emit()">Leave the table</button>
         </div>
       }
     } @else {
-      <button type="button" #first (click)="newGame.emit()">New game</button>
+      <div class="buttons">
+        <button type="button" #first (click)="newGame.emit()">New game</button>
+        <button type="button" class="link" (click)="menu.emit()">Back to menu</button>
+      </div>
     }
   </div>
 </div>
