@@ -1,27 +1,38 @@
-<div class="bar">
+<div class="vs">
   @for (tab of tabs(); track tab.side; let right = $last) {
     @if (right) {
-      @for (score of tabs(); track score.side) {
-        <span class="score" [attr.data-testid]="'score-' + score.color" [attr.aria-label]="score.name + ' captured ' + score.captured">{{ score.captured }}</span>
-      }
+      <span class="badge" aria-hidden="true">VS</span>
     }
-    <div class="name" [class.right]="right" [class.active]="tab.active" [class.low]="tab.low">
-      <span class="disc" [class.light]="tab.color === 'light'" aria-hidden="true"></span>
-      <span class="name-text" [attr.data-testid]="'name-' + tab.color">{{ tab.name }}</span>
-    </div>
-  }
-</div>
-<div class="tabs">
-  @for (tab of tabs(); track tab.side; let right = $last) {
-    @if (right) {
-      <span class="middle">Move {{ moveNumber() }}<br />captured</span>
-    }
-    <div class="tab" [class.right]="right" [class.active]="tab.active" [class.low]="tab.low">
-      <app-captured-stacks class="stacks" [color]="tab.capturedColor" [count]="tab.captured" [maxStacks]="3" [mirrored]="right"></app-captured-stacks>
-      <span class="turn">{{ tab.active ? (tab.low ? 'Hurry up' : tab.turnLabel) : '' }}</span>
+    <div class="card" [class.right]="right" [class.active]="tab.active" [class.low]="tab.low">
+      <span class="avatar" [class.light]="tab.color === 'light'" aria-hidden="true">
+        <svg viewBox="0 0 100 100">
+          <circle class="body" cx="50" cy="50" r="44"></circle>
+          <circle cx="36" cy="44" r="9" fill="#ffffff" stroke="#1b1b1b" stroke-width="3"></circle>
+          <circle cx="64" cy="44" r="9" fill="#ffffff" stroke="#1b1b1b" stroke-width="3"></circle>
+          <circle [attr.cx]="right ? 34 : 38" cy="46" r="4" fill="#1b1b1b"></circle>
+          <circle [attr.cx]="right ? 62 : 66" cy="46" r="4" fill="#1b1b1b"></circle>
+          @if (tab.low) {
+            <ellipse cx="50" cy="68" rx="7" ry="6" fill="#ff5a4e" stroke="#1b1b1b" stroke-width="3"></ellipse>
+          } @else {
+            <path class="mouth" d="M38 64c4 5 8 7 12 7s8-2 12-7"></path>
+          }
+        </svg>
+      </span>
+      <span class="who">
+        <span class="name-text" [attr.data-testid]="'name-' + tab.color">{{ tab.name }}</span>
+        <span class="score" [attr.data-testid]="'score-' + tab.color" [attr.aria-label]="tab.name + ' captured ' + tab.captured">{{ tab.captured }}</span>
+      </span>
       @if (tab.clock !== null) {
         <span class="clock" [attr.data-testid]="'clock-' + tab.color" [attr.aria-label]="tab.name + ' clock ' + tab.clock">{{ tab.clock }}</span>
       }
     </div>
+  }
+</div>
+<div class="under">
+  @for (tab of tabs(); track tab.side; let right = $last) {
+    @if (right) {
+      <span class="middle">Move {{ moveNumber() }}</span>
+    }
+    <app-captured-stacks class="stacks" [class.right]="right" [color]="tab.capturedColor" [count]="tab.captured" [maxStacks]="4" [mirrored]="right"></app-captured-stacks>
   }
 </div>

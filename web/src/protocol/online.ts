@@ -80,6 +80,47 @@ export interface RoomView {
 }
 
 /**
+ * Quick reactions: a fixed set of faces and phrases a player can send during a game (never
+ * free text, so nothing rude can be sent). Each design shows its own selection and wording;
+ * the server only passes on ids from this list.
+ */
+export const REACTIONS = [
+  'happy',
+  'laugh',
+  'wow',
+  'oops',
+  'grumpy',
+  'cheeky',
+  'thinking',
+  'good-move',
+  'hurry',
+  'take-your-time',
+  'good-game',
+  'well-played',
+  'one-more',
+] as const;
+export type ReactionId = (typeof REACTIONS)[number];
+
+export function isReaction(value: unknown): value is ReactionId {
+  return typeof value === 'string' && (REACTIONS as readonly string[]).includes(value);
+}
+
+/** A reaction as both players receive it. */
+export interface ReactionEvent {
+  by: Side;
+  reaction: ReactionId;
+}
+
+/**
+ * What `/health` answers. `features` lists what this server can do beyond rooms, so the app
+ * only offers what works: 'reactions', 'matchmaking'. (A server without the field has neither.)
+ */
+export interface HealthReply {
+  ok: true;
+  features?: ('reactions' | 'matchmaking')[];
+}
+
+/**
  * A browser's anonymous player ID: random, made on the device, nothing personal. The server
  * only uses it to count different players per day (`/stats`, metrics); it's never shown.
  */
@@ -110,6 +151,14 @@ export interface SeatRequest {
   code: string;
   token: string;
 }
+
+/** "Play someone": wait for any other player looking for a game, with this move timer. */
+export interface FindMatchRequest extends WithPlayerId {
+  moveTimeSeconds: number;
+}
+
+/** The answer to match:find: waiting (then match:found arrives), or refused. */
+export type FindMatchReply = { ok: true } | { ok: false; error: string };
 
 export interface ActionRequest {
   /**
@@ -142,11 +191,21 @@ export interface ClientToServerEvents {
   /** After the game: asks for a rematch (`yes`), or turns one down / takes the request back. */
   'room:rematch': (request: SeatRequest & { yes: boolean }, reply: (r: ActionReply) => void) => void;
   'room:leave': () => void;
+  /** Sends a quick reaction to the opponent (see REACTIONS). */
+  'room:react': (request: SeatRequest & { reaction: ReactionId }, reply: (r: ActionReply) => void) => void;
+  /** Starts looking for a random opponent; match:found follows once one turns up. */
+  'match:find': (request: FindMatchRequest, reply: (r: FindMatchReply) => void) => void;
+  /** Stops looking. */
+  'match:cancel': () => void;
 }
 
 /** Server → client events. */
 export interface ServerToClientEvents {
   'room:update': (view: RoomView) => void;
+  /** A player in the room sent a quick reaction (both players get it, the sender too). */
+  'room:reaction': (event: ReactionEvent) => void;
+  /** match:find found an opponent: a room for the two of you, with your seat in it. */
+  'match:found': (joined: { token: string; view: RoomView }) => void;
 }
 
 export const DEFAULT_SERVER_PORT = 3000;

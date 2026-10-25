@@ -15,13 +15,11 @@ describe('App', () => {
     }).compileComponents();
   });
 
-  /** The app opens on the home screen: press Start game to get to the board. */
+  /** The app opens on the home screen: press its start button to get to the board. */
   function startedApp() {
     const fixture = TestBed.createComponent(App);
     fixture.detectChanges();
-    const start = [...fixture.nativeElement.querySelectorAll('button')].find(
-      (b: HTMLButtonElement) => b.textContent?.trim() === 'Start game',
-    ) as HTMLButtonElement;
+    const start = fixture.nativeElement.querySelector('[data-testid="start"]') as HTMLButtonElement;
     start.click();
     fixture.detectChanges();
     return fixture;

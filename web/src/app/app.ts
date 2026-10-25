@@ -18,6 +18,10 @@ import { RoomChip } from './online/room-chip';
 import { Scoreboard, ScoreboardPlayer } from './scoreboard/scoreboard';
 import { CapturedTray } from './scoreboard/captured-tray';
 import { MoveList } from './move-list/move-list';
+import { ReactionBar } from './reactions/reaction-bar';
+import { ReactionBubble } from './reactions/reaction-bubble';
+import { Matchmaking } from './matchmaking/matchmaking';
+import { ReactionId } from '../protocol/online';
 import { OnlinePrompt } from './online/online-prompt';
 import { GameOverCard } from './game-over/game-over-card';
 import { TapToast } from './tap-toast/tap-toast';
@@ -32,7 +36,21 @@ import { Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Home, RoomPanel, RoomChip, Scoreboard, CapturedTray, MoveList, TapToast, OnlinePrompt, GameOverCard],
+  imports: [
+    Board,
+    Home,
+    RoomPanel,
+    RoomChip,
+    Scoreboard,
+    CapturedTray,
+    MoveList,
+    ReactionBar,
+    ReactionBubble,
+    Matchmaking,
+    TapToast,
+    OnlinePrompt,
+    GameOverCard,
+  ],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,7 +63,7 @@ export class App {
   protected readonly DARK = DARK;
 
   /** The home screen comes first; Start game (or Menu, from the game) switches between them. */
-  protected readonly screen = signal<'home' | 'game'>('home');
+  protected readonly screen = signal<'home' | 'game' | 'match'>('home');
   /** Getting into an online room: the home screen's start button waits. */
   protected readonly homeBusy = signal(false);
   protected readonly homeError = signal<string | null>(null);
@@ -83,6 +101,11 @@ export class App {
     // button only shows when it is.
     effect(() => {
       if (this.screen() === 'home') untracked(() => void this.game.checkOnlineServer());
+    });
+
+    // "Play someone" found an opponent: into the game.
+    effect(() => {
+      if (this.screen() === 'match' && this.game.online()) untracked(() => this.screen.set('game'));
     });
 
     const tick = setInterval(() => this.clock.set(Date.now()), 5_000);
@@ -168,13 +191,13 @@ export class App {
     const counts = this.game.pieceCounts();
     const left: Side = settings.mode === 'pvp' ? LIGHT : settings.playerSide;
     const player = (side: Side): ScoreboardPlayer => {
-      const name = playerName(side, settings);
+      const name = funName(playerName(side, settings));
       return {
         side,
         name,
         // Every piece starts on the board: what's missing was captured (or taken by nfikh).
         captured: PIECES_PER_SIDE - (side === LIGHT ? counts.dark : counts.light),
-        turnLabel: name === 'You' ? 'Your move' : name === 'Computer' ? 'Thinking…' : 'To move',
+        turnLabel: name === 'You' ? 'Your move' : name === 'Robot' ? 'Thinking…' : 'To move',
       };
     };
     return [player(left), player((-left) as Side)];
@@ -198,7 +221,7 @@ export class App {
   /** Who plays White and Black, for the move list's columns. */
   protected readonly moveListNames = computed(() => {
     const settings = this.perspective();
-    return { light: playerName(LIGHT, settings), dark: playerName(DARK, settings) };
+    return { light: funName(playerName(LIGHT, settings)), dark: funName(playerName(DARK, settings)) };
   });
 
   protected readonly moveTimeNote = computed(() => describeMoveTime(this.game.moveTimeMs()));
@@ -247,6 +270,11 @@ export class App {
     if (!online) {
       this.game.newGame(settings);
       this.screen.set('game');
+      return;
+    }
+    if (online.kind === 'match') {
+      this.screen.set('match');
+      await this.game.findMatch(settings);
       return;
     }
     this.homeBusy.set(true);
@@ -326,6 +354,67 @@ export class App {
     this.game.askRematch(yes);
   }
 
+  // ---- Quick reactions, and "Play someone" -------------------------------------------
+
+  /** The reactions this design offers during a game: big face stickers, then shouts. */
+  protected readonly reactionChoices: readonly ReactionId[] = ['happy', 'laugh', 'wow', 'grumpy', 'cheeky', 'good-move', 'hurry', 'good-game'];
+  /** Souk Party says it louder. */
+  protected readonly reactionLabels: Partial<Record<ReactionId, string>> = {
+    'good-move': 'NICE ONE!',
+    hurry: 'HURRY UP!',
+    'good-game': 'GG!',
+    'well-played': 'WELL PLAYED!',
+    'one-more': 'AGAIN?!',
+  };
+
+  /** "DOUBLE JUMP! ×2" and up, after a move that took that many pieces. */
+  comboText(count: number): string {
+    const name = count === 2 ? 'DOUBLE JUMP!' : count === 3 ? 'TRIPLE JUMP!' : 'MEGA COMBO!';
+    return `${name} ×${count}`;
+  }
+  /** The quick replies on the game-over screen. */
+  protected readonly gameOverReactions: readonly ReactionId[] = ['good-game', 'one-more', 'laugh'];
+
+  /** Who sent the reaction on screen, and which side of the scoreboard it comes from. */
+  protected readonly reactionFrom = computed(() => {
+    const reaction = this.game.reaction();
+    if (!reaction) return null;
+    const left = this.scoreboardPlayers()[0].side;
+    return { name: playerName(reaction.by, this.perspective()), align: reaction.by === left ? ('left' as const) : ('right' as const) };
+  });
+
+  sendReaction(reaction: ReactionId): void {
+    this.audio.unlock();
+    this.game.sendReaction(reaction);
+  }
+
+  cancelMatch(): void {
+    this.game.cancelMatch();
+    this.screen.set('home');
+  }
+
+  playComputerInstead(): void {
+    this.game.cancelMatch();
+    this.game.newGame({ mode: 'computer' });
+    this.screen.set('game');
+  }
+
+  /** The numbers on the game-over screen, from your side (the winner's in 1v1). */
+  protected readonly gameOverStats = computed(() => {
+    const stats = this.game.stats();
+    const settings = this.perspective();
+    const outcome = this.game.outcome();
+    const side = settings.mode === 'pvp' ? (outcome.kind === 'win' ? outcome.winner : LIGHT) : settings.playerSide;
+    const counts = this.game.pieceCounts();
+    const seconds = Math.max(0, Math.round(stats.durationMs / 1000));
+    return {
+      taken: PIECES_PER_SIDE - (side === LIGHT ? counts.dark : counts.light),
+      moves: stats.moves,
+      time: `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`,
+      bestCombo: side === LIGHT ? stats.bestCombo.light : stats.bestCombo.dark,
+    };
+  });
+
   /** Back to the home screen. An online game is left; Start game begins a fresh one. */
   openMenu(): void {
     this.audio.unlock();
@@ -369,6 +458,11 @@ export class App {
     this.audio.unlock();
     this.game.updateSettings({ strictMode: !this.game.settings().strictMode });
   }
+}
+
+/** Souk Party's names for the players on the scoreboard. */
+function funName(name: string): string {
+  return name === 'Computer' ? 'Robot' : name === 'Opponent' ? 'Rival' : name;
 }
 
 /** How many pieces each side starts with. */

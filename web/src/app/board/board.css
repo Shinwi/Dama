@@ -34,10 +34,12 @@
   grid-row: 1;
   width: 100%;
   aspect-ratio: 1;
+  /* Souk Party: a chunky ink frame with a sticker shadow. */
   border: var(--frame) solid var(--board-frame);
-  border-radius: var(--radius-md);
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+  outline: 3px solid #1b1b1b;
+  box-shadow: 6px 6px 0 3px #1b1b1b;
   touch-action: manipulation;
   /* Keeps z-index inside the board (the lifted, moving piece) inside it, so nothing on the
      board is ever drawn over what App lays on top, like the game-over card. */
@@ -210,14 +212,16 @@
 }
 
 .piece-disc[data-color='light'] {
-  background: radial-gradient(circle at 38% 32%, var(--piece-white-shine), var(--piece-white-fill) 70%);
-  border: 1px solid var(--piece-white-edge);
+  background: #ffffff;
+  border: 2.5px solid #1b1b1b;
+  box-shadow: inset 0 -3px 0 #d6d2c4, 0 2px 0 #1b1b1b;
 }
 
 .piece-disc[data-color='dark'] {
-  background: radial-gradient(circle at 38% 32%, var(--piece-black-shine), var(--piece-black-fill) 70%);
-  /* A light edge so a black piece stays visible on a dark square. */
-  border: 1px solid var(--piece-black-edge);
+  background: #1b1b1b;
+  /* A light ring inside so a black piece stays visible on a dark square. */
+  border: 2.5px solid #1b1b1b;
+  box-shadow: inset 0 -3px 0 #000000, inset 0 0 0 2px #5a5a5a, 0 2px 0 #000000;
 }
 
 .piece-disc::before {
@@ -228,11 +232,11 @@
 }
 
 .piece-disc[data-color='light']::before {
-  border: 2px solid var(--piece-white-edge);
+  border: 2px solid #d6d2c4;
 }
 
 .piece-disc[data-color='dark']::before {
-  border: 2px solid var(--piece-black-edge);
+  border: 2px solid #4a4a4a;
 }
 
 .king-star {
