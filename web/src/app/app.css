@@ -166,6 +166,17 @@
 
 /* Phones: Sound and Music are just their icons, so all the buttons fit on one row. */
 @media (max-width: 679px) {
+  .actions {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .actions button {
+    padding: 9px 11px;
+    font-size: 0.85rem;
+    white-space: nowrap;
+  }
+
   .icon-button .button-label {
     position: absolute;
     width: 1px;
