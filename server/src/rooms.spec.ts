@@ -113,3 +113,124 @@ describe('RoomManager', () => {
     expect(manager.get(room.code)).toBeUndefined();
   });
 });
+
+describe('ending a game other than on the board', () => {
+  it('resigning ends the game: the opponent wins, and moves are refused', () => {
+    const { manager, room } = twoPlayers();
+    const resigned = manager.resign(room, LIGHT);
+    expect(resigned.ok && resigned.value.result).toBe('resigned');
+    expect(manager.view(room, DARK).result).toEqual({ kind: 'resigned', winner: DARK });
+    expect(manager.play(room, LIGHT, { kind: 'move', path: [sq('b4'), sq('a5')] })).toEqual({ ok: false, error: 'The game is over.' });
+    expect(manager.resign(room, DARK).ok).toBe(false);
+    expect(manager.counts().active).toBe(0);
+  });
+
+  it('a draw offer is shown to both, and accepting it ends the game as a draw', () => {
+    const { manager, room } = twoPlayers();
+    expect(manager.offerDraw(room, LIGHT).ok).toBe(true);
+    expect(manager.view(room, LIGHT).drawOffer).toBe('you');
+    expect(manager.view(room, DARK).drawOffer).toBe('opponent');
+    expect(manager.offerDraw(room, LIGHT)).toEqual({ ok: false, error: 'You have already offered a draw.' });
+    expect(manager.answerDraw(room, LIGHT, true).ok).toBe(false); // can't answer your own offer
+
+    const answered = manager.answerDraw(room, DARK, true);
+    expect(answered.ok && answered.value.finished?.result).toBe('draw_agreed');
+    expect(manager.view(room, DARK)).toMatchObject({ result: { kind: 'draw_agreed', winner: null }, drawOffer: null });
+  });
+
+  it('a declined offer, or one answered with a move, goes away', () => {
+    const { manager, room } = twoPlayers();
+    manager.offerDraw(room, LIGHT);
+    expect(manager.answerDraw(room, DARK, false)).toEqual({ ok: true, value: { finished: null } });
+    expect(manager.view(room, LIGHT).drawOffer).toBeNull();
+
+    // Offered on your own turn: it stands while you move, and lapses when the opponent moves.
+    manager.offerDraw(room, LIGHT);
+    manager.play(room, LIGHT, { kind: 'move', path: [sq('b4'), sq('a5')] });
+    expect(manager.view(room, DARK).drawOffer).toBe('opponent');
+    manager.play(room, DARK, { kind: 'move', path: [sq('c7'), sq('d6')] });
+    expect(manager.view(room, DARK).drawOffer).toBeNull();
+  });
+
+  it('offering a draw when the opponent already offered one accepts it', () => {
+    const { manager, room } = twoPlayers();
+    manager.offerDraw(room, LIGHT);
+    const both = manager.offerDraw(room, DARK);
+    expect(both.ok && both.value.finished?.result).toBe('draw_agreed');
+  });
+
+  it('a win can be claimed only once the opponent has been gone long enough', () => {
+    let time = 0;
+    const manager = new RoomManager(Math.random, () => time, 5 * 60_000);
+    const { room } = twoPlayers(manager);
+    expect(manager.claimWin(room, LIGHT)).toEqual({ ok: false, error: 'Your opponent is here.' });
+
+    manager.setConnected(room, DARK, false);
+    time = 4 * 60_000;
+    expect(manager.view(room, LIGHT)).toMatchObject({ opponentGoneForMs: 4 * 60_000, claimWinAfterMs: 5 * 60_000 });
+    expect(manager.claimWin(room, LIGHT)).toEqual({ ok: false, error: 'Your opponent may still come back.' });
+
+    time = 5 * 60_000;
+    const claimed = manager.claimWin(room, LIGHT);
+    expect(claimed.ok && claimed.value.result).toBe('abandoned');
+    expect(manager.view(room, DARK).result).toEqual({ kind: 'abandoned', winner: LIGHT });
+  });
+
+  it('coming back resets the clock for claiming the win', () => {
+    let time = 0;
+    const manager = new RoomManager(Math.random, () => time, 60_000);
+    const { room } = twoPlayers(manager);
+    manager.setConnected(room, DARK, false);
+    time = 50_000;
+    manager.setConnected(room, DARK, true);
+    manager.setConnected(room, DARK, false);
+    time = 100_000;
+    expect(manager.claimWin(room, LIGHT).ok).toBe(false); // gone 50 s this time, not 100
+  });
+});
+
+describe('rematch', () => {
+  function finishedGame() {
+    const setUp = twoPlayers();
+    setUp.manager.resign(setUp.room, LIGHT);
+    return setUp;
+  }
+
+  it('needs the game to be over', () => {
+    const { manager, room } = twoPlayers();
+    expect(manager.rematch(room, LIGHT, true)).toEqual({ ok: false, error: 'The game is still on.' });
+  });
+
+  it('starts the next game once both have asked: same rules, colours swapped, fresh board', () => {
+    const { manager, room, whiteToken, blackToken } = finishedGame();
+    expect(manager.rematch(room, LIGHT, true)).toEqual({ ok: true, value: { started: false } });
+    expect(manager.view(room, DARK).rematch).toEqual({ you: false, opponent: true });
+
+    expect(manager.rematch(room, DARK, true)).toEqual({ ok: true, value: { started: true } });
+    expect(manager.sideOf(room, whiteToken)).toBe(DARK); // the first game's White now plays Black
+    expect(manager.sideOf(room, blackToken)).toBe(LIGHT);
+    const view = manager.view(room, LIGHT);
+    expect(view).toMatchObject({ game: 1, seq: 0, result: null, lastAction: null, rematch: { you: false, opponent: false } });
+    expect(view.state.toMove).toBe(LIGHT);
+    expect(manager.counts().active).toBe(1);
+    // The new White (the old Black) moves first.
+    expect(manager.play(room, LIGHT, { kind: 'move', path: [sq('b4'), sq('a5')] }).ok).toBe(true);
+  });
+
+  it('"No thanks" (or taking a request back) clears both requests', () => {
+    const { manager, room } = finishedGame();
+    manager.rematch(room, LIGHT, true);
+    manager.rematch(room, DARK, false);
+    expect(manager.view(room, LIGHT).rematch).toEqual({ you: false, opponent: false });
+  });
+
+  it('keeps strict mode for the next game', () => {
+    const manager = new RoomManager();
+    const { room } = manager.create(LIGHT, true);
+    manager.join(room.code);
+    manager.resign(room, DARK);
+    manager.rematch(room, LIGHT, true);
+    manager.rematch(room, DARK, true);
+    expect(room.state.strictMode).toBe(true);
+  });
+});

@@ -2,7 +2,6 @@ import {
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
-  ElementRef,
   Injector,
   afterNextRender,
   computed,
@@ -15,17 +14,20 @@ import {
 import { Board } from './board/board';
 import { GameSetup, Home } from './home/home';
 import { RoomPanel } from './online/room-panel';
+import { OnlinePrompt } from './online/online-prompt';
+import { GameOverCard } from './game-over/game-over-card';
 import { TapToast } from './tap-toast/tap-toast';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
 import { squareName } from '../engine/board';
 import { DARK, LIGHT, Outcome } from '../engine/types';
+import { RoomResult } from '../protocol/online';
 import { Difficulty } from '../engine/ai';
 import { Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Home, RoomPanel, TapToast],
+  imports: [Board, Home, RoomPanel, TapToast, OnlinePrompt, GameOverCard],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -45,7 +47,7 @@ export class App {
   /** A room code from an invite link, `?room=K7QX`. */
   protected readonly inviteCode = signal(inviteCodeFrom(typeof location === 'undefined' ? '' : location.search));
 
-  /** Ticks every 15 s, for "lost connection 3 min ago". */
+  /** Ticks every 5 s, for "lost connection 3 min ago" and when a win can be claimed. */
   private readonly clock = signal(Date.now());
 
   /** The settings as "you" see them: online, `playerSide` is the side the server gave you. */
@@ -63,14 +65,14 @@ export class App {
 
   protected readonly selection = computed(() => this.game.selection());
 
-  private readonly gameOverButton = viewChild<ElementRef<HTMLButtonElement>>('gameOverButton');
+  private readonly gameOverCard = viewChild(GameOverCard);
   private readonly board = viewChild(Board);
   private readonly injector = inject(Injector);
 
   constructor() {
     // When the game-over card appears, move keyboard (and screen reader) focus to its
     // "New game" button, rather than leaving it on the board behind the card.
-    effect(() => this.gameOverButton()?.nativeElement.focus());
+    effect(() => this.gameOverCard()?.focus());
 
     // Each time the home screen is shown, check the online server is there, so its Online
     // button only shows when it is.
@@ -78,7 +80,7 @@ export class App {
       if (this.screen() === 'home') untracked(() => void this.game.checkOnlineServer());
     });
 
-    const tick = setInterval(() => this.clock.set(Date.now()), 15_000);
+    const tick = setInterval(() => this.clock.set(Date.now()), 5_000);
     inject(DestroyRef).onDestroy(() => clearInterval(tick));
 
     // Reloaded during an online game: go straight back into it. (An invite link wins: that's
@@ -121,7 +123,9 @@ export class App {
       }
       return `${sideName(outcome.winner)} wins!`;
     }
-    if (outcome.kind === 'draw') return 'Draw — 50 moves with no capture.';
+    if (outcome.kind === 'draw') {
+      return this.game.endReason() === 'draw_agreed' ? 'Draw by agreement.' : 'Draw — 50 moves with no capture.';
+    }
 
     if (this.game.thinking()) return 'Computer is thinking…';
     if (this.game.selection().target !== null) return 'More than one way to get there: tap the way to go.';
@@ -140,7 +144,7 @@ export class App {
    * slide across it).
    */
   protected readonly gameOver = computed(() =>
-    this.game.moving() ? null : describeGameOver(this.game.outcome(), this.perspective()),
+    this.game.moving() ? null : describeGameOver(this.game.outcome(), this.perspective(), this.game.endReason()),
   );
 
   /**
@@ -190,6 +194,66 @@ export class App {
       history.replaceState(null, '', location.pathname);
     }
     this.screen.set('game');
+  }
+
+  // ---- Online: ending a game ---------------------------------------------------------
+
+  /** Resign asks "Are you sure?" first: the first tap shows Yes / No. */
+  protected readonly confirmingResign = signal(false);
+  /** The claim-win moment the player chose to "Keep waiting" past. */
+  private readonly claimDismissedAt = signal<number | null>(null);
+
+  /** Online, game on: Resign and Offer draw are available. */
+  protected readonly onlineGameOn = computed(() => {
+    const online = this.game.online();
+    return !!online && online.opponentJoined && online.result === null && this.game.outcome().kind === 'ongoing';
+  });
+
+  protected readonly drawOfferToAnswer = computed(() => this.onlineGameOn() && this.game.online()?.drawOffer === 'opponent');
+
+  /** The opponent has been gone long enough that the player may claim the win. */
+  protected readonly canClaimWin = computed(() => {
+    const online = this.game.online();
+    if (!online || !this.onlineGameOn() || online.claimWinAt === null || online.opponentConnected) return false;
+    return this.clock() >= online.claimWinAt && this.claimDismissedAt() !== online.claimWinAt;
+  });
+
+  resign(): void {
+    this.audio.unlock();
+    if (!this.confirmingResign()) {
+      this.confirmingResign.set(true);
+      return;
+    }
+    this.confirmingResign.set(false);
+    this.game.resign();
+  }
+
+  cancelResign(): void {
+    this.confirmingResign.set(false);
+  }
+
+  offerDraw(): void {
+    this.audio.unlock();
+    this.game.offerDraw();
+  }
+
+  answerDraw(accept: boolean): void {
+    this.audio.unlock();
+    this.game.answerDraw(accept);
+  }
+
+  claimWin(): void {
+    this.audio.unlock();
+    this.game.claimWin();
+  }
+
+  keepWaiting(): void {
+    this.claimDismissedAt.set(this.game.online()?.claimWinAt ?? null);
+  }
+
+  answerRematch(yes: boolean): void {
+    this.audio.unlock();
+    this.game.askRematch(yes);
   }
 
   /** Back to the home screen. An online game is left; Start game begins a fresh one. */
@@ -291,13 +355,20 @@ export interface GameOverInfo {
   subtitle: string;
 }
 
-/** Pure so it's unit-testable without driving a whole game through the UI. */
-export function describeGameOver(outcome: Outcome, settings: Settings): GameOverInfo | null {
+/**
+ * Pure so it's unit-testable without driving a whole game through the UI. `reason`: how an
+ * online game ended other than on the board (resigned, agreed draw, claimed win).
+ */
+export function describeGameOver(
+  outcome: Outcome,
+  settings: Settings,
+  reason: RoomResult['kind'] | null = null,
+): GameOverInfo | null {
   if (outcome.kind === 'draw') {
     return {
       variant: 'neutral',
       title: 'Draw',
-      subtitle: '50 moves in a row with no capture and no man moving.',
+      subtitle: reason === 'draw_agreed' ? 'Draw by agreement.' : '50 moves in a row with no capture and no man moving.',
     };
   }
   if (outcome.kind !== 'win') return null;
@@ -305,11 +376,19 @@ export function describeGameOver(outcome: Outcome, settings: Settings): GameOver
   if (settings.mode !== 'pvp') {
     const youWon = outcome.winner === settings.playerSide;
     const them = settings.mode === 'online' ? 'Your opponent' : 'The computer';
-    return {
-      variant: youWon ? 'win' : 'loss',
-      title: youWon ? 'You win!' : 'You lose',
-      subtitle: youWon ? `${them} has no legal move left.` : 'You have no legal move left.',
-    };
+    const subtitle =
+      reason === 'resigned'
+        ? youWon
+          ? 'Your opponent resigned.'
+          : 'You resigned.'
+        : reason === 'abandoned'
+          ? youWon
+            ? "Your opponent didn't come back."
+            : "You didn't come back in time."
+          : youWon
+            ? `${them} has no legal move left.`
+            : 'You have no legal move left.';
+    return { variant: youWon ? 'win' : 'loss', title: youWon ? 'You win!' : 'You lose', subtitle };
   }
 
   const loser = outcome.winner === LIGHT ? DARK : LIGHT;

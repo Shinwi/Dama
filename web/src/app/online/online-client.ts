@@ -114,6 +114,26 @@ export class OnlineClient {
     return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:action', { code, token, action }));
   }
 
+  resign(code: string, token: string): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:resign', { code, token }));
+  }
+
+  offerDraw(code: string, token: string): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:offer-draw', { code, token }));
+  }
+
+  answerDraw(code: string, token: string, accept: boolean): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:answer-draw', { code, token, accept }));
+  }
+
+  claimWin(code: string, token: string): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:claim-win', { code, token }));
+  }
+
+  rematch(code: string, token: string, yes: boolean): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:rematch', { code, token, yes }));
+  }
+
   /** Leaves the room and closes the connection. */
   close(): void {
     this.socket.emit('room:leave');

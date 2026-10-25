@@ -21,9 +21,24 @@ export class RoomPanel {
     return `${location.origin}${location.pathname}?room=${code}`;
   }
 
-  async copyInvite(): Promise<void> {
+  /** Phones (and some desktops) can hand the invite to WhatsApp, SMS, … through the share sheet. */
+  protected readonly canShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
+
+  /** The share sheet where there is one; otherwise the link goes on the clipboard. */
+  async shareInvite(): Promise<void> {
+    const code = this.status().code;
+    const url = this.inviteLink(code);
+    if (this.canShare) {
+      try {
+        await navigator.share({ title: 'Dama', text: `Play dama with me! Room ${code}:`, url });
+        return;
+      } catch (error) {
+        // Closing the share sheet isn't a failure; anything else falls back to copying.
+        if (error instanceof DOMException && error.name === 'AbortError') return;
+      }
+    }
     try {
-      await navigator.clipboard.writeText(this.inviteLink(this.status().code));
+      await navigator.clipboard.writeText(url);
       this.copied.set(true);
       setTimeout(() => this.copied.set(false), 2000);
     } catch {

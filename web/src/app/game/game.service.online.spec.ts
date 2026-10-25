@@ -23,6 +23,17 @@ class FakeOnlineClient {
 
   create = async () => this.joinedReply;
   join = async () => this.joinedReply;
+  requests: string[] = [];
+  requestReply: ActionReply = { ok: true };
+  private record = (name: string) => async () => {
+    this.requests.push(name);
+    return this.requestReply;
+  };
+  resign = this.record('resign');
+  offerDraw = this.record('offerDraw');
+  claimWin = this.record('claimWin');
+  answerDraw = async (_code: string, _token: string, accept: boolean) => this.record(`answerDraw:${accept}`)();
+  rematch = async (_code: string, _token: string, yes: boolean) => this.record(`rematch:${yes}`)();
   rejoin = () => {
     this.rejoins++;
     if (!this.holdRejoins) return Promise.resolve(this.joinedReply);
@@ -46,6 +57,12 @@ function view(state: GameState, side: Side, seq: number, extra: Partial<RoomView
     state: { ...state, board: Array.from(state.board) },
     seq,
     lastAction: null,
+    game: 0,
+    result: null,
+    drawOffer: null,
+    rematch: { you: false, opponent: false },
+    opponentGoneForMs: null,
+    claimWinAfterMs: 300_000,
     ...extra,
   };
 }
@@ -344,5 +361,57 @@ describe('GameService online', () => {
     await flush();
     expect(client.sent).toHaveLength(1);
     expect(service.updateKind()).not.toBe('reset');
+  });
+
+  it("the server's result ends the game, and no more moves can be made", async () => {
+    await enterRoom(LIGHT, true);
+    client.onUpdate(view(createInitialState(), LIGHT, 0, { result: { kind: 'resigned', winner: DARK } }));
+    expect(service.outcome()).toEqual({ kind: 'win', winner: DARK });
+    expect(service.endReason()).toBe('resigned');
+    expect(service.isHumanTurn()).toBe(false);
+  });
+
+  it('sends resign, draw, claim-win and rematch requests for this seat, and shows a refusal', async () => {
+    await enterRoom(LIGHT, true);
+    service.resign();
+    service.offerDraw();
+    service.answerDraw(false);
+    service.claimWin();
+    service.askRematch(true);
+    await flush();
+    expect(client.requests).toEqual(['resign', 'offerDraw', 'answerDraw:false', 'claimWin', 'rematch:true']);
+
+    client.requestReply = { ok: false, error: 'Your opponent may still come back.' };
+    service.claimWin();
+    await flush();
+    expect(service.online()?.error).toBe('Your opponent may still come back.');
+  });
+
+  it('works out when the win can be claimed, from how long the server says the opponent has been gone', async () => {
+    await enterRoom(LIGHT, true);
+    (service as unknown as { now: () => number }).now = () => 10_000;
+    client.onUpdate(view(createInitialState(), LIGHT, 0, { opponentConnected: false, opponentGoneForMs: 60_000, claimWinAfterMs: 300_000 }));
+    expect(service.online()?.claimWinAt).toBe(10_000 + 240_000);
+    expect(service.online()?.opponentGoneSince).toBe(10_000 - 60_000);
+
+    client.onUpdate(view(createInitialState(), LIGHT, 0));
+    expect(service.online()?.claimWinAt).toBeNull();
+  });
+
+  it('a rematch starts the next game with the colour the server gives, on a fresh board', async () => {
+    await enterRoom(LIGHT, true);
+    service.tapSquare(sq('b4'));
+    service.tapSquare(sq('a5'));
+    service.boardSettled();
+    const after = play(createInitialState(), 'b4', 'a5');
+    client.onUpdate(view(after, LIGHT, 1, { result: { kind: 'resigned', winner: LIGHT } }));
+
+    client.onUpdate(view(createInitialState(), DARK, 0, { game: 1 }));
+    expect(service.online()).toMatchObject({ game: 1, side: DARK, result: null });
+    expect(service.playerSide()).toBe(DARK);
+    expect(service.outcome().kind).toBe('ongoing');
+    expect(service.updateKind()).toBe('reset');
+    expect(Array.from(service.state().board)).toEqual(Array.from(createInitialState().board));
+    expect(service.isHumanTurn()).toBe(false); // White (the opponent now) opens
   });
 });

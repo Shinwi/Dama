@@ -18,6 +18,8 @@ export default defineConfig({
       // The online server, for e2e/online.spec.ts. Needs `npm install` in ../server first.
       command: 'npm --prefix ../server start',
       url: 'http://localhost:3000',
+      // So e2e/online.spec.ts can claim a win without waiting 5 minutes.
+      env: { CLAIM_WIN_AFTER_SECONDS: '3' },
       reuseExistingServer: !process.env['CI'],
       timeout: 60_000,
     },

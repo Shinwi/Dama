@@ -3,6 +3,48 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-25 (afternoon)
+
+Issue #43, branch `feature/online-complete-game`: a complete online game.
+
+- **Server (`RoomManager`, pure):**
+  - Results off the board (`RoomResult`: `resigned` / `draw_agreed` / `abandoned` plus the winner)
+    via `resign`, `offerDraw` (accepts if the opponent already offered), `answerDraw` and
+    `claimWin`.
+  - Per-seat `disconnectedAt`. Claiming needs `CLAIM_WIN_AFTER_SECONDS`, default 300, e2e 3.
+  - A draw offer lapses when the player it was made to plays a move.
+  - `rematch`: both must ask. It swaps the seats (tokens keep their seat object, so a player
+    keeps their token but changes side), resets the state, `seq` = 0, `game++`.
+- **The Socket.IO channel per seat is now named by token, not side,** so a rematch's side swap
+  needs no socket moves.
+  - All seat requests go through `seatFor()`, which also seats an unseated connection from
+    code+token, as moves already did since #36.
+  - New events: `room:resign`, `room:offer-draw`, `room:answer-draw`, `room:claim-win`,
+    `room:rematch`.
+  - `room:leave` takes back a rematch request.
+- **`RoomView`** gains `game`, `result`, `drawOffer` (you/opponent), `rematch` (you/opponent),
+  `opponentGoneForMs` and `claimWinAfterMs`. The client turns the last two into a local
+  `claimWinAt`, which avoids clock skew between server and phone.
+- **Client:**
+  - `GameService.outcome` includes the server's result; `endReason`; `resign`, `offerDraw`,
+    `answerDraw`, `claimWin`, `askRematch`.
+  - A changed `game` number starts the next game: `controller.newGame` + snap, with the side
+    from the server.
+  - **UI:**
+    - Resign (inline confirmation) and Offer draw in the sidebar;
+    - `app-online-prompt` for an incoming draw offer and for Claim win / Keep waiting (the clock
+      ticks every 5 s now);
+    - `app-game-over-card` (moved out of App, which also freed app.css budget): Rematch / No
+      thanks / Cancel / Back to menu, a fixed width;
+    - RoomPanel "Share invite" via `navigator.share`, falling back to copying the link.
+- **Metrics:** `games_finished{result}` with the new results, `dama_rematches_total`, and
+  `dama_draw_offers_total{answer}`.
+- **Tests:**
+  - server: 39 (rules + a Socket.IO resign → rematch → first-move run);
+  - app: 129 (service, card states, share fallback, wording);
+  - e2e: 44, with three new two-browser tests (draw → rematch with swapped colours, resign with
+    confirmation, claim win).
+
 ## 2026-10-25
 
 Issue #31, branch `fix/illegal-tap-feedback`: a refused tap used to do nothing at all.

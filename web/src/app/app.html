@@ -19,6 +19,26 @@
         <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
         <!-- Always in the page, so screen readers announce it when the text appears. -->
         <p class="nfikh-note" data-testid="nfikh-note" aria-live="polite">{{ nfikhNote() }}</p>
+        @if (drawOfferToAnswer()) {
+          <app-online-prompt
+            data-testid="draw-offer"
+            text="Your opponent offers a draw."
+            yesLabel="Accept"
+            noLabel="Decline"
+            (yes)="answerDraw(true)"
+            (no)="answerDraw(false)"
+          ></app-online-prompt>
+        }
+        @if (canClaimWin()) {
+          <app-online-prompt
+            data-testid="claim-win"
+            text="Your opponent hasn't come back."
+            yesLabel="Claim win"
+            noLabel="Keep waiting"
+            (yes)="claimWin()"
+            (no)="keepWaiting()"
+          ></app-online-prompt>
+        }
 
         <p class="piece-counts">
           <span [class.active-turn]="game.state().toMove === LIGHT">○ White {{ pieceCounts().light }}</span>
@@ -44,28 +64,13 @@
           <app-tap-toast [message]="game.tapFeedback()?.message ?? null"></app-tap-toast>
 
           @if (gameOver(); as result) {
-            <div
-              class="game-over"
-              [class.win]="result.variant === 'win'"
-              [class.loss]="result.variant === 'loss'"
-              data-testid="game-over"
-            >
-              <div
-                class="game-over-card"
-                role="dialog"
-                aria-modal="true"
-                aria-labelledby="game-over-title"
-                aria-describedby="game-over-subtitle"
-              >
-                <p class="game-over-title" id="game-over-title">{{ result.title }}</p>
-                <p class="game-over-subtitle" id="game-over-subtitle">{{ result.subtitle }}</p>
-                @if (game.online()) {
-                  <button type="button" #gameOverButton (click)="openMenu()">Back to menu</button>
-                } @else {
-                  <button type="button" #gameOverButton (click)="newGameFromGameOver()">New game</button>
-                }
-              </div>
-            </div>
+            <app-game-over-card
+              [info]="result"
+              [rematch]="game.online()?.rematch ?? null"
+              (newGame)="newGameFromGameOver()"
+              (menu)="openMenu()"
+              (answerRematch)="answerRematch($event)"
+            ></app-game-over-card>
           }
         </div>
       </div>
@@ -84,6 +89,17 @@
           }
           @if (game.settings().mode === 'computer') {
             <button type="button" (click)="undo()" [disabled]="!game.canUndo() || game.thinking()">Undo</button>
+          }
+          @if (onlineGameOn()) {
+            @if (confirmingResign()) {
+              <button type="button" class="danger" (click)="resign()">Yes, resign</button>
+              <button type="button" (click)="cancelResign()">Keep playing</button>
+            } @else {
+              <button type="button" (click)="resign()">Resign</button>
+              <button type="button" (click)="offerDraw()" [disabled]="game.online()?.drawOffer === 'you'">
+                {{ game.online()?.drawOffer === 'you' ? 'Draw offered' : 'Offer draw' }}
+              </button>
+            }
           }
           <button type="button" [attr.aria-pressed]="game.settings().soundOn" (click)="toggleSound()">🔊 Sound</button>
           <button type="button" [attr.aria-pressed]="game.settings().musicOn" (click)="toggleMusic()">🎵 Music</button>

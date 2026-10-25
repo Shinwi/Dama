@@ -5,8 +5,8 @@ import { checkOnlineServer, OnlineClient, onlineServerUrl } from '../online/onli
 import { playerId } from '../online/player-id';
 import { Seat, SeatStore } from '../online/seat-store';
 import { isKing, squareName } from '../../engine/board';
-import { DARK, GameState, LIGHT, Move, Side } from '../../engine/types';
-import { OnlineAction, RoomView, WireState } from '../../protocol/online';
+import { DARK, GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
+import { ActionReply, OnlineAction, RoomResult, RoomView, WireState } from '../../protocol/online';
 import { defaultSettings, GameController, RejectReason, Settings, UpdateKind } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
@@ -32,6 +32,16 @@ export interface OnlineStatus {
   error: string | null;
   /** When (Date.now()) the opponent was seen to lose their connection, while they're gone. */
   opponentGoneSince: number | null;
+  /** Which game in the room this is: a rematch starts the next one. */
+  game: number;
+  /** Set when the game ended by resigning, an agreed draw, or a claimed win. */
+  result: RoomResult | null;
+  /** An open draw offer: made by you, or by your opponent (yours to answer). */
+  drawOffer: 'you' | 'opponent' | null;
+  /** After the game: who has asked for a rematch. */
+  rematch: { you: boolean; opponent: boolean };
+  /** When (Date.now()) the player may claim the win, while the opponent is gone; else null. */
+  claimWinAt: number | null;
 }
 
 /** A refused tap, for the board (a shake) and a short message. */
@@ -171,10 +181,18 @@ export class GameService {
     this.version();
     return this.controller.selectionInfo;
   });
-  readonly outcome = computed(() => {
+  /**
+   * How the game stands. Online, the server's result (resigned, agreed draw, claimed win) ends
+   * the game too, though the board alone wouldn't say so.
+   */
+  readonly outcome = computed<Outcome>(() => {
     this.version();
+    const result = this.online()?.result;
+    if (result) return result.winner === null ? { kind: 'draw' } : { kind: 'win', winner: result.winner };
     return this.controller.outcome;
   });
+  /** Why an online game ended, when it wasn't on the board. */
+  readonly endReason = computed(() => this.online()?.result?.kind ?? null);
   readonly pieceCounts = computed(() => {
     this.version();
     return this.controller.pieceCounts;
@@ -327,7 +345,13 @@ export class GameService {
     if (settings.mode === 'pvp') return true;
     if (settings.mode === 'online') {
       const online = this.online();
-      return !!online && online.opponentJoined && online.connection === 'connected' && this.controller.state.toMove === online.side;
+      return (
+        !!online &&
+        online.opponentJoined &&
+        online.connection === 'connected' &&
+        online.result === null &&
+        this.controller.state.toMove === online.side
+      );
     }
     return this.controller.state.toMove === settings.playerSide;
   }
@@ -485,6 +509,11 @@ export class GameService {
       connection: 'connected',
       error: null,
       opponentGoneSince: null,
+      game: view.game,
+      result: null,
+      drawOffer: null,
+      rematch: { you: false, opponent: false },
+      claimWinAt: null,
     });
     this.applyRoomView(view, true);
   }
@@ -497,15 +526,29 @@ export class GameService {
   private applyRoomView(view: RoomView, snap: boolean): void {
     const online = this.online();
     if (!online) return;
+    // A rematch: the next game, maybe with the other colour. Start it fresh.
+    const nextGame = view.game !== online.game;
+    if (nextGame) {
+      this.controller.newGame({ mode: 'online' });
+      this.pendingAction = null;
+      snap = true;
+    }
     // The game has moved on since the last problem: the message is old news.
-    const movedOn = !snap && view.seq !== this.onlineSeq;
+    const movedOn = nextGame || (!snap && view.seq !== this.onlineSeq);
     const opponentGone = view.opponentJoined && !view.opponentConnected;
+    const now = this.now();
     this.online.set({
       ...online,
+      side: view.yourSide,
       opponentJoined: view.opponentJoined,
       opponentConnected: view.opponentConnected,
       error: movedOn ? null : online.error,
-      opponentGoneSince: opponentGone ? (online.opponentGoneSince ?? this.now()) : null,
+      opponentGoneSince: opponentGone ? (online.opponentGoneSince ?? now - (view.opponentGoneForMs ?? 0)) : null,
+      game: view.game,
+      result: view.result,
+      drawOffer: view.drawOffer,
+      rematch: view.rematch,
+      claimWinAt: view.opponentGoneForMs === null ? null : now + Math.max(0, view.claimWinAfterMs - view.opponentGoneForMs),
     });
 
     const opponentsNext =
@@ -570,6 +613,45 @@ export class GameService {
         // Refused without a position: the server doesn't have this game any more.
         this.gameGone(reply.error);
       }
+    });
+  }
+
+  /** Online, game on: ends it, and the opponent wins. */
+  resign(): void {
+    this.sendRequest((client, seat) => client.resign(seat.code, seat.token));
+  }
+
+  /** Online, game on: offers the opponent a draw. */
+  offerDraw(): void {
+    this.sendRequest((client, seat) => client.offerDraw(seat.code, seat.token));
+  }
+
+  /** Online: accepts or declines the opponent's draw offer. */
+  answerDraw(accept: boolean): void {
+    this.sendRequest((client, seat) => client.answerDraw(seat.code, seat.token, accept));
+  }
+
+  /** Online: wins, once the opponent has been gone long enough (the server checks). */
+  claimWin(): void {
+    this.sendRequest((client, seat) => client.claimWin(seat.code, seat.token));
+  }
+
+  /** Online, after a game: asks for a rematch (`yes`), or turns one down / takes it back. */
+  askRematch(yes: boolean): void {
+    this.sendRequest((client, seat) => client.rematch(seat.code, seat.token, yes));
+  }
+
+  /**
+   * Sends one of the requests above. The server's answer comes as a room update to both
+   * players, so only a refusal needs handling here.
+   */
+  private sendRequest(send: (client: OnlineClient, seat: Seat) => Promise<ActionReply | { ok: false; error: string; unreachable: true }>): void {
+    const client = this.onlineClient;
+    const seat = this.onlineSession;
+    if (!client || !seat) return;
+    void send(client, seat).then((reply) => {
+      if (client !== this.onlineClient) return;
+      this.updateOnline({ error: reply.ok ? null : reply.error });
     });
   }
 

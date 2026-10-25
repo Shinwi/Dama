@@ -78,8 +78,13 @@ describe('ServerMetrics', () => {
     rooms.join(room.code);
     metrics.gameStarted();
     metrics.playerSeen(ID);
-    metrics.actionPlayed('move', null);
-    metrics.actionPlayed('move', { result: 'win', durationMs: 600_000, actions: 42 });
+    metrics.actionPlayed('move');
+    metrics.actionPlayed('move');
+    metrics.gameFinished({ result: 'win', durationMs: 600_000, actions: 42 });
+    metrics.gameFinished({ result: 'resigned', durationMs: 60_000, actions: 3 });
+    metrics.rematchStarted();
+    metrics.drawOffered();
+    metrics.drawAnswered(false);
     metrics.actionRefused('Not your turn.');
     metrics.rejoined();
 
@@ -91,9 +96,13 @@ describe('ServerMetrics', () => {
     expect(text).toContain('dama_unique_players_today 1');
     expect(text).toContain('dama_moves_total{kind="move"} 2');
     expect(text).toContain('dama_games_finished_total{result="win"} 1');
+    expect(text).toContain('dama_games_finished_total{result="resigned"} 1');
+    expect(text).toContain('dama_rematches_total 1');
+    expect(text).toContain('dama_draw_offers_total{answer="offered"} 1');
+    expect(text).toContain('dama_draw_offers_total{answer="declined"} 1');
     expect(text).toContain('dama_actions_refused_total{reason="not_your_turn"} 1');
     expect(text).toContain('dama_rejoins_total 1');
-    expect(text).toContain('dama_game_duration_seconds_sum 600');
+    expect(text).toContain('dama_game_duration_seconds_sum 660');
     expect(text).not.toContain(ID); // IDs are counted, never shown
   });
 

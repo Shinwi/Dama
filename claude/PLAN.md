@@ -101,7 +101,7 @@ In rough order of value. The polish round (#28: #29–#34) is being worked throu
 - Uptime monitor on /health (the user's step, e.g. UptimeRobot).
 
 **Online play**
-1. Rematch (same room, colours swapped) and Resign.
+1. ✅ Rematch (same room, colours swapped), Resign, offer a draw, claim a win, share invite (#43).
 2. Games survive server restarts: persist rooms (SQLite on a Fly volume, or Redis).
 3. #32 (dropped taps) and #30 (move list), from the polish round. They matter more online.
 - Quick reactions / preset phrases; an "opponent is choosing…" indicator; an optional move

@@ -196,3 +196,17 @@ describe('describeOpponentGone', () => {
     expect(describeOpponentGone(null, 10 * 60_000)).toBe('Your opponent lost connection. Waiting for them to come back…');
   });
 });
+
+describe('describeGameOver online, when the game ended off the board', () => {
+  const online = { ...defaultSettings(), mode: 'online' as const, playerSide: LIGHT };
+
+  it('says who resigned', () => {
+    expect(describeGameOver({ kind: 'win', winner: LIGHT }, online, 'resigned')).toMatchObject({ title: 'You win!', subtitle: 'Your opponent resigned.' });
+    expect(describeGameOver({ kind: 'win', winner: DARK }, online, 'resigned')).toMatchObject({ title: 'You lose', subtitle: 'You resigned.' });
+  });
+
+  it('a draw by agreement, and a claimed win', () => {
+    expect(describeGameOver({ kind: 'draw' }, online, 'draw_agreed')).toMatchObject({ title: 'Draw', subtitle: 'Draw by agreement.' });
+    expect(describeGameOver({ kind: 'win', winner: LIGHT }, online, 'abandoned')?.subtitle).toBe("Your opponent didn't come back.");
+  });
+});

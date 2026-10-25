@@ -91,7 +91,7 @@ export class ServerMetrics {
   });
   private readonly gamesFinished = new Counter({
     name: 'dama_games_finished_total',
-    help: 'Games played to the end',
+    help: 'Games that ended: win / draw on the board, resigned, draw_agreed, abandoned (win claimed)',
     labelNames: ['result'] as const,
     registers: [this.registry],
   });
@@ -105,6 +105,13 @@ export class ServerMetrics {
     name: 'dama_actions_refused_total',
     help: 'Actions the server refused, by reason',
     labelNames: ['reason'] as const,
+    registers: [this.registry],
+  });
+  private readonly rematches = new Counter({ name: 'dama_rematches_total', help: 'Rematches started', registers: [this.registry] });
+  private readonly drawOffers = new Counter({
+    name: 'dama_draw_offers_total',
+    help: 'Draw offers, by how they were answered (offered, accepted, declined)',
+    labelNames: ['answer'] as const,
     registers: [this.registry],
   });
   private readonly rejoins = new Counter({ name: 'dama_rejoins_total', help: 'Players back in their seat after a drop or reload', registers: [this.registry] });
@@ -157,13 +164,28 @@ export class ServerMetrics {
     this.today.count('gamesStarted');
   }
 
-  actionPlayed(kind: 'move' | 'nfikh', finished: FinishedGame | null): void {
+  actionPlayed(kind: 'move' | 'nfikh'): void {
     this.actions.inc({ kind });
-    if (!finished) return;
+  }
+
+  /** A game ended, however it ended. */
+  gameFinished(finished: FinishedGame): void {
     this.gamesFinished.inc({ result: finished.result });
     this.gameDuration.observe(finished.durationMs / 1000);
     this.gameMoves.observe(finished.actions);
     this.today.count('gamesFinished');
+  }
+
+  rematchStarted(): void {
+    this.rematches.inc();
+  }
+
+  drawOffered(): void {
+    this.drawOffers.inc({ answer: 'offered' });
+  }
+
+  drawAnswered(accepted: boolean): void {
+    this.drawOffers.inc({ answer: accepted ? 'accepted' : 'declined' });
   }
 
   actionRefused(error: string): void {
