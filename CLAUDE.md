@@ -68,7 +68,10 @@ dama/
   Cell values: 0 empty, ±1 man, ±2 king, positive = Light.
 - Testability hooks for Playwright: squares are buttons with `data-square="b4"`; pieces have
   `data-testid="piece"`, `data-square`, `data-color="light|dark"`, `data-king`; status line has
-  `data-testid="status"`; the nfikh message has `data-testid="nfikh-note"`. The board has
+  `data-testid="status"`; the nfikh message has `data-testid="nfikh-note"`, a skipped turn's
+  `data-testid="timeout-note"`. The scoreboard has `name-light|dark`, `score-light|dark` (pieces
+  captured) and `clock-light|dark`; the move list `data-testid="move-list"`; the room chip
+  (once both players are in) `room-chip`, with `room-code` inside. The board has
   `data-theme="classic|wood|green"`.
 - No hints about which piece to move (no "must capture" rings): spotting captures, and missed
   ones to take by nfikh, is up to the player.
@@ -80,6 +83,9 @@ dama/
 - Online server address: `?server=` if given; else the hosted server on https pages
   (`web/src/app/online/server-config.ts`, must match `app` in fly.toml); else
   `<page host>:3000` (local dev). The Online button shows only if `/health` answers.
+- Move timer: online the server keeps the time (`RoomView.turnLeftMs`, a `timeout` action when
+  it skips a turn); offline the browser does (GameService.turnClock). Tests set a tiny timer by
+  putting `moveTime` (seconds) in the saved settings.
 - Online: the server is the referee; the client plays its own action at once and sends it,
   plays the opponent's actions from `room:update` like computer moves, and snaps to the
   server's position whenever its copy is out of step (`RoomView.seq`).

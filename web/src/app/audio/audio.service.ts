@@ -33,6 +33,11 @@ export class AudioService {
   }
 
   /** A refused tap: short and soft, so it's no fuss to hear a few times. */
+  /** The move timer's last seconds: one soft tick a second. */
+  clockTick(): void {
+    if (this.soundOn) this.engine?.playClockTick();
+  }
+
   nope(): void {
     if (this.soundOn) this.engine?.playNope();
   }

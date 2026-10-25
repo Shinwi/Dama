@@ -59,6 +59,12 @@ export class SoundEngine {
     this.tone(ctx, 720, 0.04, 'sine', 0.18, ctx.currentTime);
   }
 
+  /** The move timer running out: a short, quiet, high tick, like a clock's. */
+  playClockTick(): void {
+    const ctx = this.ensureContext();
+    this.tone(ctx, 1320, 0.03, 'triangle', 0.08, ctx.currentTime);
+  }
+
   /** A refused tap: two quick, soft, falling notes. */
   playNope(): void {
     const ctx = this.ensureContext();

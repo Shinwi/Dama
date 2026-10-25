@@ -64,6 +64,17 @@
 - The game is a **draw** after 50 consecutive moves (by either side) with no capture and no
   man moving (i.e. only kings shuffling back and forth).
 
+## Move timer
+
+- Optional, picked on the home screen: no timer, 30 s (the default), 45 s or 1 min per move.
+  Online, the player who creates the room picks it for both, and the server keeps the time.
+- A player who runs out of time doesn't move: their turn is **skipped** and the opponent
+  plays. A capture half tapped in is dropped, and taking a piece by nfikh doesn't stop the
+  clock (it's part of the same turn). A chance to take a piece by nfikh is lost with the turn.
+- A skipped turn isn't a move, so it doesn't count toward the 50-move draw.
+- **Three skipped turns in a row lose the game.** Playing a move starts the count over.
+- Against the computer, only the player has a clock.
+
 ## Notation
 
 Squares are named from White's point of view: files **a–j** left to right, ranks **1–10**

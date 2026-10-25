@@ -1,9 +1,16 @@
 import { Browser, expect, Page, test } from '@playwright/test';
 import { tap } from './start';
 
-/** Each player gets their own browser context: separate storage, like two devices. */
-async function player(browser: Browser): Promise<Page> {
+/**
+ * Each player gets their own browser context: separate storage, like two devices.
+ * `moveTime`: the move timer a room this player creates gets, in seconds (the home screen
+ * only offers 30s and up; a test can't wait that long).
+ */
+async function player(browser: Browser, moveTime?: number): Promise<Page> {
   const context = await browser.newContext();
+  if (moveTime !== undefined) {
+    await context.addInitScript((seconds) => localStorage.setItem('dama.settings.v1', JSON.stringify({ moveTime: seconds })), moveTime);
+  }
   const page = await context.newPage();
   await page.goto('/');
   await page.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
@@ -165,8 +172,9 @@ test('joining your own room with its code takes your seat back; a third player i
   await joinRoom(black, code);
   await expect(white.getByTestId('status')).toHaveText('Your move.');
 
-  // Black leaves, then types the code in again.
-  await black.getByRole('button', { name: 'Leave room' }).click();
+  // Black leaves (from the room chip's menu), then types the code in again.
+  await black.getByTestId('room-chip').click();
+  await black.getByRole('menuitem', { name: 'Leave room' }).click();
   await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
   await joinRoom(black, code);
   await expect(black.getByTestId('room-code')).toHaveText(code);
@@ -265,4 +273,29 @@ test("a win can be claimed when the opponent doesn't come back", async ({ browse
   await prompt.getByRole('button', { name: 'Claim win' }).click();
   await expect(card(white)).toContainText('You win!');
   await expect(card(white)).toContainText("Your opponent didn't come back.");
+});
+
+test('the move timer: the server skips a turn that runs out, on both screens', async ({ browser }) => {
+  const white = await player(browser, 2);
+  const code = await createRoom(white);
+  await expect(white.getByTestId('room-timer')).toHaveText('2s per move');
+  const black = await player(browser);
+  await joinRoom(black, code);
+  // Once both are in, the room card gives way to the chip.
+  await expect(black.getByTestId('room-chip')).toBeVisible();
+  await expect(white.getByTestId('room-chip')).toBeVisible();
+  await expect(white.getByTestId('share-invite')).toHaveCount(0);
+
+  await expect(white.getByTestId('clock-light')).toHaveText(/^0:0[0-2]$/);
+  // White doesn't move: 2 s, plus the server's 1 s grace.
+  await expect(white.getByTestId('timeout-note')).toHaveText('You ran out of time: your turn was skipped. Time-outs in a row: 1 of 3.', {
+    timeout: 6000,
+  });
+  await expect(black.getByTestId('timeout-note')).toHaveText('Opponent ran out of time: your move again. Time-outs in a row: 1 of 3.');
+  await expect(black.getByTestId('status')).toHaveText('Your move.');
+  await expect(black.getByTestId('move-list')).toContainText('out of time');
+
+  await tap(black, 'c7', 'b6');
+  await expect(white.getByTestId('timeout-note')).toBeEmpty();
+  await expect(white.getByTestId('move-list')).toContainText('c7-b6');
 });

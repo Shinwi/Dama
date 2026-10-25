@@ -26,6 +26,13 @@ in (or opens an invite link). From then on, each move goes through the server.
   - **Claim the win:** allowed once the opponent has been disconnected for 5 minutes. The server
     checks the time itself (`CLAIM_WIN_AFTER_SECONDS`).
   - Once a game is over, moves are refused.
+- **Move timer:** the room's creator picks it (`moveTimeSeconds` on `room:create`; 0 for none).
+  The server keeps the time: each `RoomView` has `moveTimeMs` and the time left on the turn
+  (`turnLeftMs`). When a turn runs out (plus 1 s of grace for the network), the server skips
+  it: a `timeout` action, sent to both players like a move. A move that arrives after that is
+  refused ("Out of time."). Three skipped turns in a row lose the game. A rematch keeps the timer.
+  `RoomView.actions` lists the game's actions, so a page that snaps to the server's position
+  can rebuild its move list.
 - **Rematch:** when both players ask for one after a game, the next game starts in the same
   room, with colours swapped and the same rules. `RoomView.game` counts the games, and `seq`
   starts at 0 again. A player who leaves the room takes back their rematch request.
@@ -34,7 +41,7 @@ in (or opens an invite link). From then on, each move goes through the server.
 - **Logs:** one JSON line per event. Watch them with `fly logs`. Secret tokens are never logged.
   - **Rooms and players:** `server_started`, `room_created`, `room_joined`, `player_rejoined`,
     `player_left` (with the reason), `rooms_removed`.
-  - **Games:** `action_refused`, `request_refused`, `game_finished`, `game_resigned`,
+  - **Games:** `action_refused`, `request_refused`, `turn_timed_out`, `game_finished`, `game_resigned`,
     `draw_offered`, `draw_answered`, `win_claimed`, `rematch_asked`, `rematch_declined`,
     `rematch_started`.
 
@@ -153,7 +160,8 @@ How the online game is used, in two places:
 |---|---|
 | `dama_rooms_created_total` | Rooms created |
 | `dama_games_started_total` | Rooms where the friend joined, so a game started |
-| `dama_games_finished_total{result}` | Games that ended: `win` / `draw` on the board, `resigned`, `draw_agreed`, `abandoned` (win claimed) |
+| `dama_games_finished_total{result}` | Games that ended: `win` / `draw` on the board, `timeout` (lost on time), `resigned`, `draw_agreed`, `abandoned` (win claimed) |
+| `dama_turns_timed_out_total` | Turns skipped because the move timer ran out |
 | `dama_rematches_total` | Rematches started |
 | `dama_draw_offers_total{answer}` | Draw offers: `offered`, `accepted`, `declined` |
 | `dama_moves_total{kind}` | Actions accepted (`move` / `nfikh`) |
@@ -162,7 +170,7 @@ How the online game is used, in two places:
 | `dama_unique_players_today` | Different anonymous players seen today (UTC) |
 | `dama_game_duration_seconds`, `dama_game_moves` | Length of finished games (histograms) |
 | `dama_rejoins_total`, `dama_rejoin_failures_total` | Players back in their seat after a drop / rejoins refused |
-| `dama_actions_refused_total{reason}` | Refused actions: `not_your_turn`, `illegal`, `game_over`, `no_room`, … |
+| `dama_actions_refused_total{reason}` | Refused actions: `not_your_turn`, `out_of_time`, `illegal`, `game_over`, `no_room`, … |
 | `process_*`, `nodejs_*` | Node.js: memory, CPU, event-loop delay, garbage collection |
 
 **Good to know:**

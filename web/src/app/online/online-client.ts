@@ -97,8 +97,11 @@ export class OnlineClient {
     this.socket.on('disconnect', () => this.onConnection('reconnecting', false));
   }
 
-  create(side: Side, strictMode: boolean): Promise<JoinedReply | Unreachable> {
-    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:create', { side, strictMode, playerId: this.playerId }));
+  /** `moveTimeSeconds`: the room's move timer, 0 for none. */
+  create(side: Side, strictMode: boolean, moveTimeSeconds = 0): Promise<JoinedReply | Unreachable> {
+    return this.request(() =>
+      this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:create', { side, strictMode, moveTimeSeconds, playerId: this.playerId }),
+    );
   }
 
   join(code: string): Promise<JoinedReply | Unreachable> {

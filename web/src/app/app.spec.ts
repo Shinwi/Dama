@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { App, describeGameOver, describeNfikh, describeOpponentGone, describeSetup, inviteCodeFrom } from './app';
+import { App, describeGameOver, describeNfikh, describeOpponentGone, describeSetup, describeTimeout, inviteCodeFrom } from './app';
 import { defaultSettings } from './game/game-controller';
 import { GameService } from './game/game.service';
 import { boardFrom, parseSquare } from '../engine/board';
@@ -208,5 +208,29 @@ describe('describeGameOver online, when the game ended off the board', () => {
   it('a draw by agreement, and a claimed win', () => {
     expect(describeGameOver({ kind: 'draw' }, online, 'draw_agreed')).toMatchObject({ title: 'Draw', subtitle: 'Draw by agreement.' });
     expect(describeGameOver({ kind: 'win', winner: LIGHT }, online, 'abandoned')?.subtitle).toBe("Your opponent didn't come back.");
+  });
+});
+
+describe('running out of time', () => {
+  const settings = defaultSettings();
+  const timeouts = { light: 1, dark: 2 };
+
+  it('says whose turn was skipped, and how many in a row', () => {
+    expect(describeTimeout(LIGHT, timeouts, { ...settings, mode: 'computer', playerSide: LIGHT })).toBe(
+      'You ran out of time: your turn was skipped. Time-outs in a row: 1 of 3.',
+    );
+    expect(describeTimeout(DARK, timeouts, { ...settings, mode: 'online', playerSide: LIGHT })).toBe(
+      'Opponent ran out of time: your move again. Time-outs in a row: 2 of 3.',
+    );
+    expect(describeTimeout(DARK, timeouts, { ...settings, mode: 'pvp' })).toBe('Black ran out of time: White to move. Time-outs in a row: 2 of 3.');
+    expect(describeTimeout(null, timeouts, settings)).toBeNull();
+    expect(describeTimeout(LIGHT, timeouts, settings, false)).toBeNull(); // the game is over: the card says it
+  });
+
+  it('a game lost on time says so', () => {
+    const onTime = { kind: 'win', winner: LIGHT, onTime: true } as const;
+    expect(describeGameOver(onTime, { ...settings, mode: 'online', playerSide: LIGHT })?.subtitle).toBe('Your opponent ran out of time 3 turns in a row.');
+    expect(describeGameOver(onTime, { ...settings, mode: 'computer', playerSide: DARK })?.subtitle).toBe('You ran out of time 3 turns in a row.');
+    expect(describeGameOver(onTime, { ...settings, mode: 'pvp' })?.subtitle).toBe('Black ran out of time 3 turns in a row.');
   });
 });

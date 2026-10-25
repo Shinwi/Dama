@@ -157,3 +157,11 @@
   font-size: 0.92rem;
   text-align: center;
 }
+
+.hint {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--color-text-muted);
+  font-size: 0.82rem;
+  text-align: center;
+}

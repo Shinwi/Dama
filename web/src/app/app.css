@@ -8,6 +8,20 @@
   text-align: center;
 }
 
+/* In a game: the title on the left, the room chip (online) on the right. */
+.header.in-game {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.header.in-game .title {
+  margin: 0;
+  font-size: clamp(1.4rem, 5vw, 1.9rem);
+}
+
 .title {
   margin: 4px 0 14px;
   font-size: clamp(1.8rem, 6vw, 2.4rem);
@@ -63,26 +77,81 @@
   text-align: center;
 }
 
-.piece-counts {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
+.timeout-note,
+.online-error {
+  text-align: center;
   margin: 0;
-  color: var(--color-text-muted);
-  font-size: 0.95rem;
+  font-weight: 600;
+  font-size: 0.92rem;
 }
 
-.piece-counts .active-turn {
-  color: var(--color-text);
-  font-weight: 700;
+.timeout-note {
+  color: #c0392b;
+}
+
+.timeout-note:empty,
+.nfikh-note:empty {
+  display: none;
+}
+
+.online-error {
+  color: #c0392b;
+}
+
+/* The board, with the captured pieces beside it on wide screens. */
+.board-row {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+@media (min-width: 1000px) {
+  .board-wrap {
+    width: min(calc(100% - 224px), calc(560px + var(--coord-gutter)), calc(100vh - var(--board-vh-reserve, 240px)));
+  }
+}
+
+/* A bar along the edge of the board on the side of the player to move; red when their
+   time is nearly up. */
+.board-wrap[data-turn]::after {
+  content: '';
+  position: absolute;
+  left: var(--coord-gutter);
+  right: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-saffron);
+  pointer-events: none;
+}
+
+.board-wrap[data-turn='bottom']::after {
+  bottom: -8px;
+}
+
+.board-wrap[data-turn='top']::after {
+  top: -8px;
+}
+
+.board-wrap.low::after {
+  background: #d23b42;
 }
 
 .board-wrap {
   position: relative;
   /* Board plus its coordinate strips: a square that fits the same height budget the board
      alone used to. The board component fills it. */
-  width: min(100%, calc(560px + var(--coord-gutter)), calc(100vh - var(--board-vh-reserve, 170px)));
+  width: min(100%, calc(560px + var(--coord-gutter)), calc(100vh - var(--board-vh-reserve, 240px)));
   margin-inline: auto;
+  flex: none;
+}
+
+/* Below the trays' breakpoint the board-row holds only the board. */
+@media (max-width: 999px) {
+  .board-wrap {
+    flex: 0 1 auto;
+  }
 }
 
 .actions {
@@ -105,6 +174,22 @@
 .actions button[aria-pressed='true'] {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+/* Phones: Sound and Music are just their icons, so all the buttons fit on one row. */
+@media (max-width: 679px) {
+  .icon-button .button-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}
+
+.icon-button .button-label {
+  margin-inline-start: 0.35em;
 }
 
 .actions button.danger {
@@ -203,7 +288,7 @@
   .page {
     padding-top: 10px;
     padding-bottom: 16px;
-    --board-vh-reserve: 118px;
+    --board-vh-reserve: 170px;
   }
 
   .title {

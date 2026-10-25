@@ -3,6 +3,10 @@ import { applyMove, forfeitableAfter, generateLegalMoves, removePiece } from './
 import { DARK, GameState, LIGHT, Move, Outcome, Side } from './types';
 
 export const DRAW_QUIET_MOVES = 50;
+/** Turns skipped in a row by the move timer that lose the game. */
+export const MAX_TIMEOUTS = 3;
+
+const timeoutKey = (side: Side) => (side === LIGHT ? 'light' : 'dark');
 
 export function createInitialState(strictMode = false): GameState {
   return {
@@ -11,6 +15,7 @@ export function createInitialState(strictMode = false): GameState {
     strictMode,
     quietMoves: 0,
     forfeitable: [],
+    timeouts: { light: 0, dark: 0 },
   };
 }
 
@@ -28,6 +33,23 @@ export function advanceState(state: GameState, move: Move): GameState {
     strictMode: state.strictMode,
     quietMoves: wasQuiet ? state.quietMoves + 1 : 0,
     forfeitable: forfeitableAfter(state.board, move),
+    // Moving ends the mover's run of time-outs.
+    timeouts: { ...state.timeouts, [timeoutKey(state.toMove)]: 0 },
+  };
+}
+
+/**
+ * The side to move ran out of time: its turn is skipped, and the other side moves. A skipped
+ * turn isn't a move, so the 50-quiet-move count stands; any chance to take a piece by nfikh
+ * is gone. Does not mutate `state`.
+ */
+export function passTurn(state: GameState): GameState {
+  const key = timeoutKey(state.toMove);
+  return {
+    ...state,
+    toMove: (-state.toMove) as Side,
+    forfeitable: [],
+    timeouts: { ...state.timeouts, [key]: state.timeouts[key] + 1 },
   };
 }
 
@@ -47,6 +69,9 @@ export function takeForfeit(state: GameState, square: number): GameState {
 }
 
 export function outcome(state: GameState): Outcome {
+  for (const side of [LIGHT, DARK] as Side[]) {
+    if (state.timeouts[timeoutKey(side)] >= MAX_TIMEOUTS) return { kind: 'win', winner: (-side) as Side, onTime: true };
+  }
   if (state.quietMoves >= DRAW_QUIET_MOVES) {
     return { kind: 'draw' };
   }

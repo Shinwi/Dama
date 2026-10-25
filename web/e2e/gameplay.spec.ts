@@ -81,3 +81,31 @@ test('the home screen sets the board pattern, and Menu goes back to it', async (
   // The choices are remembered.
   await expect(page.getByRole('group', { name: 'Board pattern' }).getByRole('button', { name: 'Green' })).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('the scoreboard counts captures, and the move list names who played', async ({ page }) => {
+  await startGame(page, { mode: '1v1' });
+  await expect(page.getByTestId('name-light')).toHaveText('White');
+  await expect(page.getByTestId('score-light')).toHaveText('0');
+  // b4-c5, e7-d6, then White takes d6 (c5xe7).
+  await tap(page, 'b4', 'c5');
+  await tap(page, 'e7', 'd6');
+  await tap(page, 'c5', 'e7');
+  await expect(page.getByTestId('score-light')).toHaveText('1');
+  await expect(page.getByTestId('move-list')).toContainText('c5xe7');
+});
+
+test('taps made while a move is still sliding are all played (issue #32)', async ({ page }) => {
+  await startGame(page, { mode: '1v1' });
+  // No waiting between taps: the second and third moves are tapped while the first slides.
+  await tap(page, 'b4', 'c5', 'c7', 'd6', 'j4', 'i5');
+  await expect(page.locator('[data-testid="piece"][data-square="i5"]')).toHaveAttribute('data-color', 'light');
+  await expect(page.locator('[data-testid="piece"][data-square="d6"]')).toHaveAttribute('data-color', 'dark');
+  await expect(page.getByTestId('status')).toHaveText('Black to move.');
+});
+
+test('the move timer skips a turn that runs out (1v1, kept by the browser)', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('dama.settings.v1', JSON.stringify({ moveTime: 2 })));
+  await startGame(page, { mode: '1v1' });
+  await expect(page.getByTestId('timeout-note')).toHaveText('White ran out of time: Black to move. Time-outs in a row: 1 of 3.');
+  await expect(page.getByTestId('status')).toHaveText('Black to move.');
+});

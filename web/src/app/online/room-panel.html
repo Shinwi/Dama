@@ -5,6 +5,7 @@
   <button type="button" data-testid="share-invite" (click)="shareInvite()">
     {{ copied() ? 'Link copied' : canShare ? 'Share invite' : 'Copy invite link' }}
   </button>
+  <p class="room-hint" data-testid="room-timer">{{ timerText() }}</p>
 }
 @if (status().error; as error) {
   <p class="room-error" role="alert" data-testid="online-error">{{ error }}</p>
