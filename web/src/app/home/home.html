@@ -1,115 +1,132 @@
 <section class="home" aria-label="New game">
-  <div class="step">
-    <h2 class="step-title">Opponent</h2>
-    <div class="segmented" role="group" aria-label="Opponent">
-      <button type="button" [attr.aria-pressed]="mode() === 'computer'" (click)="setMode('computer')">Vs computer</button>
-      <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="setMode('pvp')">1v1</button>
-      @if (onlineAvailable()) {
-        <button type="button" [attr.aria-pressed]="mode() === 'online'" (click)="setMode('online')">Online</button>
-      }
-    </div>
-    @if (inviteUnavailable()) {
-      <p class="notice" role="status" data-testid="online-unavailable">
-        Online games aren't available right now. You can still play the computer or a friend on this device.
-      </p>
-    }
-  </div>
+  <div class="glow" aria-hidden="true"></div>
+  <p class="intro">Pull up a chair. Who's playing?</p>
 
-  @if (mode() === 'online') {
-    <div class="step">
-      <h2 class="step-title">Room</h2>
-      <div class="segmented" role="group" aria-label="Room">
-        <button type="button" [attr.aria-pressed]="onlineEntry() === 'create'" (click)="onlineEntry.set('create')">Create room</button>
-        <button type="button" [attr.aria-pressed]="onlineEntry() === 'join'" (click)="onlineEntry.set('join')">Join room</button>
-      </div>
-    </div>
-
-    @if (onlineEntry() === 'create') {
-      <div class="step">
-        <h2 class="step-title">Play as</h2>
-        <div class="segmented" role="group" aria-label="Play as">
-          <button type="button" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
-          <button type="button" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
+  <div class="menu" role="group" aria-label="Opponent">
+    <button type="button" class="row" data-mode="computer" [attr.aria-pressed]="mode() === 'computer'" (click)="setMode('computer')">
+      <span class="row-icon brass" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><rect x="5" y="7" width="14" height="12" rx="3"></rect><path d="M12 3v4M9 12h.01M15 12h.01M9.5 16h5"></path></svg>
+      </span>
+      <span class="row-text"><span class="row-name">The computer</span><span class="row-detail">Beginner, Novice or Very good</span></span>
+      <svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+    </button>
+    @if (mode() === 'computer') {
+      <div class="options">
+        <div class="pills" role="group" aria-label="Difficulty">
+          <button type="button" data-difficulty="beginner" [attr.aria-pressed]="difficulty() === 'beginner'" (click)="difficulty.set('beginner')">Beginner</button>
+          <button type="button" data-difficulty="novice" [attr.aria-pressed]="difficulty() === 'novice'" (click)="difficulty.set('novice')">Novice</button>
+          <button type="button" data-difficulty="very-good" [attr.aria-pressed]="difficulty() === 'very-good'" (click)="difficulty.set('very-good')">Very good</button>
         </div>
       </div>
-    } @else {
-      <div class="step">
-        <label class="step-title" for="room-code">Room code</label>
-        <input
-          id="room-code"
-          class="room-code-input"
-          data-testid="room-code-input"
-          autocomplete="off"
-          autocapitalize="characters"
-          spellcheck="false"
-          maxlength="8"
-          placeholder="K7QX"
-          [value]="roomCode()"
-          (input)="setRoomCode($event)"
-          (keydown.enter)="startGame()"
-        />
+    }
+
+    <button type="button" class="row" data-mode="pvp" [attr.aria-pressed]="mode() === 'pvp'" (click)="setMode('pvp')">
+      <span class="row-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24"><circle cx="8" cy="8" r="3"></circle><circle cx="16" cy="8" r="3"></circle><path d="M3 19c0-3 2.2-5 5-5s5 2 5 5M11 19c0-3 2.2-5 5-5s5 2 5 5"></path></svg>
+      </span>
+      <span class="row-text"><span class="row-name">A friend, here</span><span class="row-detail">Pass the phone between turns</span></span>
+      <svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+    </button>
+
+    @if (onlineAvailable()) {
+      <button type="button" class="row" data-mode="online" [attr.aria-pressed]="mode() === 'online'" (click)="setMode('online')">
+        <span class="row-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"></path><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"></path></svg>
+        </span>
+        <span class="row-text"><span class="row-name">A friend, online</span><span class="row-detail">Send them a room code</span></span>
+        <svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+      </button>
+      @if (mode() === 'online') {
+        <div class="options">
+          <div class="pills" role="group" aria-label="Room">
+            <button type="button" data-entry="create" [attr.aria-pressed]="onlineEntry() === 'create'" (click)="onlineEntry.set('create')">Create room</button>
+            <button type="button" data-entry="join" [attr.aria-pressed]="onlineEntry() === 'join'" (click)="onlineEntry.set('join')">Join room</button>
+          </div>
+          @if (onlineEntry() === 'join') {
+            <label class="code-label" for="room-code">Room code</label>
+            <input
+              id="room-code"
+              class="room-code-input"
+              data-testid="room-code-input"
+              autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              maxlength="8"
+              placeholder="K7QX"
+              [value]="roomCode()"
+              (input)="setRoomCode($event)"
+              (keydown.enter)="startGame()"
+            />
+          }
+        </div>
+      }
+
+      <button type="button" class="row featured" data-mode="match" [attr.aria-pressed]="mode() === 'match'" (click)="setMode('match')">
+        <span class="row-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"></circle><path d="M20 20l-4.5-4.5"></path></svg>
+        </span>
+        <span class="row-text">
+          <span class="row-name">Someone new <span class="new" aria-hidden="true">New</span></span>
+          <span class="row-detail">{{ playersLine() }}</span>
+        </span>
+        <svg class="chevron" aria-hidden="true" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"></path></svg>
+      </button>
+    }
+  </div>
+  @if (inviteUnavailable()) {
+    <p class="notice" role="status" data-testid="online-unavailable">
+      Online games aren't available right now. You can still play the computer or a friend on this device.
+    </p>
+  }
+
+  <h2 class="section-title">House rules</h2>
+  <div class="rules">
+    @if (showMoveTime()) {
+      <div class="rule">
+        <span class="rule-name">Timer</span>
+        <div class="pills" role="group" aria-label="Move timer">
+          @for (option of moveTimes; track option.seconds) {
+            <button type="button" [attr.data-move-time]="option.seconds" [attr.aria-pressed]="moveTime() === option.seconds" (click)="moveTime.set(option.seconds)">
+              {{ option.seconds === 0 ? 'Off' : option.label }}
+            </button>
+          }
+        </div>
       </div>
     }
-  }
-
-  @if (mode() === 'computer') {
-    <div class="step">
-      <h2 class="step-title">Difficulty</h2>
-      <div class="segmented" role="group" aria-label="Difficulty">
-        <button type="button" [attr.aria-pressed]="difficulty() === 'beginner'" (click)="difficulty.set('beginner')">Beginner</button>
-        <button type="button" [attr.aria-pressed]="difficulty() === 'novice'" (click)="difficulty.set('novice')">Novice</button>
-        <button type="button" [attr.aria-pressed]="difficulty() === 'very-good'" (click)="difficulty.set('very-good')">Very good</button>
+    @if (mode() === 'computer' || (mode() === 'online' && onlineEntry() === 'create')) {
+      <div class="rule">
+        <span class="rule-name">Play as</span>
+        <div class="pills" role="group" aria-label="Play as">
+          <button type="button" data-side="white" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
+          <button type="button" data-side="black" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
+        </div>
       </div>
-    </div>
-
-    <div class="step">
-      <h2 class="step-title">Play as</h2>
-      <div class="segmented" role="group" aria-label="Play as">
-        <button type="button" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
-        <button type="button" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
-      </div>
-    </div>
-  }
-
-  @if (showMoveTime()) {
-    <div class="step">
-      <h2 class="step-title">Move timer</h2>
-      <div class="segmented" role="group" aria-label="Move timer">
-        @for (option of moveTimes; track option.seconds) {
-          <button type="button" [attr.aria-pressed]="moveTime() === option.seconds" (click)="moveTime.set(option.seconds)">{{ option.label }}</button>
+    }
+    <div class="rule">
+      <span class="rule-name">Board</span>
+      <div class="pills" role="group" aria-label="Board pattern">
+        @for (theme of themes; track theme.id) {
+          <button type="button" class="theme" [attr.data-theme]="theme.id" [attr.aria-pressed]="boardTheme() === theme.id" (click)="boardTheme.set(theme.id)">
+            <span class="swatch" aria-hidden="true">
+              @for (dark of miniSwatch; track $index) {
+                <span class="swatch-square" [class.dark]="dark"></span>
+              }
+            </span>
+            {{ theme.label }}
+          </button>
         }
       </div>
-      @if (moveTime() > 0) {
-        <p class="hint">Out of time: the turn is skipped. Three in a row lose the game.</p>
-      }
-    </div>
-  }
-
-  <div class="step">
-    <h2 class="step-title">Board</h2>
-    <div class="themes" role="group" aria-label="Board pattern">
-      @for (theme of themes; track theme.id) {
-        <button
-          type="button"
-          class="theme"
-          [attr.data-theme]="theme.id"
-          [attr.aria-pressed]="boardTheme() === theme.id"
-          (click)="boardTheme.set(theme.id)"
-        >
-          <span class="swatch" aria-hidden="true">
-            @for (dark of swatchSquares; track $index) {
-              <span class="swatch-square" [class.dark]="dark"></span>
-            }
-          </span>
-          {{ theme.label }}
-        </button>
-      }
     </div>
   </div>
+  @if (showMoveTime() && moveTime() > 0) {
+    <p class="hint">Out of time: the turn is skipped. Three in a row lose the game.</p>
+  }
 
   @if (error(); as message) {
     <p class="error" role="alert" data-testid="home-error">{{ message }}</p>
   }
 
-  <button type="button" class="start" [disabled]="!canStart()" (click)="startGame()">{{ startLabel() }}</button>
+  <div class="start-bar">
+    <button type="button" class="start" data-testid="start" [disabled]="!canStart()" (click)="startGame()">{{ startLabel() }}</button>
+  </div>
 </section>

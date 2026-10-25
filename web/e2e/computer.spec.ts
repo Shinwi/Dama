@@ -57,3 +57,13 @@ test('the board stays put while messages come and go (the computer thinking, cap
   }
   expect([...seen]).toEqual([Math.round(start)]);
 });
+
+test('quick reactions: yours shows, and the computer answers', async ({ page }) => {
+  await startGame(page, { difficulty: 'Beginner' });
+  // Some designs keep the reactions behind a button.
+  const toggle = page.getByTestId('reactions-toggle');
+  if (await toggle.count()) await toggle.click();
+  await page.getByTestId('reactions').locator('[data-reaction="good-move"]').click();
+  await expect(page.getByTestId('reaction-bubble')).toContainText('You: Good move');
+  await expect(page.getByTestId('reaction-bubble')).toHaveAttribute('data-from', 'Computer', { timeout: 4000 });
+});

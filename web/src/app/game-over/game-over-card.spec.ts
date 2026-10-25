@@ -18,14 +18,14 @@ describe('GameOverCard', () => {
     await fixture.whenStable();
   }
 
-  it('offline: New game', async () => {
+  it('offline: New game or Back to menu', async () => {
     await show(null);
-    expect(buttons()).toEqual(['New game']);
+    expect(buttons()).toEqual(['New game', 'Back to menu']);
   });
 
-  it('online: Rematch or Back to menu', async () => {
+  it('online: Rematch or Leave the table', async () => {
     await show({ you: false, opponent: false });
-    expect(buttons()).toEqual(['Rematch', 'Back to menu']);
+    expect(buttons()).toEqual(['Rematch', 'Leave the table']);
     expect(status()).toBeNull();
   });
 
@@ -42,7 +42,7 @@ describe('GameOverCard', () => {
   it('online: waiting for the answer to your request', async () => {
     await show({ you: true, opponent: false });
     expect(status()).toBe('Rematch asked. Waiting for your opponent…');
-    expect(buttons()).toEqual(['Cancel', 'Back to menu']);
+    expect(buttons()).toEqual(['Cancel', 'Leave the table']);
   });
 
   it('focus() puts focus on the main button', async () => {

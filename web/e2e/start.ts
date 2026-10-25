@@ -7,15 +7,27 @@ export interface Setup {
   board?: 'Classic' | 'Wood' | 'Green';
 }
 
+/**
+ * The home screen's options, found by their data attributes rather than their wording, so
+ * the tests work whatever each design calls them.
+ */
+export const home = {
+  mode: (page: Page, mode: 'computer' | 'pvp' | 'online' | 'match') => page.locator(`[data-mode="${mode}"]`),
+  entry: (page: Page, entry: 'create' | 'join') => page.locator(`[data-entry="${entry}"]`),
+  start: (page: Page) => page.getByTestId('start'),
+};
+
+const MODES = { 'Vs computer': 'computer', '1v1': 'pvp' } as const;
+const DIFFICULTIES = { Beginner: 'beginner', Novice: 'novice', 'Very good': 'very-good' } as const;
+
 /** Opens the app and starts a game from the home screen. */
 export async function startGame(page: Page, setup: Setup = {}): Promise<void> {
   await page.goto('/');
-  const group = (name: string) => page.getByRole('group', { name });
-  if (setup.mode) await group('Opponent').getByRole('button', { name: setup.mode, exact: true }).click();
-  if (setup.difficulty) await group('Difficulty').getByRole('button', { name: setup.difficulty, exact: true }).click();
-  if (setup.side) await group('Play as').getByRole('button', { name: setup.side, exact: true }).click();
-  if (setup.board) await group('Board pattern').getByRole('button', { name: setup.board, exact: true }).click();
-  await page.getByRole('button', { name: 'Start game', exact: true }).click();
+  if (setup.mode) await home.mode(page, MODES[setup.mode]).click();
+  if (setup.difficulty) await page.locator(`[data-difficulty="${DIFFICULTIES[setup.difficulty]}"]`).click();
+  if (setup.side) await page.locator(`[data-side="${setup.side.toLowerCase()}"]`).click();
+  if (setup.board) await page.locator(`[data-theme="${setup.board.toLowerCase()}"]`).click();
+  await home.start(page).click();
 }
 
 /** Taps squares in order, e.g. tap(page, 'b4', 'a5') plays b4-a5. */

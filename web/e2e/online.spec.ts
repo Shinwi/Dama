@@ -1,5 +1,5 @@
 import { Browser, expect, Page, test } from '@playwright/test';
-import { tap } from './start';
+import { home, tap } from './start';
 
 /**
  * Each player gets their own browser context: separate storage, like two devices.
@@ -13,21 +13,21 @@ async function player(browser: Browser, moveTime?: number): Promise<Page> {
   }
   const page = await context.newPage();
   await page.goto('/');
-  await page.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await home.mode(page, 'online').click();
   return page;
 }
 
 async function createRoom(page: Page): Promise<string> {
-  await page.getByRole('button', { name: 'Create room', exact: true }).last().click();
+  await home.start(page).click();
   const code = page.getByTestId('room-code');
   await expect(code).toHaveText(/^[A-Z2-9]{4}$/);
   return (await code.textContent())!.trim();
 }
 
 async function joinRoom(page: Page, code: string): Promise<void> {
-  await page.getByRole('group', { name: 'Room' }).getByRole('button', { name: 'Join room' }).click();
+  await home.entry(page, 'join').click();
   await page.getByTestId('room-code-input').fill(code);
-  await page.getByRole('button', { name: 'Join room', exact: true }).last().click();
+  await home.start(page).click();
 }
 
 const piece = (page: Page, square: string, color: 'light' | 'dark') =>
@@ -81,7 +81,7 @@ test('an invite link fills in the room code, and a reload after joining goes bac
   const black = await (await browser.newContext()).newPage();
   await black.goto(`/?room=${code.toLowerCase()}`);
   await expect(black.getByTestId('room-code-input')).toHaveValue(code);
-  await black.getByRole('button', { name: 'Join room', exact: true }).last().click();
+  await home.start(black).click();
   await expect(black.getByTestId('room-code')).toHaveText(code);
   expect(new URL(black.url()).search).toBe('');
 
@@ -95,12 +95,11 @@ const NO_SERVER = 'server=http://localhost:3999';
 
 test('with no online server, the home screen has no Online option', async ({ page }) => {
   await page.goto(`/?${NO_SERVER}`);
-  const opponent = page.getByRole('group', { name: 'Opponent' });
-  await expect(opponent.getByRole('button', { name: 'Vs computer' })).toBeVisible();
+  await expect(home.mode(page, 'computer')).toBeVisible();
   // Give the check time to give up (2 s), then make sure the button never appeared.
   await page.waitForTimeout(2500);
-  await expect(opponent.getByRole('button', { name: 'Online' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Start game', exact: true })).toBeVisible();
+  await expect(home.mode(page, 'online')).toHaveCount(0);
+  await expect(home.start(page)).toBeVisible();
 });
 
 test('an invite link with no online server says online games are unavailable', async ({ page }) => {
@@ -118,7 +117,7 @@ test('a move made while the connection is down reaches the opponent once it is b
   const blackContext = await browser.newContext();
   const black = await blackContext.newPage();
   await black.goto('/');
-  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await home.mode(black, 'online').click();
   await joinRoom(black, code);
   await tap(white, 'b4', 'a5');
   await expect(piece(black, 'a5', 'light')).toBeVisible();
@@ -146,7 +145,7 @@ test('a player who closes the browser mid-game is put back in the game on openin
   const blackContext = await browser.newContext();
   const black = await blackContext.newPage();
   await black.goto('/');
-  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await home.mode(black, 'online').click();
   await joinRoom(black, code);
   await tap(white, 'b4', 'a5');
   await expect(piece(black, 'a5', 'light')).toBeVisible();
@@ -168,14 +167,14 @@ test('joining your own room with its code takes your seat back; a third player i
   const blackContext = await browser.newContext();
   const black = await blackContext.newPage();
   await black.goto('/');
-  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await home.mode(black, 'online').click();
   await joinRoom(black, code);
   await expect(white.getByTestId('status')).toHaveText('Your move.');
 
   // Black leaves (from the room chip's menu), then types the code in again.
   await black.getByTestId('room-chip').click();
   await black.getByRole('menuitem', { name: 'Leave room' }).click();
-  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await home.mode(black, 'online').click();
   await joinRoom(black, code);
   await expect(black.getByTestId('room-code')).toHaveText(code);
   await expect(black.getByTestId('status')).toHaveText("Opponent's move.");
@@ -213,7 +212,7 @@ async function roomWithTwoPlayers(browser: Browser) {
   const blackContext = await browser.newContext();
   const black = await blackContext.newPage();
   await black.goto('/');
-  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await home.mode(black, 'online').click();
   await joinRoom(black, code);
   await expect(white.getByTestId('status')).toHaveText('Your move.');
   return { white, black, blackContext, code };
@@ -298,4 +297,13 @@ test('the move timer: the server skips a turn that runs out, on both screens', a
   await tap(black, 'c7', 'b6');
   await expect(white.getByTestId('timeout-note')).toBeEmpty();
   await expect(white.getByTestId('move-list')).toContainText('c7-b6');
+});
+
+test('"Play someone" says it is coming soon until the server can match players', async ({ browser }) => {
+  const page = await player(browser);
+  await home.mode(page, 'match').click();
+  await home.start(page).click();
+  await expect(page.getByTestId('match-unavailable')).toBeVisible();
+  await page.getByRole('button', { name: 'Play the computer' }).click();
+  await expect(page.getByTestId('status')).toHaveText('Your move.');
 });
