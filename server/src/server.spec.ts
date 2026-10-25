@@ -165,7 +165,7 @@ describe('Dama server over Socket.IO', () => {
     // Black's room:rejoin arrives after the move seated it: Black stays connected.
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(server.rooms.view(server.rooms.get(code)!, LIGHT).opponentConnected).toBe(true);
-    expect(logged.some((l) => l['event'] === 'player_rejoined' && l['byAction'] === true)).toBe(true);
+    expect(logged.some((l) => l['event'] === 'player_rejoined' && l['byRequest'] === true)).toBe(true);
   });
 
   it('refuses a move whose token is not the seat it claims', async () => {
@@ -241,6 +241,57 @@ describe('Dama server with a list of allowed pages', () => {
       expect(await connectFrom('https://shinwi.github.io')).toBe(true);
       expect(await connectFrom('https://evil.example')).toBe(false);
     } finally {
+      await server.close();
+    }
+  });
+});
+
+describe('Dama server: ending a game and a rematch, over Socket.IO', () => {
+  it('resign, then a rematch from both, then the new White moves first', async () => {
+    const server = createDamaServer({ log: () => {}, nodeMetrics: false });
+    await new Promise<void>((resolve) => server.http.listen(0, resolve));
+    const url = `http://localhost:${(server.http.address() as AddressInfo).port}`;
+    const open = (): Client => connect(url, { transports: ['websocket'], forceNew: true });
+    const a = open();
+    const b = open();
+    const next = (socket: Client, test: (v: RoomView) => boolean) =>
+      new Promise<RoomView>((resolve) => {
+        const listener = (v: RoomView) => {
+          if (!test(v)) return;
+          socket.off('room:update', listener);
+          resolve(v);
+        };
+        socket.on('room:update', listener);
+      });
+    try {
+      const created = (await a.emitWithAck('room:create', { side: LIGHT, strictMode: false })) as Extract<JoinedReply, { ok: true }>;
+      const code = created.view.code;
+      const joined = (await b.emitWithAck('room:join', { code })) as Extract<JoinedReply, { ok: true }>;
+      const seatA = { code, token: created.token };
+      const seatB = { code, token: joined.token };
+
+      const bSeesResign = next(b, (v) => v.result !== null);
+      expect(await a.emitWithAck('room:resign', seatA)).toEqual({ ok: true });
+      expect((await bSeesResign).result).toEqual({ kind: 'resigned', winner: DARK });
+
+      const aSeesAsk = next(a, (v) => v.rematch.opponent);
+      expect(await b.emitWithAck('room:rematch', { ...seatB, yes: true })).toEqual({ ok: true });
+      await aSeesAsk;
+      const bSeesNewGame = next(b, (v) => v.game === 1);
+      expect(await a.emitWithAck('room:rematch', { ...seatA, yes: true })).toEqual({ ok: true });
+      const newGame = await bSeesNewGame;
+      expect(newGame.yourSide).toBe(LIGHT); // B was Black, now White
+      expect(newGame.result).toBeNull();
+
+      // B (now White) opens; A (now Black) can't.
+      const refused = await a.emitWithAck('room:action', { ...seatA, action: { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')] } });
+      expect(refused.ok).toBe(false);
+      const played = await b.emitWithAck('room:action', { ...seatB, action: { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')] } });
+      expect(played).toEqual({ ok: true });
+      expect(await server.metrics.render()).toContain('dama_rematches_total 1');
+    } finally {
+      a.disconnect();
+      b.disconnect();
       await server.close();
     }
   });

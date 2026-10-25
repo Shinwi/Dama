@@ -85,79 +85,6 @@
   margin-inline: auto;
 }
 
-.game-over {
-  position: absolute;
-  /* Over the board only, not the coordinate strips to its left and below it. */
-  inset: 0 0 var(--coord-gutter) var(--coord-gutter);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: var(--radius-md);
-  animation: game-over-in 220ms ease;
-}
-
-.game-over-card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 28px 36px;
-  background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
-  text-align: center;
-}
-
-.game-over-title {
-  margin: 0;
-  font-family: var(--font-title);
-  font-size: clamp(1.6rem, 6vw, 2.1rem);
-  color: var(--color-accent);
-}
-
-.game-over.win .game-over-title {
-  color: var(--color-saffron);
-}
-
-.game-over.loss .game-over-title {
-  color: var(--color-text-muted);
-}
-
-.game-over-subtitle {
-  margin: 0 0 10px;
-  color: var(--color-text-muted);
-  font-size: 0.95rem;
-}
-
-.game-over-card button {
-  border: 1px solid var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@keyframes game-over-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .game-over {
-    animation: none;
-  }
-}
-
 .actions {
   display: flex;
   flex-wrap: wrap;
@@ -178,6 +105,12 @@
 .actions button[aria-pressed='true'] {
   border-color: var(--color-accent);
   color: var(--color-accent);
+}
+
+.actions button.danger {
+  border-color: #c0392b;
+  background: #c0392b;
+  color: #fff;
 }
 
 .actions button:disabled {

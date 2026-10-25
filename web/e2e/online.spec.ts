@@ -197,3 +197,72 @@ test('each browser sends its own anonymous player ID, and the server counts the 
   expect(stats.today.uniquePlayers).toBeGreaterThanOrEqual(2);
   expect(stats.now.roomsActive).toBeGreaterThanOrEqual(1);
 });
+
+// Issue #43: ending a game online, and playing again in the same room.
+async function roomWithTwoPlayers(browser: Browser) {
+  const white = await player(browser);
+  const code = await createRoom(white);
+  const blackContext = await browser.newContext();
+  const black = await blackContext.newPage();
+  await black.goto('/');
+  await black.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Online' }).click();
+  await joinRoom(black, code);
+  await expect(white.getByTestId('status')).toHaveText('Your move.');
+  return { white, black, blackContext, code };
+}
+
+const card = (page: Page) => page.getByTestId('game-over');
+
+test('a draw by agreement, then a rematch from both, with colours swapped', async ({ browser }) => {
+  const { white, black } = await roomWithTwoPlayers(browser);
+  await tap(white, 'b4', 'a5');
+  await expect(black.getByTestId('status')).toHaveText('Your move.');
+
+  await white.getByRole('button', { name: 'Offer draw' }).click();
+  await expect(white.getByRole('button', { name: 'Draw offered' })).toBeDisabled();
+  await black.getByTestId('draw-offer').getByRole('button', { name: 'Accept' }).click();
+  for (const page of [white, black]) {
+    await expect(card(page)).toContainText('Draw');
+    await expect(card(page)).toContainText('Draw by agreement.');
+  }
+
+  await white.getByRole('button', { name: 'Rematch', exact: true }).click();
+  await expect(white.getByTestId('rematch-status')).toHaveText('Rematch asked. Waiting for your opponent…');
+  await expect(black.getByTestId('rematch-status')).toHaveText('Your opponent wants a rematch.');
+  await black.getByRole('button', { name: 'Rematch', exact: true }).click();
+
+  // New game, same room: the first game's Black now plays White, and opens.
+  for (const page of [white, black]) await expect(card(page)).toHaveCount(0);
+  await expect(black.getByTestId('setup-summary')).toHaveText('Online · You play White');
+  await expect(white.getByTestId('setup-summary')).toHaveText('Online · You play Black');
+  await expect(black.getByTestId('status')).toHaveText('Your move.');
+  await expect(white.getByTestId('status')).toHaveText("Opponent's move.");
+  await expect(white.locator('[data-testid="piece"][data-color="light"]')).toHaveCount(20); // fresh board
+  await tap(black, 'b4', 'a5');
+  await expect(white.locator('[data-testid="piece"][data-square="a5"][data-color="light"]')).toBeVisible();
+});
+
+test('resigning asks first, then the opponent wins', async ({ browser }) => {
+  const { white, black } = await roomWithTwoPlayers(browser);
+  await black.getByRole('button', { name: 'Resign' }).click();
+  await black.getByRole('button', { name: 'Keep playing' }).click(); // changed their mind
+  await expect(card(black)).toHaveCount(0);
+
+  await black.getByRole('button', { name: 'Resign' }).click();
+  await black.getByRole('button', { name: 'Yes, resign' }).click();
+  await expect(card(black)).toContainText('You resigned.');
+  await expect(card(white)).toContainText('You win!');
+  await expect(card(white)).toContainText('Your opponent resigned.');
+});
+
+test("a win can be claimed when the opponent doesn't come back", async ({ browser }) => {
+  // The e2e server lets a win be claimed after 3 s (CLAIM_WIN_AFTER_SECONDS in playwright.config.ts).
+  const { white, black } = await roomWithTwoPlayers(browser);
+  await black.close();
+  await expect(white.getByTestId('status')).toHaveText(/Your opponent lost connection/);
+  const prompt = white.getByTestId('claim-win');
+  await expect(prompt).toBeVisible({ timeout: 15_000 });
+  await prompt.getByRole('button', { name: 'Claim win' }).click();
+  await expect(card(white)).toContainText('You win!');
+  await expect(card(white)).toContainText("Your opponent didn't come back.");
+});

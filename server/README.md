@@ -19,11 +19,24 @@ in (or opens an invite link). From then on, each move goes through the server.
   the automatic return, but keeps the seat for its code. Every move also carries the room code and token, so a move made during a
   drop is accepted once the connection is back, whatever order the messages arrive in. If the
   server never got it, the page sends it again after rejoining.
+- **Ending a game other than on the board:**
+  - **Resign:** the opponent wins.
+  - **Offer a draw:** the opponent accepts or declines. The offer lapses if they play a move
+    instead.
+  - **Claim the win:** allowed once the opponent has been disconnected for 5 minutes. The server
+    checks the time itself (`CLAIM_WIN_AFTER_SECONDS`).
+  - Once a game is over, moves are refused.
+- **Rematch:** when both players ask for one after a game, the next game starts in the same
+  room, with colours swapped and the same rules. `RoomView.game` counts the games, and `seq`
+  starts at 0 again. A player who leaves the room takes back their rematch request.
 - **Heartbeat:** the server pings every 10 s and drops a connection that hasn't answered
   10 s later, so a phone that lost its signal is noticed within about 20 s.
-- **Logs:** one JSON line per event (`server_started`, `room_created`, `room_joined`,
-  `player_rejoined`, `player_left` with the reason, `action_refused`, `rooms_removed`). Watch
-  them with `fly logs`. Secret tokens are never logged.
+- **Logs:** one JSON line per event. Watch them with `fly logs`. Secret tokens are never logged.
+  - **Rooms and players:** `server_started`, `room_created`, `room_joined`, `player_rejoined`,
+    `player_left` (with the reason), `rooms_removed`.
+  - **Games:** `action_refused`, `request_refused`, `game_finished`, `game_resigned`,
+    `draw_offered`, `draw_answered`, `win_claimed`, `rematch_asked`, `rematch_declined`,
+    `rematch_started`.
 
 The messages are defined in `web/src/protocol/online.ts`.
 
@@ -140,7 +153,9 @@ How the online game is used, in two places:
 |---|---|
 | `dama_rooms_created_total` | Rooms created |
 | `dama_games_started_total` | Rooms where the friend joined, so a game started |
-| `dama_games_finished_total{result}` | Games played to the end (`win` / `draw`) |
+| `dama_games_finished_total{result}` | Games that ended: `win` / `draw` on the board, `resigned`, `draw_agreed`, `abandoned` (win claimed) |
+| `dama_rematches_total` | Rematches started |
+| `dama_draw_offers_total{answer}` | Draw offers: `offered`, `accepted`, `declined` |
 | `dama_moves_total{kind}` | Actions accepted (`move` / `nfikh`) |
 | `dama_rooms_open` / `_waiting` / `_active` | Rooms right now: all / one player waiting / game on |
 | `dama_players_connected` | Players in a room right now ("active users") |
@@ -168,6 +183,7 @@ How the online game is used, in two places:
 | Variable      | Default | What it does                                                         |
 |---------------|---------|----------------------------------------------------------------------|
 | `PORT`        | `3000`  | Port to listen on.                                                   |
+| `CLAIM_WIN_AFTER_SECONDS` | `300` | How long an opponent must be disconnected before the other player can claim the win. The e2e tests use 3. |
 | `METRICS_PORT`| `9091`  | Port for `/metrics` (Prometheus). Keep it private: Fly only scrapes it internally. |
 | `CORS_ORIGIN` | any     | Comma-separated list of web pages (origins) allowed to connect. Checked on every connection, WebSocket included. Fly sets it to `https://shinwi.github.io`. |
 

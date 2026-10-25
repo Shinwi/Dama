@@ -1,6 +1,6 @@
 import { advanceState, createInitialState, legalMoves, outcome, takeForfeit } from '../../web/src/engine/game';
 import { DARK, GameState, LIGHT, Side } from '../../web/src/engine/types';
-import { OnlineAction, RoomView, WireState } from '../../web/src/protocol/online';
+import { OnlineAction, RoomResult, RoomView, WireState } from '../../web/src/protocol/online';
 
 /** No 0/O or 1/I/L: a code is read off one screen and typed on another. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -14,7 +14,12 @@ export const ROOM_FULL = 'That room already has two players. If one of them is y
 interface Seat {
   token: string;
   connected: boolean;
+  /** When this player lost their connection, while they're gone; null while connected. */
+  disconnectedAt: number | null;
 }
+
+/** How long an opponent must be gone before the other player can claim the win. */
+export const DEFAULT_CLAIM_WIN_AFTER_MS = 5 * 60 * 1000;
 
 export interface Room {
   code: string;
@@ -28,11 +33,19 @@ export interface Room {
   startedAt: number | null;
   /** When the game ended (a win or a draw), or null while it's on. */
   finishedAt: number | null;
+  /** How the game ended, if not on the board: resigned, an agreed draw, a claimed win. */
+  result: RoomResult | null;
+  /** The side with an open draw offer, waiting for the other's answer. */
+  drawOffer: Side | null;
+  /** After the game: who has asked for a rematch. Both → the next game starts. */
+  rematch: { light: boolean; dark: boolean };
+  /** Counts games in this room (0 for the first): a rematch starts the next one. */
+  game: number;
 }
 
 /** A game that has just ended, for the metrics. */
 export interface FinishedGame {
-  result: 'win' | 'draw';
+  result: 'win' | 'draw' | RoomResult['kind'];
   durationMs: number;
   /** Accepted actions: moves and nfikh. */
   actions: number;
@@ -66,6 +79,7 @@ export class RoomManager {
   constructor(
     private readonly random: () => number = Math.random,
     private readonly now: () => number = Date.now,
+    private readonly claimWinAfterMs = DEFAULT_CLAIM_WIN_AFTER_MS,
   ) {}
 
   get size(): number {
@@ -86,9 +100,13 @@ export class RoomManager {
       emptySince: null,
       startedAt: null,
       finishedAt: null,
+      result: null,
+      drawOffer: null,
+      rematch: { light: false, dark: false },
+      game: 0,
     };
     const token = this.newToken();
-    room.seats[seatKey(side)] = { token, connected: true };
+    room.seats[seatKey(side)] = { token, connected: true, disconnectedAt: null };
     this.rooms.set(room.code, room);
     return { room, token };
   }
@@ -100,7 +118,7 @@ export class RoomManager {
     const side = !room.seats.light ? LIGHT : !room.seats.dark ? DARK : null;
     if (side === null) return { ok: false, error: ROOM_FULL };
     const token = this.newToken();
-    room.seats[seatKey(side)] = { token, connected: true };
+    room.seats[seatKey(side)] = { token, connected: true, disconnectedAt: null };
     room.emptySince = null;
     room.startedAt = this.now(); // both seats are taken now
     return { ok: true, value: { room, side, token } };
@@ -111,14 +129,16 @@ export class RoomManager {
     const room = this.rooms.get(normalizeCode(code));
     const side = room && this.sideOf(room, token);
     if (!room || !side) return { ok: false, error: 'That game is no longer available.' };
-    room.seats[seatKey(side)]!.connected = true;
-    room.emptySince = null;
+    this.setConnected(room, side, true);
     return { ok: true, value: { room, side } };
   }
 
   setConnected(room: Room, side: Side, connected: boolean): void {
     const seat = room.seats[seatKey(side)];
-    if (seat) seat.connected = connected;
+    if (seat && seat.connected !== connected) {
+      seat.connected = connected;
+      seat.disconnectedAt = connected ? null : this.now();
+    }
     const anyoneThere = Object.values(room.seats).some((s) => s?.connected);
     room.emptySince = anyoneThere ? null : this.now();
   }
@@ -129,8 +149,8 @@ export class RoomManager {
    */
   play(room: Room, side: Side, action: unknown): Result<{ finished: FinishedGame | null }> {
     if (!isAction(action)) return { ok: false, error: 'Not a valid action.' };
-    if (!room.seats.light || !room.seats.dark) return { ok: false, error: 'Waiting for the other player.' };
-    if (outcome(room.state).kind !== 'ongoing') return { ok: false, error: 'The game is over.' };
+    const notOn = this.gameNotOn(room);
+    if (notOn) return { ok: false, error: notOn };
     if (room.state.toMove !== side) return { ok: false, error: 'Not your turn.' };
 
     if (action.kind === 'nfikh') {
@@ -145,15 +165,105 @@ export class RoomManager {
     // Rebuilt rather than spread, so nothing else the client sent along is kept.
     room.lastAction =
       action.kind === 'nfikh' ? { kind: 'nfikh', square: action.square, by: side } : { kind: 'move', path: [...action.path], by: side };
+    // A draw offer stands until the player it was made to plays a move instead of answering.
+    if (room.drawOffer !== null && room.drawOffer !== side) room.drawOffer = null;
     const result = outcome(room.state);
     if (result.kind === 'ongoing' || room.finishedAt !== null) return { ok: true, value: { finished: null } };
+    return { ok: true, value: { finished: this.finish(room, result.kind) } };
+  }
+
+  /** Ends the game: `side` resigns, and the opponent wins. */
+  resign(room: Room, side: Side): Result<FinishedGame> {
+    const notOn = this.gameNotOn(room);
+    if (notOn) return { ok: false, error: notOn };
+    room.result = { kind: 'resigned', winner: other(side) };
+    return { ok: true, value: this.finish(room, 'resigned') };
+  }
+
+  /**
+   * `side` offers a draw. If the opponent had already offered one, this accepts it: says
+   * whether the game ended.
+   */
+  offerDraw(room: Room, side: Side): Result<{ finished: FinishedGame | null }> {
+    const notOn = this.gameNotOn(room);
+    if (notOn) return { ok: false, error: notOn };
+    if (room.drawOffer === side) return { ok: false, error: 'You have already offered a draw.' };
+    if (room.drawOffer === other(side)) return this.answerDraw(room, side, true);
+    room.drawOffer = side;
+    return { ok: true, value: { finished: null } };
+  }
+
+  /** `side` accepts or declines the opponent's draw offer. Says whether the game ended. */
+  answerDraw(room: Room, side: Side, accept: boolean): Result<{ finished: FinishedGame | null }> {
+    const notOn = this.gameNotOn(room);
+    if (notOn) return { ok: false, error: notOn };
+    if (room.drawOffer !== other(side)) return { ok: false, error: 'There is no draw offer to answer.' };
+    room.drawOffer = null;
+    if (!accept) return { ok: true, value: { finished: null } };
+    room.result = { kind: 'draw_agreed', winner: null };
+    return { ok: true, value: { finished: this.finish(room, 'draw_agreed') } };
+  }
+
+  /** `side` wins because the opponent has been gone for `claimWinAfterMs`. */
+  claimWin(room: Room, side: Side): Result<FinishedGame> {
+    const notOn = this.gameNotOn(room);
+    if (notOn) return { ok: false, error: notOn };
+    const gone = this.goneFor(room, other(side));
+    if (gone === null) return { ok: false, error: 'Your opponent is here.' };
+    if (gone < this.claimWinAfterMs) return { ok: false, error: 'Your opponent may still come back.' };
+    room.result = { kind: 'abandoned', winner: side };
+    return { ok: true, value: this.finish(room, 'abandoned') };
+  }
+
+  /**
+   * After a game: `side` asks for a rematch (`yes`), or turns one down / takes its request
+   * back (which clears both requests). When both have asked, the next game starts: same rules,
+   * colours swapped. Says whether it started.
+   */
+  rematch(room: Room, side: Side, yes: boolean): Result<{ started: boolean }> {
+    if (!this.isOver(room)) return { ok: false, error: 'The game is still on.' };
+    if (!yes) {
+      room.rematch = { light: false, dark: false };
+      return { ok: true, value: { started: false } };
+    }
+    room.rematch[seatKey(side)] = true;
+    if (!room.rematch.light || !room.rematch.dark) return { ok: true, value: { started: false } };
+
+    room.seats = { light: room.seats.dark, dark: room.seats.light };
+    room.state = createInitialState(room.state.strictMode);
+    room.seq = 0;
+    room.lastAction = null;
+    room.result = null;
+    room.drawOffer = null;
+    room.rematch = { light: false, dark: false };
+    room.game++;
+    room.startedAt = this.now();
+    room.finishedAt = null;
+    return { ok: true, value: { started: true } };
+  }
+
+  /** Over: on the board (a win or draw), or by a result (resigned, agreed draw, claimed win). */
+  isOver(room: Room): boolean {
+    return room.result !== null || outcome(room.state).kind !== 'ongoing';
+  }
+
+  /** Why nothing can be played right now, or null if the game is on. */
+  private gameNotOn(room: Room): string | null {
+    if (!room.seats.light || !room.seats.dark) return 'Waiting for the other player.';
+    if (this.isOver(room)) return 'The game is over.';
+    return null;
+  }
+
+  private finish(room: Room, result: FinishedGame['result']): FinishedGame {
     room.finishedAt = this.now();
-    const finished: FinishedGame = {
-      result: result.kind,
-      durationMs: room.finishedAt - (room.startedAt ?? room.finishedAt),
-      actions: room.seq,
-    };
-    return { ok: true, value: { finished } };
+    room.drawOffer = null;
+    return { result, durationMs: room.finishedAt - (room.startedAt ?? room.finishedAt), actions: room.seq };
+  }
+
+  /** How long `side`'s player has been disconnected, or null if they're connected (or absent). */
+  private goneFor(room: Room, side: Side): number | null {
+    const seat = room.seats[seatKey(side)];
+    return seat && !seat.connected && seat.disconnectedAt !== null ? this.now() - seat.disconnectedAt : null;
   }
 
   counts(): RoomCounts {
@@ -190,10 +300,17 @@ export class RoomManager {
       state: toWire(room.state),
       seq: room.seq,
       lastAction: room.lastAction,
+      game: room.game,
+      result: room.result,
+      drawOffer: room.drawOffer === null ? null : room.drawOffer === side ? 'you' : 'opponent',
+      rematch: { you: room.rematch[seatKey(side)], opponent: room.rematch[seatKey(other(side))] },
+      opponentGoneForMs: this.goneFor(room, other(side)),
+      claimWinAfterMs: this.claimWinAfterMs,
     };
   }
 
-  private sideOf(room: Room, token: string): Side | null {
+  /** The side whose seat `token` is, if any. (A rematch swaps the sides, not the tokens.) */
+  sideOf(room: Room, token: string): Side | null {
     if (room.seats.light?.token === token) return LIGHT;
     if (room.seats.dark?.token === token) return DARK;
     return null;

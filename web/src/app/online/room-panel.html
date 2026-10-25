@@ -2,7 +2,9 @@
 <p class="room-code" data-testid="room-code">{{ status().code }}</p>
 @if (!status().opponentJoined) {
   <p class="room-hint">Send this code to a friend. They pick Online → Join room.</p>
-  <button type="button" (click)="copyInvite()">{{ copied() ? 'Link copied' : 'Copy invite link' }}</button>
+  <button type="button" data-testid="share-invite" (click)="shareInvite()">
+    {{ copied() ? 'Link copied' : canShare ? 'Share invite' : 'Copy invite link' }}
+  </button>
 }
 @if (status().error; as error) {
   <p class="room-error" role="alert" data-testid="online-error">{{ error }}</p>

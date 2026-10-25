@@ -1,0 +1,35 @@
+<div class="game-over" [class.win]="info().variant === 'win'" [class.loss]="info().variant === 'loss'" data-testid="game-over">
+  <div
+    class="game-over-card"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="game-over-title"
+    aria-describedby="game-over-subtitle"
+  >
+    <p class="game-over-title" id="game-over-title">{{ info().title }}</p>
+    <p class="game-over-subtitle" id="game-over-subtitle">{{ info().subtitle }}</p>
+
+    @if (rematch(); as rematch) {
+      @if (rematch.you) {
+        <p class="request waiting" data-testid="rematch-status" aria-live="polite">Rematch asked. Waiting for your opponent…</p>
+        <div class="buttons">
+          <button type="button" class="secondary" #first (click)="answerRematch.emit(false)">Cancel</button>
+          <button type="button" class="secondary" (click)="menu.emit()">Back to menu</button>
+        </div>
+      } @else if (rematch.opponent) {
+        <p class="request" data-testid="rematch-status" aria-live="polite">Your opponent wants a rematch.</p>
+        <div class="buttons">
+          <button type="button" #first (click)="answerRematch.emit(true)">Rematch</button>
+          <button type="button" class="secondary" (click)="answerRematch.emit(false)">No thanks</button>
+        </div>
+      } @else {
+        <div class="buttons">
+          <button type="button" #first (click)="answerRematch.emit(true)">Rematch</button>
+          <button type="button" class="secondary" (click)="menu.emit()">Back to menu</button>
+        </div>
+      }
+    } @else {
+      <button type="button" #first (click)="newGame.emit()">New game</button>
+    }
+  </div>
+</div>

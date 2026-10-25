@@ -24,6 +24,16 @@ export interface WireState {
   forfeitable: number[];
 }
 
+/**
+ * How a game ended other than on the board. (A win or draw on the board isn't here: both
+ * sides can see it in `state`.)
+ */
+export interface RoomResult {
+  kind: 'resigned' | 'draw_agreed' | 'abandoned';
+  /** The side that won: the resigner's opponent, or the player who claimed the win. Null for a draw. */
+  winner: Side | null;
+}
+
 /** What one player sees of a room. Sent after every change, to each player separately. */
 export interface RoomView {
   code: string;
@@ -38,6 +48,18 @@ export interface RoomView {
   seq: number;
   /** The action that made this the position, and who played it. Null at the start. */
   lastAction: (OnlineAction & { by: Side }) | null;
+  /** Counts games in this room: a rematch starts the next one (with `seq` back at 0). */
+  game: number;
+  /** Set when the game ended by resigning, an agreed draw, or a claimed win. */
+  result: RoomResult | null;
+  /** An open draw offer: made by you, or by your opponent (yours to answer). */
+  drawOffer: 'you' | 'opponent' | null;
+  /** Who has asked for a rematch since the game ended. */
+  rematch: { you: boolean; opponent: boolean };
+  /** How long the opponent has been disconnected, as the server sent this; null if they're here. */
+  opponentGoneForMs: number | null;
+  /** How long the opponent must be gone before you can claim the win. */
+  claimWinAfterMs: number;
 }
 
 /**
@@ -64,6 +86,12 @@ export interface RejoinRoomRequest extends WithPlayerId {
   token: string;
 }
 
+/** Which seat a request is for (see ActionRequest for why every request says so). */
+export interface SeatRequest {
+  code: string;
+  token: string;
+}
+
 export interface ActionRequest {
   /**
    * The seat this action is for, as for room:rejoin. Every action carries it, so the server
@@ -85,6 +113,15 @@ export interface ClientToServerEvents {
   'room:join': (request: JoinRoomRequest, reply: (r: JoinedReply) => void) => void;
   'room:rejoin': (request: RejoinRoomRequest, reply: (r: JoinedReply) => void) => void;
   'room:action': (request: ActionRequest, reply: (r: ActionReply) => void) => void;
+  /** Ends the game: the opponent wins. */
+  'room:resign': (request: SeatRequest, reply: (r: ActionReply) => void) => void;
+  /** Offers a draw (accepts one, if the opponent offered first). */
+  'room:offer-draw': (request: SeatRequest, reply: (r: ActionReply) => void) => void;
+  'room:answer-draw': (request: SeatRequest & { accept: boolean }, reply: (r: ActionReply) => void) => void;
+  /** Wins the game, once the opponent has been gone for `claimWinAfterMs`. */
+  'room:claim-win': (request: SeatRequest, reply: (r: ActionReply) => void) => void;
+  /** After the game: asks for a rematch (`yes`), or turns one down / takes the request back. */
+  'room:rematch': (request: SeatRequest & { yes: boolean }, reply: (r: ActionReply) => void) => void;
   'room:leave': () => void;
 }
 
