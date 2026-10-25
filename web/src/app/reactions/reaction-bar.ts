@@ -35,23 +35,62 @@ import { ReactionFace } from './reaction-face';
       gap: 8px;
     }
 
+    /* Design C, "Souk Party": round face stickers in loud colours, then shouted phrases. */
+    :host {
+      justify-content: space-between;
+    }
+
     button {
-      height: 44px;
+      height: 46px;
       min-width: 44px;
-      padding: 0 14px;
-      border-radius: 22px;
-      border: 1px solid var(--color-border);
-      background: var(--color-surface);
-      color: var(--color-text);
-      font: inherit;
-      font-size: 0.9rem;
-      font-weight: 600;
+      flex: 1 1 auto;
+      padding: 0 12px;
+      border: 3px solid #1b1b1b;
+      border-radius: 14px;
+      background: #ffffff;
+      box-shadow: 3px 3px 0 #1b1b1b;
+      color: #1b1b1b;
+      font-family: 'Lilita One', sans-serif;
+      font-size: 1rem;
       cursor: pointer;
     }
 
     button.face {
+      flex: 0 0 auto;
+      width: 58px;
+      height: 58px;
       padding: 0;
-      color: var(--color-accent);
+      border-radius: 50%;
+      box-shadow: 3px 4px 0 #1b1b1b;
+      --face-fill: #ffe680;
+      --face-stroke: 2.2;
+    }
+
+    button:active {
+      transform: translate(2px, 2px);
+      box-shadow: 1px 1px 0 #1b1b1b;
+    }
+
+    button[data-reaction='happy'] {
+      background: #ffd23f;
+    }
+
+    button[data-reaction='laugh'] {
+      background: #2ed18b;
+    }
+
+    button[data-reaction='wow'] {
+      background: #3fa9f5;
+    }
+
+    button[data-reaction='grumpy'] {
+      background: #ff5a4e;
+    }
+
+    button[data-reaction='cheeky'],
+    button[data-reaction='oops'],
+    button[data-reaction='thinking'] {
+      background: #b796ff;
     }
 
     button:disabled {

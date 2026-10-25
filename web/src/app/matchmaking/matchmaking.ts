@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, DestroyRef, computed, inject, input, output, signal } from '@angular/core';
 import { MatchmakingStatus } from '../game/game.service';
 import { describeMoveTime } from '../online/room-panel';
+import { Damo } from '../mascot/damo';
 
 /**
  * "Play someone": looking for a random opponent, how long for, and how many players are
@@ -10,6 +11,7 @@ import { describeMoveTime } from '../online/room-panel';
   selector: 'app-matchmaking',
   templateUrl: './matchmaking.html',
   styleUrl: './matchmaking.css',
+  imports: [Damo],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { 'data-testid': 'matchmaking' },
 })

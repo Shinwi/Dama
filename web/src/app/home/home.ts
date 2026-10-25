@@ -3,6 +3,7 @@ import { Difficulty } from '../../engine/ai';
 import { DARK, LIGHT, Side } from '../../engine/types';
 import { BoardTheme, GameMode, MOVE_TIMES, Settings } from '../game/game-controller';
 import { OnlineEntry, OnlineServerState } from '../game/game.service';
+import { Damo } from '../mascot/damo';
 
 export type GameSetup = Pick<Settings, 'mode' | 'difficulty' | 'playerSide' | 'boardTheme' | 'moveTime'> & {
   /** Set when mode is 'online': make a new room, or join a friend's. */
@@ -24,6 +25,7 @@ interface ThemeOption {
  */
 @Component({
   selector: 'app-home',
+  imports: [Damo],
   templateUrl: './home.html',
   styleUrl: './home.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -76,14 +78,14 @@ export class Home {
   /** Joining a room plays by its creator's timer, so there's nothing to pick then. */
   protected readonly showMoveTime = computed(() => this.mode() !== 'online' || this.onlineEntry() === 'create');
 
-  /** The 4×4 corner of the board drawn in each pattern's swatch. */
-  protected readonly swatchSquares = Array.from({ length: 16 }, (_, i) => (Math.floor(i / 4) + i) % 2 === 1);
+  /** The 2×2 corner of the board drawn in each pattern's swatch. */
+  protected readonly miniSwatch = [false, true, true, false];
 
   protected readonly startLabel = computed(() => {
-    if (this.busy()) return 'Connecting…';
-    if (this.mode() === 'match') return 'Find a player';
-    if (this.mode() !== 'online') return 'Start game';
-    return this.onlineEntry() === 'create' ? 'Create room' : 'Join room';
+    if (this.busy()) return 'CONNECTING…';
+    if (this.mode() === 'match') return 'FIND A RIVAL!';
+    if (this.mode() !== 'online') return "LET'S PLAY!";
+    return this.onlineEntry() === 'create' ? 'MAKE A ROOM!' : 'JOIN!';
   });
 
   protected readonly canStart = computed(

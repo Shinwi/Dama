@@ -5,8 +5,8 @@ import { ReactionId } from '../../protocol/online';
 @Component({
   selector: 'app-reaction-face',
   template: `
-    <svg aria-hidden="true" [attr.width]="size()" [attr.height]="size()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="12" cy="12" r="9"></circle>
+    <svg aria-hidden="true" [attr.width]="size()" [attr.height]="size()" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <circle class="head" cx="12" cy="12" r="9"></circle>
       @switch (face()) {
         @case ('laugh') {
           <path d="M7.5 9.5l2-1-2-1M16.5 9.5l-2-1 2-1"></path>
@@ -39,6 +39,15 @@ import { ReactionId } from '../../protocol/online';
     :host {
       display: inline-grid;
       place-items: center;
+    }
+
+    svg {
+      stroke-width: var(--face-stroke, 1.8);
+    }
+
+    /* A design can fill the face in (Souk Party's yellow stickers). */
+    .head {
+      fill: var(--face-fill, none);
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,

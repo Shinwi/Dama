@@ -1,21 +1,27 @@
+<div class="stage" aria-hidden="true">
+  <span class="bubble">{{ status().state === 'searching' ? 'Anyone?!' : status().state === 'unavailable' ? 'Soon!' : 'Oops!' }}</span>
+  <app-damo [mood]="status().state === 'searching' ? 'search' : status().state === 'unavailable' ? 'shrug' : 'sad'" [size]="150"></app-damo>
+</div>
 @switch (status().state) {
   @case ('searching') {
-    <h2 class="title">Finding an opponent…</h2>
-    <p class="detail" data-testid="match-waited">
-      Waiting {{ waited() }}@if (players(); as players) { · {{ players }}}
-    </p>
-    <p class="detail">{{ timer() }}</p>
+    <h2 class="title">Looking for a rival…</h2>
+    <div class="pills">
+      <p class="pill" data-testid="match-waited">
+        Waiting {{ waited() }}@if (players(); as players) { · {{ players }}}
+      </p>
+      <p class="pill">{{ timer() }}</p>
+    </div>
   }
   @case ('unavailable') {
-    <h2 class="title">Coming soon</h2>
-    <p class="detail" data-testid="match-unavailable">Playing someone new isn't ready yet. For now, play the computer or invite a friend.</p>
+    <h2 class="title">Coming soon!</h2>
+    <p class="pill wide" data-testid="match-unavailable">Finding a rival isn't ready yet. Beat the robot, or invite a friend!</p>
   }
   @default {
-    <h2 class="title">Couldn't look for a player</h2>
-    <p class="detail" role="alert">{{ status().error }}</p>
+    <h2 class="title">Couldn't look!</h2>
+    <p class="pill wide" role="alert">{{ status().error }}</p>
   }
 }
 <div class="buttons">
-  <button type="button" class="primary" (click)="playComputer.emit()">Play the computer</button>
-  <button type="button" (click)="cancel.emit()">{{ status().state === 'searching' ? 'Cancel' : 'Back' }}</button>
+  <button type="button" class="primary" aria-label="Play the computer meanwhile" (click)="playComputer.emit()">Beat the robot meanwhile</button>
+  <button type="button" (click)="cancel.emit()">{{ status().state === 'searching' ? 'Never mind' : 'Back' }}</button>
 </div>

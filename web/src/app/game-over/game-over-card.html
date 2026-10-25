@@ -1,4 +1,9 @@
 <div class="game-over" [class.win]="info().variant === 'win'" [class.loss]="info().variant === 'loss'" data-testid="game-over">
+  @if (info().variant === 'win') {
+    @for (bit of confetti; track $index) {
+      <span class="confetti" aria-hidden="true" [style.left.%]="bit.x" [style.top.%]="bit.y" [style.rotate.deg]="bit.r" [style.background]="bit.colour" [class.round]="bit.round"></span>
+    }
+  }
   <div
     class="game-over-card"
     role="dialog"
@@ -7,36 +12,55 @@
     aria-describedby="game-over-subtitle"
   >
     <p class="game-over-title" id="game-over-title">{{ info().title }}</p>
-    <p class="game-over-subtitle" id="game-over-subtitle">{{ info().subtitle }}</p>
-    @if (stats(); as stats) {
-      <dl class="stats" data-testid="game-stats">
-        <div><dt>Pieces taken</dt><dd>{{ stats.taken }}</dd></div>
-        <div><dt>Moves</dt><dd>{{ stats.moves }}</dd></div>
-        <div><dt>Time</dt><dd>{{ stats.time }}</dd></div>
-      </dl>
-    }
+    <app-damo class="damo" [mood]="info().variant === 'win' ? 'crown' : info().variant === 'loss' ? 'sad' : 'shrug'" [size]="128"></app-damo>
 
+    <div class="panel">
+      <p class="game-over-subtitle" id="game-over-subtitle">{{ info().subtitle }}</p>
+
+      @if (stats(); as stats) {
+        <dl class="stats" data-testid="game-stats">
+          <div class="mint"><dt>gobbled</dt><dd>{{ stats.taken }}</dd></div>
+          <div class="sun"><dt>best combo</dt><dd>×{{ stats.bestCombo }}</dd></div>
+          <div class="grape"><dt>time</dt><dd>{{ stats.time }}</dd></div>
+        </dl>
+      }
+
+      @if (rematch(); as rematch) {
+        @if (rematch.you) {
+          <p class="request" aria-live="polite"><span data-testid="rematch-status">Rematch asked. Waiting for your opponent…</span></p>
+        } @else if (rematch.opponent) {
+          <p class="request" aria-live="polite"><span data-testid="rematch-status">Your opponent wants a rematch.</span><span class="aside">REMATCH?!</span></p>
+        }
+      }
+
+      @if (reactions().length > 0) {
+        <app-reaction-bar class="replies" [reactions]="reactions()" [labels]="replyLabels" [faceSize]="34" (pick)="react.emit($event)"></app-reaction-bar>
+      }
+    </div>
+
+    <!-- The main button comes first (focus and reading order); the row is reversed so it sits on the right. -->
     @if (rematch(); as rematch) {
       @if (rematch.you) {
-        <p class="request waiting" data-testid="rematch-status" aria-live="polite">Rematch asked. Waiting for your opponent…</p>
         <div class="buttons">
           <button type="button" class="secondary" #first (click)="answerRematch.emit(false)">Cancel</button>
-          <button type="button" class="secondary" (click)="menu.emit()">Back to menu</button>
+          <button type="button" class="link" (click)="menu.emit()">Back to menu</button>
         </div>
       } @else if (rematch.opponent) {
-        <p class="request" data-testid="rematch-status" aria-live="polite">Your opponent wants a rematch.</p>
         <div class="buttons">
           <button type="button" #first (click)="answerRematch.emit(true)">Rematch</button>
-          <button type="button" class="secondary" (click)="answerRematch.emit(false)">No thanks</button>
+          <button type="button" class="link" (click)="answerRematch.emit(false)">No thanks</button>
         </div>
       } @else {
         <div class="buttons">
           <button type="button" #first (click)="answerRematch.emit(true)">Rematch</button>
-          <button type="button" class="secondary" (click)="menu.emit()">Back to menu</button>
+          <button type="button" class="link" (click)="menu.emit()">Back to menu</button>
         </div>
       }
     } @else {
-      <button type="button" #first (click)="newGame.emit()">New game</button>
+      <div class="buttons">
+        <button type="button" #first (click)="newGame.emit()">New game</button>
+        <button type="button" class="link" (click)="menu.emit()">Back to menu</button>
+      </div>
     }
   </div>
 </div>

@@ -108,7 +108,7 @@ export function defaultSettings(): Settings {
     strictMode: false,
     soundOn: true,
     musicOn: false,
-    boardTheme: 'classic',
+    boardTheme: 'green',
     moveTime: 30,
   };
 }

@@ -1,31 +1,100 @@
 .page {
+  position: relative;
   max-width: 1040px;
   margin-inline: auto;
-  padding: 16px 16px 48px;
+  padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
 }
 
 .header {
-  text-align: center;
-}
-
-/* In a game: the title on the left, the room chip (online) on the right. */
-.header.in-game {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
+  margin-bottom: 6px;
+}
+
+/* The home and matchmaking screens: the title over their one column. */
+.header:not(.in-game) {
+  max-width: 460px;
+  margin-inline: auto;
+}
+
+/* In a game: back on the left, the title in the middle, the room chip (online) on the right. */
+.header.in-game {
+  justify-content: space-between;
   margin-bottom: 12px;
 }
 
 .header.in-game .title {
   margin: 0;
-  font-size: clamp(1.4rem, 5vw, 1.9rem);
+  font-size: 1.5rem;
+}
+
+.back,
+.header-spacer {
+  width: 44px;
+  height: 44px;
+  flex: none;
+}
+
+.back {
+  display: grid;
+  place-items: center;
+  border: var(--outline);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 3px 3px 0 var(--ink);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.back svg,
+.actions svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .title {
-  margin: 4px 0 14px;
-  font-size: clamp(1.8rem, 6vw, 2.4rem);
-  color: var(--color-accent);
+  margin: 8px 0 4px;
+  font-size: 2rem;
+  line-height: 1;
+  color: var(--tomato);
+  text-shadow: 3px 3px 0 var(--ink);
+  text-transform: uppercase;
+}
+
+/* The home screen: a huge, tilted "DAMA!". */
+.header:not(.in-game) .title {
+  margin: 26px 0 8px;
+  font-size: 4.4rem;
+  line-height: 0.9;
+  text-shadow: 4px 4px 0 var(--ink);
+  transform: rotate(-4deg);
+  transform-origin: left bottom;
+}
+
+.header:not(.in-game) .title::after {
+  content: '!';
+}
+
+.title .arabic {
+  display: none;
+}
+
+/* In a game on a phone, the top bar is back, the room, and the game's buttons. */
+@media (max-width: 679px) {
+  .header.in-game {
+    justify-content: flex-start;
+  }
+
+  .header.in-game .title,
+  .header.in-game .header-spacer {
+    display: none;
+  }
 }
 
 .title .arabic {
@@ -142,42 +211,103 @@
   }
 }
 
+.react {
+  margin-top: 8px;
+}
+
+/* "DOUBLE JUMP! ×2": a sticker that pops over the board's corner. */
+.combo {
+  position: absolute;
+  left: -6px;
+  top: -22px;
+  z-index: 6;
+  margin: 0;
+  padding: 6px 12px;
+  border: var(--outline);
+  border-radius: 14px;
+  background: var(--tomato);
+  box-shadow: 3px 3px 0 var(--ink);
+  color: #ffffff;
+  font-family: var(--font-title);
+  font-size: 1.3rem;
+  text-shadow: 2px 2px 0 var(--ink);
+  transform: rotate(-8deg);
+  pointer-events: none;
+  animation: combo-pop 320ms cubic-bezier(0.3, 1.6, 0.5, 1);
+}
+
+@keyframes combo-pop {
+  from {
+    transform: rotate(-8deg) scale(0.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .combo {
+    animation: none;
+  }
+}
+
+/* The game's buttons: icon over label. A tab bar fixed along the bottom on a phone. */
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  justify-content: center;
 }
 
 .actions button {
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  padding: 10px 14px;
-  border-radius: var(--radius-md);
-  font-size: 0.9rem;
+  min-width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: var(--outline);
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 3px 3px 0 var(--ink);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 900;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 
 .actions button[aria-pressed='true'] {
-  border-color: var(--color-accent);
-  color: var(--color-accent);
+  background: var(--mint);
 }
 
-/* Phones: Sound and Music are just their icons, so all the buttons fit on one row. */
+.actions button.danger {
+  background: var(--tomato);
+  color: #ffffff;
+}
+
+/* A phone: icon buttons in the top bar (the words stay for screen readers). */
 @media (max-width: 679px) {
   .actions {
+    position: absolute;
+    top: 16px;
+    right: max(16px, env(safe-area-inset-right));
+    z-index: 5;
     flex-wrap: nowrap;
     gap: 6px;
   }
 
   .actions button {
-    padding: 9px 11px;
-    font-size: 0.85rem;
-    white-space: nowrap;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0;
+    border-radius: 12px;
   }
 
-  .icon-button .button-label {
+  .actions svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .actions button .label {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -187,16 +317,6 @@
   }
 }
 
-.icon-button .button-label {
-  margin-inline-start: 0.35em;
-}
-
-.actions button.danger {
-  border-color: #c0392b;
-  background: #c0392b;
-  color: #fff;
-}
-
 .actions button:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -204,8 +324,9 @@
 
 .rules {
   background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
+  border: var(--outline);
+  box-shadow: var(--pop);
+  border-radius: var(--radius-lg);
   padding: 10px 16px;
 }
 
@@ -258,9 +379,6 @@
     min-width: 180px;
   }
 
-  .actions {
-    justify-content: flex-start;
-  }
 
   .setup-summary {
     text-align: left;

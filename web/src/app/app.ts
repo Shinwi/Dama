@@ -191,13 +191,13 @@ export class App {
     const counts = this.game.pieceCounts();
     const left: Side = settings.mode === 'pvp' ? LIGHT : settings.playerSide;
     const player = (side: Side): ScoreboardPlayer => {
-      const name = playerName(side, settings);
+      const name = funName(playerName(side, settings));
       return {
         side,
         name,
         // Every piece starts on the board: what's missing was captured (or taken by nfikh).
         captured: PIECES_PER_SIDE - (side === LIGHT ? counts.dark : counts.light),
-        turnLabel: name === 'You' ? 'Your move' : name === 'Computer' ? 'Thinking…' : 'To move',
+        turnLabel: name === 'You' ? 'Your move' : name === 'Robot' ? 'Thinking…' : 'To move',
       };
     };
     return [player(left), player((-left) as Side)];
@@ -221,7 +221,7 @@ export class App {
   /** Who plays White and Black, for the move list's columns. */
   protected readonly moveListNames = computed(() => {
     const settings = this.perspective();
-    return { light: playerName(LIGHT, settings), dark: playerName(DARK, settings) };
+    return { light: funName(playerName(LIGHT, settings)), dark: funName(playerName(DARK, settings)) };
   });
 
   protected readonly moveTimeNote = computed(() => describeMoveTime(this.game.moveTimeMs()));
@@ -356,8 +356,24 @@ export class App {
 
   // ---- Quick reactions, and "Play someone" -------------------------------------------
 
-  /** The reactions this design offers during a game. */
-  protected readonly reactionChoices: readonly ReactionId[] = ['happy', 'wow', 'oops', 'good-move', 'hurry'];
+  /** The reactions this design offers during a game: big face stickers, then shouts. */
+  protected readonly reactionChoices: readonly ReactionId[] = ['happy', 'laugh', 'wow', 'grumpy', 'cheeky', 'good-move', 'hurry', 'good-game'];
+  /** Souk Party says it louder. */
+  protected readonly reactionLabels: Partial<Record<ReactionId, string>> = {
+    'good-move': 'NICE ONE!',
+    hurry: 'HURRY UP!',
+    'good-game': 'GG!',
+    'well-played': 'WELL PLAYED!',
+    'one-more': 'AGAIN?!',
+  };
+
+  /** "DOUBLE JUMP! ×2" and up, after a move that took that many pieces. */
+  comboText(count: number): string {
+    const name = count === 2 ? 'DOUBLE JUMP!' : count === 3 ? 'TRIPLE JUMP!' : 'MEGA COMBO!';
+    return `${name} ×${count}`;
+  }
+  /** The quick replies on the game-over screen. */
+  protected readonly gameOverReactions: readonly ReactionId[] = ['good-game', 'one-more', 'laugh'];
 
   /** Who sent the reaction on screen, and which side of the scoreboard it comes from. */
   protected readonly reactionFrom = computed(() => {
@@ -442,6 +458,11 @@ export class App {
     this.audio.unlock();
     this.game.updateSettings({ strictMode: !this.game.settings().strictMode });
   }
+}
+
+/** Souk Party's names for the players on the scoreboard. */
+function funName(name: string): string {
+  return name === 'Computer' ? 'Robot' : name === 'Opponent' ? 'Rival' : name;
 }
 
 /** How many pieces each side starts with. */

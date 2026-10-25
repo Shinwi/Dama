@@ -1,46 +1,120 @@
+/* Design C, "Souk Party": a purple dotted stage, Damo hunting with a magnifier, loud buttons. */
 :host {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  max-width: 420px;
-  margin: 24px auto 0;
-  padding: 24px 20px;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px max(24px, env(safe-area-inset-bottom));
+  background-color: var(--grape);
+  background-image: radial-gradient(rgba(27, 27, 27, 0.18) 2px, transparent 2.5px);
+  background-size: 18px 18px;
   text-align: center;
+}
+
+.stage {
+  position: relative;
+  width: 190px;
+  height: 170px;
+}
+
+.stage app-damo {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  animation: hunt 1.6s ease-in-out infinite alternate;
+}
+
+.bubble {
+  position: absolute;
+  right: 0;
+  top: 0;
+  padding: 6px 12px;
+  border: var(--outline);
+  border-radius: 16px 16px 16px 4px;
+  background: #ffffff;
+  font-family: var(--font-title);
+  font-size: 1.1rem;
+  transform: rotate(8deg);
 }
 
 .title {
   margin: 0;
-  font-size: 1.6rem;
-  color: var(--color-accent);
+  font-family: var(--font-title);
+  font-size: 2.6rem;
+  line-height: 1;
+  color: var(--sun);
+  text-shadow: 4px 4px 0 var(--ink);
+  text-transform: uppercase;
+  transform: rotate(-3deg);
 }
 
-.detail {
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.pill {
   margin: 0;
-  color: var(--color-text-muted);
+  padding: 6px 14px;
+  border: var(--outline);
+  border-radius: 999px;
+  background: #ffffff;
+  font-weight: 900;
+  font-size: 0.9rem;
+}
+
+.pill.wide {
+  max-width: 340px;
+  border-radius: 18px;
 }
 
 .buttons {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  align-self: stretch;
-  margin-top: 16px;
+  gap: 12px;
+  width: min(100%, 380px);
+  margin-top: 12px;
 }
 
-button {
-  height: 50px;
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
-  font: inherit;
-  font-weight: 700;
+.buttons button {
+  height: 58px;
+  border: var(--outline);
+  border-radius: 20px;
+  background: #ffffff;
+  box-shadow: 0 6px 0 var(--ink);
+  color: var(--ink);
+  font-family: var(--font-title);
+  font-size: 1.25rem;
+  text-transform: uppercase;
   cursor: pointer;
 }
 
-button.primary {
-  background: var(--color-accent);
-  border-color: var(--color-accent);
-  color: var(--color-accent-contrast);
+.buttons button.primary {
+  background: var(--sun);
+}
+
+.buttons button:active {
+  transform: translateY(4px);
+  box-shadow: 0 2px 0 var(--ink);
+}
+
+@keyframes hunt {
+  from {
+    transform: translateX(-8px) rotate(-6deg);
+  }
+  to {
+    transform: translateX(8px) rotate(6deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stage app-damo {
+    animation: none;
+  }
 }

@@ -34,13 +34,13 @@ describe('Scoreboard', () => {
   });
 
   it('lights up the player to move, in red for their last 10 seconds', async () => {
-    const tab = () => el().querySelectorAll('.tab')[0];
+    const tab = () => el().querySelectorAll('.card')[0];
     expect(tab().classList).toContain('active');
     expect(tab().classList).not.toContain('low');
     fixture.componentRef.setInput('clock', { side: LIGHT, leftMs: 9_000 });
     await fixture.whenStable();
     expect(tab().classList).toContain('low');
-    expect(el().querySelectorAll('.tab')[1].classList).not.toContain('active');
+    expect(el().querySelectorAll('.card')[1].classList).not.toContain('active');
   });
 
   it("mirrors the right-hand player's stacks, so their \"+N\" faces the middle, not the screen's edge", () => {

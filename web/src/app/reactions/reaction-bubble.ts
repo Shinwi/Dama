@@ -15,8 +15,9 @@ import { ReactionFace } from './reaction-face';
     @if (shown(); as r) {
       <p class="bubble" [class.right]="align() === 'right'" [attr.data-from]="r.from" data-testid="reaction-bubble" aria-live="polite">
         @if (r.face) {
+          <span class="who">{{ r.from }}</span>
           <app-reaction-face class="face" [face]="r.id" [size]="faceSize()"></app-reaction-face>
-          <span class="visually-hidden">{{ r.from }}: {{ r.label }}</span>
+          <span class="visually-hidden">{{ r.label }}</span>
         } @else {
           <span class="who">{{ r.from }}:</span> {{ r.label }}
         }
@@ -39,13 +40,17 @@ import { ReactionFace } from './reaction-face';
       display: flex;
       align-items: center;
       gap: 6px;
-      padding: 7px 12px;
+      padding: 6px 12px;
       border-radius: 4px 16px 16px 16px;
-      background: var(--color-surface);
-      border: 1px solid var(--color-border);
-      box-shadow: 0 6px 16px rgba(40, 30, 10, 0.14);
-      font-weight: 700;
-      font-size: 0.92rem;
+      background: #ffffff;
+      border: 3px solid #1b1b1b;
+      box-shadow: 3px 3px 0 #1b1b1b;
+      font-family: 'Lilita One', sans-serif;
+      font-weight: 400;
+      font-size: 1.05rem;
+      text-transform: uppercase;
+      --face-fill: #ffe680;
+      --face-stroke: 2.2;
       white-space: nowrap;
       animation: pop 180ms ease-out;
     }
@@ -62,7 +67,7 @@ import { ReactionFace } from './reaction-face';
     }
 
     .face {
-      color: var(--color-accent);
+      color: #1b1b1b;
     }
 
     @keyframes pop {
