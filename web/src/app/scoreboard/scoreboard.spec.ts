@@ -76,6 +76,7 @@ describe('CapturedStacks', () => {
 
 describe('CapturedStacks, with room for only so many stacks', () => {
   async function stacks(count: number, maxStacks: number | null) {
+    TestBed.resetTestingModule();
     TestBed.configureTestingModule({ imports: [CapturedStacks], providers: [provideZonelessChangeDetection()] });
     const fixture = TestBed.createComponent(CapturedStacks);
     fixture.componentRef.setInput('color', 'light');
@@ -83,14 +84,18 @@ describe('CapturedStacks, with room for only so many stacks', () => {
     fixture.componentRef.setInput('maxStacks', maxStacks);
     await fixture.whenStable();
     const el = fixture.nativeElement as HTMLElement;
-    return { sizes: [...el.querySelectorAll('.stack')].map((s) => s.querySelectorAll('.chip').length), plus: el.querySelectorAll('.more').length };
+    return {
+      sizes: [...el.querySelectorAll('.stack')].map((s) => s.querySelectorAll('.chip').length),
+      more: el.querySelector('.stack:last-child .more')?.textContent?.trim() ?? null,
+    };
   }
 
   it('shows them all while they fit', async () => {
-    expect(await stacks(12, 3)).toEqual({ sizes: [4, 4, 4], plus: 0 });
+    expect(await stacks(12, 3)).toEqual({ sizes: [4, 4, 4], more: null });
   });
 
-  it('puts a "+" on the last stack when there are more', async () => {
-    expect(await stacks(13, 3)).toEqual({ sizes: [4, 4, 4], plus: 1 });
+  it('puts "+N" on the last stack when there are more', async () => {
+    expect(await stacks(13, 3)).toEqual({ sizes: [4, 4, 4], more: '+1' });
+    expect(await stacks(19, 3)).toEqual({ sizes: [4, 4, 4], more: '+7' });
   });
 });

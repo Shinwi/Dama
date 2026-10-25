@@ -12,8 +12,8 @@ const STACK_HEIGHT = 4;
   template: `
     @for (stack of stacks(); track $index; let last = $last) {
       <span class="stack">
-        @if (last && more()) {
-          <span class="more" aria-hidden="true">+</span>
+        @if (last && more() > 0) {
+          <span class="more" aria-hidden="true">+{{ more() }}</span>
         }
         @for (piece of stack; track $index) {
           <span class="chip" [class.light]="color() === 'light'" [style.z-index]="10 - $index"></span>
@@ -50,18 +50,30 @@ const STACK_HEIGHT = 4;
       margin-bottom: 0;
     }
 
-    /* More pieces than the stacks shown can hold. */
-    .more {
-      font-size: calc(var(--chip-height, 11px) * 1.6);
-      font-weight: 800;
-      line-height: 0.8;
-      color: var(--color-text-muted);
+    .stack {
+      position: relative;
     }
 
-    .chip.light {
-      background: linear-gradient(180deg, var(--piece-white-shine) 0%, var(--piece-white-fill) 45%, #c9c5bb 100%);
-      border-color: var(--piece-white-edge);
-      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+    /* More pieces than the stacks shown can hold: a gold "+N" counter on the last stack's
+       top-right corner, so nothing moves. */
+    .more {
+      position: absolute;
+      top: -6px;
+      right: -11px;
+      z-index: 20;
+      height: 12px;
+      padding: 0 3px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      border: 1.5px solid #fff;
+      background: linear-gradient(180deg, #f7c548, var(--color-saffron));
+      color: #2b1d00;
+      font-size: 8.5px;
+      font-weight: 900;
+      line-height: 1;
+      letter-spacing: -0.02em;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,13 +82,13 @@ const STACK_HEIGHT = 4;
 export class CapturedStacks {
   readonly color = input.required<'light' | 'dark'>();
   readonly count = input.required<number>();
-  /** At most this many stacks; if there are more pieces than they hold, the last gets a "+". */
+  /** At most this many stacks; if there are more pieces than they hold, the last gets "+N". */
   readonly maxStacks = input<number | null>(null);
 
-  /** There are more pieces than the stacks shown. */
+  /** How many more pieces there are than the stacks shown hold (0 if they all show). */
   protected readonly more = computed(() => {
     const max = this.maxStacks();
-    return max !== null && this.count() > max * STACK_HEIGHT;
+    return max === null ? 0 : Math.max(0, this.count() - max * STACK_HEIGHT);
   });
 
   protected readonly stacks = computed(() => {
