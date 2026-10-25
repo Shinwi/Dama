@@ -148,6 +148,20 @@ export class App {
    */
   protected readonly statusIsTurn = computed(() => /^(Your move\.|Opponent's move\.|(White|Black) to move\.)$/.test(this.statusText()));
 
+  /** The latest problem the server reported, once both players are in (the room card shows it before). */
+  protected readonly onlineError = computed(() => {
+    const online = this.game.online();
+    return online?.opponentJoined ? online.error : null;
+  });
+
+  /** Which message the one line above the board shows: the most important one there is. */
+  protected readonly shownMessage = computed<'error' | 'timeout' | 'nfikh' | 'status' | null>(() => {
+    if (this.onlineError()) return 'error';
+    if (this.timeoutNote()) return 'timeout';
+    if (this.nfikhNote()) return 'nfikh';
+    return this.statusIsTurn() ? null : 'status';
+  });
+
   /** The scoreboard's two players: you on the left (White on the left in 1v1), then the other. */
   protected readonly scoreboardPlayers = computed<readonly [ScoreboardPlayer, ScoreboardPlayer]>(() => {
     const settings = this.perspective();

@@ -89,9 +89,21 @@
   color: #c0392b;
 }
 
-.timeout-note:empty,
-.nfikh-note:empty {
-  display: none;
+/* The line of messages above the board: a fixed height (two lines of text), so nothing
+   appearing or going there moves the board. */
+.messages {
+  height: 2.7em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  overflow: hidden;
+}
+
+.messages p {
+  font-size: inherit;
+  min-height: 0;
 }
 
 .online-error {

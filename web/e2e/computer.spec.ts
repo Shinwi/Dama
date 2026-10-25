@@ -34,3 +34,26 @@ test('playing Black makes the computer open', async ({ page }) => {
   await expect(page.locator('[data-testid="piece"][data-color="light"]')).toHaveCount(20);
   await expect(page.locator('[data-testid="piece"][data-color="dark"]')).toHaveCount(20);
 });
+
+test('the board stays put while messages come and go (the computer thinking, captures)', async ({ page }) => {
+  await startGame(page, { difficulty: 'Beginner' });
+  const board = page.locator('.board-wrap');
+  const top = async () => (await board.boundingBox())!.y;
+  const start = await top();
+  const seen = new Set<number>();
+  // Sample the board's position through a few moves, while "Computer is thinking…" shows and goes.
+  for (const [from, to] of [
+    ['b4', 'a5'],
+    ['d4', 'c5'],
+    ['f4', 'g5'],
+  ]) {
+    await page.locator(`button[data-square="${from}"]`).click();
+    await page.locator(`button[data-square="${to}"]`).click().catch(() => {}); // the computer may have blocked it
+    for (let i = 0; i < 10; i++) {
+      seen.add(Math.round(await top()));
+      await page.waitForTimeout(50);
+    }
+    await expect(page.getByTestId('status')).toHaveText('Your move.');
+  }
+  expect([...seen]).toEqual([Math.round(start)]);
+});

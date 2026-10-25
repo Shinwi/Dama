@@ -98,6 +98,10 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr);
   width: min(100%, 560px);
+  /* The same height whatever is in it (clocks or not, stacks growing), so the board below
+     never moves. */
+  height: 30px;
+  overflow: hidden;
   padding: 0 8px;
 }
 

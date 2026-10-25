@@ -25,35 +25,21 @@
           [moveTimeMs]="game.moveTimeMs()"
           [moveNumber]="moveNumber()"
         ></app-scoreboard>
-        <!-- Only for screen readers while it just says whose move it is: the scoreboard shows that. -->
-        <p class="status" [class.visually-hidden]="statusIsTurn()" data-testid="status" aria-live="polite">{{ statusText() }}</p>
+        <!--
+          One line of messages above the board, always the same height, so the board never moves
+          when one appears or goes. Only the most important one shows; the others stay in the page
+          for screen readers (and tests). The status line shows only when it says more than whose
+          move it is, which the scoreboard already shows.
+        -->
+        <div class="messages">
+          <p class="status" [class.visually-hidden]="shownMessage() !== 'status'" data-testid="status" aria-live="polite">{{ statusText() }}</p>
+          <p class="nfikh-note" [class.visually-hidden]="shownMessage() !== 'nfikh'" data-testid="nfikh-note" aria-live="polite">{{ nfikhNote() }}</p>
+          <p class="timeout-note" [class.visually-hidden]="shownMessage() !== 'timeout'" data-testid="timeout-note" aria-live="polite">{{ timeoutNote() }}</p>
+          @if (onlineError(); as error) {
+            <p class="online-error" role="alert" data-testid="online-error">{{ error }}</p>
+          }
+        </div>
         <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
-        <!-- Always in the page, so screen readers announce it when the text appears. -->
-        <p class="nfikh-note" data-testid="nfikh-note" aria-live="polite">{{ nfikhNote() }}</p>
-        <p class="timeout-note" data-testid="timeout-note" aria-live="polite">{{ timeoutNote() }}</p>
-        @if (game.online()?.opponentJoined && game.online()?.error; as error) {
-          <p class="online-error" role="alert" data-testid="online-error">{{ error }}</p>
-        }
-        @if (drawOfferToAnswer()) {
-          <app-online-prompt
-            data-testid="draw-offer"
-            text="Your opponent offers a draw."
-            yesLabel="Accept"
-            noLabel="Decline"
-            (yes)="answerDraw(true)"
-            (no)="answerDraw(false)"
-          ></app-online-prompt>
-        }
-        @if (canClaimWin()) {
-          <app-online-prompt
-            data-testid="claim-win"
-            text="Your opponent hasn't come back."
-            yesLabel="Claim win"
-            noLabel="Keep waiting"
-            (yes)="claimWin()"
-            (no)="keepWaiting()"
-          ></app-online-prompt>
-        }
 
         <div class="board-row">
           <app-captured-tray
@@ -98,6 +84,27 @@
             [count]="scoreboardPlayers()[1].captured"
           ></app-captured-tray>
         </div>
+
+        @if (drawOfferToAnswer()) {
+          <app-online-prompt
+            data-testid="draw-offer"
+            text="Your opponent offers a draw."
+            yesLabel="Accept"
+            noLabel="Decline"
+            (yes)="answerDraw(true)"
+            (no)="answerDraw(false)"
+          ></app-online-prompt>
+        }
+        @if (canClaimWin()) {
+          <app-online-prompt
+            data-testid="claim-win"
+            text="Your opponent hasn't come back."
+            yesLabel="Claim win"
+            noLabel="Keep waiting"
+            (yes)="claimWin()"
+            (no)="keepWaiting()"
+          ></app-online-prompt>
+        }
       </div>
 
       <aside class="sidebar">

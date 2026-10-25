@@ -37,7 +37,14 @@ Issue #45, branch `feature/move-timer-scoreboard`: move timer, scoreboard, room 
     share / copy code / leave). `online/invite.ts` holds the share code.
   - The room card shows only until both players are in. The status line is screen-reader-only
     while it just says whose move it is.
-- **Tests:** engine 52, component 156, server 49, Playwright 52 (including an online time-out
+- **After review:**
+  - The tray overlap is fixed: the wide-screen board-width rule was being overridden.
+  - The board-edge turn bar is removed: it felt laggy.
+  - The messages above the board (status, nfikh, time-out, server error) share one
+    fixed-height line, and only the most important one shows. The draw and claim-win prompts
+    moved below the board, and the scoreboard's tab row has a fixed height. The board never
+    moves up or down now; an e2e test checks it while the computer thinks.
+- **Tests:** engine 52, component 156, server 49, Playwright 54 (including an online time-out
   between two browsers and the fast-taps case). e2e sets a tiny timer through the saved
   settings (`moveTime`), as the home screen only offers 30 s and up.
 
