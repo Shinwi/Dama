@@ -18,9 +18,9 @@ describe('GameOverCard', () => {
     await fixture.whenStable();
   }
 
-  it('offline: New game', async () => {
+  it('offline: New game or Back to menu', async () => {
     await show(null);
-    expect(buttons()).toEqual(['New game']);
+    expect(buttons()).toEqual(['New game', 'Back to menu']);
   });
 
   it('online: Rematch or Back to menu', async () => {

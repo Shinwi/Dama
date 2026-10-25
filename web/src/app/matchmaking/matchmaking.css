@@ -1,37 +1,186 @@
+/* Design A, "Riad": rings spreading out from your piece while the server looks for a player. */
 :host {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  max-width: 420px;
-  margin: 24px auto 0;
-  padding: 24px 20px;
+  gap: 8px;
+  max-width: 460px;
+  margin: 0 auto;
   text-align: center;
+}
+
+.radar {
+  position: relative;
+  width: 260px;
+  height: 260px;
+  margin: 24px 0 20px;
+  display: grid;
+  place-items: center;
+}
+
+.ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+.r1 {
+  inset: 0;
+  animation: pulse 2.4s ease-out infinite;
+}
+
+.r2 {
+  inset: 38px;
+  border-color: color-mix(in srgb, var(--color-accent) 40%, transparent);
+}
+
+.r3 {
+  inset: 76px;
+  border-width: 2px;
+  border-color: color-mix(in srgb, var(--color-accent) 55%, transparent);
+}
+
+.blip {
+  position: absolute;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.b1 {
+  top: 6px;
+  left: calc(50% - 7px);
+  width: 14px;
+  height: 14px;
+  background: var(--color-saffron);
+}
+
+.b2 {
+  bottom: 44px;
+  right: 30px;
+  width: 10px;
+  height: 10px;
+  opacity: 0.6;
+}
+
+.b3 {
+  top: 66px;
+  left: 18px;
+  width: 8px;
+  height: 8px;
+  opacity: 0.4;
+}
+
+.idle .ring,
+.idle .blip {
+  animation: none;
+  opacity: 0.35;
+}
+
+.piece {
+  width: 92px;
+  height: 92px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at 38% 32%, var(--piece-white-shine), var(--piece-white-fill) 70%);
+  border: 2px solid var(--piece-white-edge);
+  box-shadow: 0 10px 24px rgba(40, 30, 10, 0.2), inset 0 -4px 0 rgba(0, 0, 0, 0.12);
+}
+
+.piece span {
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  border: 2px solid var(--piece-white-edge);
 }
 
 .title {
   margin: 0;
-  font-size: 1.6rem;
+  font-size: 1.9rem;
   color: var(--color-accent);
 }
 
 .detail {
   margin: 0;
   color: var(--color-text-muted);
+  font-size: 0.95rem;
 }
 
-.buttons {
+.chips {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: var(--color-surface);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.chip svg,
+.tip-icon svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chip svg {
+  color: var(--color-accent);
+}
+
+.bottom {
   display: flex;
   flex-direction: column;
   gap: 10px;
   align-self: stretch;
-  margin-top: 16px;
+  margin-top: 32px;
+}
+
+.tip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 16px;
+  background: var(--color-surface);
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  text-align: left;
+}
+
+.tip-icon {
+  width: 40px;
+  height: 40px;
+  flex: none;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: var(--color-saffron-soft);
+  color: #8a5a0a;
+}
+
+.tip-icon svg {
+  width: 22px;
+  height: 22px;
 }
 
 button {
-  height: 50px;
-  border-radius: var(--radius-md);
+  height: 52px;
   border: 1px solid var(--color-border);
+  border-radius: 18px;
   background: var(--color-surface);
   color: var(--color-text);
   font: inherit;
@@ -40,7 +189,25 @@ button {
 }
 
 button.primary {
-  background: var(--color-accent);
   border-color: var(--color-accent);
+  background: var(--color-accent);
   color: var(--color-accent-contrast);
+}
+
+@keyframes pulse {
+  0% {
+    transform: scale(0.85);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1.05);
+    opacity: 0.2;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .r1 {
+    animation: none;
+  }
 }

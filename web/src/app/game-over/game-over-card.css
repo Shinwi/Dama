@@ -1,108 +1,82 @@
+/* Design A, "Riad": a sheet that slides up from the bottom on a phone; a card over the board
+   on wider screens. */
 .game-over {
-  position: absolute;
-  /* Over the board only, not the coordinate strips to its left and below it. */
-  inset: 0 0 var(--coord-gutter) var(--coord-gutter);
+  position: fixed;
+  inset: 0;
+  z-index: 30;
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: var(--radius-md);
-  animation: game-over-in 220ms ease;
+  background: rgba(29, 27, 46, 0.55);
+  animation: fade-in 200ms ease;
 }
 
 .game-over-card {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding: 28px 36px;
+  gap: 12px;
+  width: 100%;
+  max-width: 520px;
+  box-sizing: border-box;
+  padding: 14px 20px max(24px, env(safe-area-inset-bottom));
   background: var(--color-surface);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  border-radius: 28px 28px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.25);
   text-align: center;
+  animation: sheet-up 260ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.grabber {
+  width: 44px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--color-border);
+}
+
+.badge {
+  width: 72px;
+  height: 72px;
+  margin-top: 6px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: var(--color-surface-sunk);
+  color: var(--color-text-muted);
+}
+
+.win .badge {
+  background: var(--color-saffron-soft);
+  border: 2px solid var(--color-saffron);
+  color: var(--color-saffron);
+}
+
+.badge svg {
+  width: 38px;
+  height: 38px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .game-over-title {
   margin: 0;
   font-family: var(--font-title);
-  font-size: clamp(1.6rem, 6vw, 2.1rem);
+  font-size: 2.2rem;
+  line-height: 1;
   color: var(--color-accent);
 }
 
-.game-over.win .game-over-title {
-  color: var(--color-saffron);
-}
-
-.game-over.loss .game-over-title {
-  color: var(--color-text-muted);
+.loss .game-over-title {
+  color: var(--color-text);
 }
 
 .game-over-subtitle {
-  margin: 0 0 10px;
+  margin: 0;
   color: var(--color-text-muted);
   font-size: 0.95rem;
-}
-
-.game-over-card button {
-  border: 1px solid var(--color-accent);
-  background: var(--color-accent);
-  color: var(--color-accent-contrast);
-  padding: 10px 20px;
-  border-radius: var(--radius-md);
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-@keyframes game-over-in {
-  from {
-    opacity: 0;
-    transform: scale(0.96);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .game-over {
-    animation: none;
-  }
-}
-
-.game-over-card {
-  /* The same width whatever the text, so the buttons sit side by side in every state. */
-  width: min(92%, 360px);
-  padding: 24px 20px;
-}
-
-.buttons {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 10px;
-}
-
-.game-over-card button.secondary {
-  background: var(--color-surface);
-  color: var(--color-text);
-  border-color: var(--color-border);
-}
-
-.request {
-  margin: 2px 0 8px;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--color-saffron) 18%, transparent);
-  font-weight: 600;
-  font-size: 0.92rem;
-}
-
-.request.waiting {
-  background: none;
-  color: var(--color-text-muted);
-  font-weight: normal;
 }
 
 .stats {
@@ -110,13 +84,16 @@
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
   width: 100%;
-  margin: 4px 0;
+  margin: 4px 0 0;
 }
 
 .stats div {
   display: flex;
   flex-direction: column-reverse;
   align-items: center;
+  padding: 10px 4px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
 }
 
 .stats dt {
@@ -127,5 +104,114 @@
 .stats dd {
   margin: 0;
   font-family: var(--font-title);
-  font-size: 1.3rem;
+  font-size: 1.45rem;
+}
+
+.request {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--color-accent-soft);
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.request .dot {
+  width: 10px;
+  height: 10px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.request .aside {
+  margin-left: auto;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.replies {
+  justify-content: center;
+}
+
+.buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.buttons button {
+  height: 54px;
+  border: none;
+  border-radius: 18px;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-title);
+  font-size: 1.2rem;
+  cursor: pointer;
+}
+
+.buttons button.secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-family: var(--font-body);
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.buttons button.link {
+  height: 46px;
+  background: none;
+  color: var(--color-text-muted);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  font-weight: 600;
+}
+
+@media (min-width: 680px) {
+  /* Wider screens: a card over the board. */
+  .game-over {
+    position: absolute;
+    inset: 0 0 var(--coord-gutter) var(--coord-gutter);
+    align-items: center;
+    border-radius: var(--radius-md);
+  }
+
+  .game-over-card {
+    width: min(92%, 400px);
+    padding: 20px 24px 18px;
+    border-radius: 24px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  }
+
+  .grabber {
+    display: none;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sheet-up {
+  from {
+    transform: translateY(40%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .game-over,
+  .game-over-card {
+    animation: none;
+  }
 }

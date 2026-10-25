@@ -358,6 +358,8 @@ export class App {
 
   /** The reactions this design offers during a game. */
   protected readonly reactionChoices: readonly ReactionId[] = ['happy', 'wow', 'oops', 'good-move', 'hurry'];
+  /** The quick replies on the game-over screen. */
+  protected readonly gameOverReactions: readonly ReactionId[] = ['good-game', 'well-played', 'happy'];
 
   /** Who sent the reaction on screen, and which side of the scoreboard it comes from. */
   protected readonly reactionFrom = computed(() => {
