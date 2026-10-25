@@ -17,7 +17,7 @@
       <span class="middle">Move {{ moveNumber() }}<br />captured</span>
     }
     <div class="tab" [class.right]="right" [class.active]="tab.active" [class.low]="tab.low">
-      <app-captured-stacks class="stacks" [color]="tab.capturedColor" [count]="tab.captured"></app-captured-stacks>
+      <app-captured-stacks class="stacks" [color]="tab.capturedColor" [count]="tab.captured" [maxStacks]="3" [mirrored]="right"></app-captured-stacks>
       <span class="turn">{{ tab.active ? (tab.low ? 'Hurry up' : tab.turnLabel) : '' }}</span>
       @if (tab.clock !== null) {
         <span class="clock" [attr.data-testid]="'clock-' + tab.color" [attr.aria-label]="tab.name + ' clock ' + tab.clock">{{ tab.clock }}</span>

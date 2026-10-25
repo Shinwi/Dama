@@ -109,3 +109,38 @@ test('the move timer skips a turn that runs out (1v1, kept by the browser)', asy
   await expect(page.getByTestId('timeout-note')).toHaveText('White ran out of time: Black to move. Time-outs in a row: 1 of 3.');
   await expect(page.getByTestId('status')).toHaveText('Black to move.');
 });
+
+test('the clocks stay put as captured pieces pile up beside them', async ({ page }) => {
+  await startGame(page, { mode: '1v1' });
+  const clock = page.getByTestId('clock-light');
+  const before = (await clock.boundingBox())!;
+  // b4-c5, e7-d6, then White takes d6 (c5xe7): one captured piece beside White's clock.
+  await tap(page, 'b4', 'c5');
+  await tap(page, 'e7', 'd6');
+  await tap(page, 'c5', 'e7');
+  await expect(page.getByTestId('score-light')).toHaveText('1');
+  const after = (await clock.boundingBox())!;
+  expect(Math.round(after.x)).toBe(Math.round(before.x));
+  expect(Math.round(after.y)).toBe(Math.round(before.y));
+});
+
+test('captured pieces show in the colour they were: White took black ones, Black white ones', async ({ page }) => {
+  await startGame(page, { mode: '1v1' });
+  // b4-c5, e7-d6, White takes d6 (c5xe7), then Black takes e7 (f8xd6).
+  await tap(page, 'b4', 'c5');
+  await tap(page, 'e7', 'd6');
+  await tap(page, 'c5', 'e7');
+  await tap(page, 'f8', 'd6');
+  await expect(page.getByTestId('score-dark')).toHaveText('1');
+  // The stacks show in the scoreboard on a phone, beside the board on a wide screen.
+  const chip = (label: string) => page.locator(`app-captured-stacks[aria-label="${label}"]:visible .chip`).first();
+  const lightness = async (label: string) =>
+    chip(label).evaluate((el) => {
+      // The middle of the chip's gradient, as 0 (black) … 255 (white).
+      const colours = [...getComputedStyle(el).backgroundImage.matchAll(/rgba?\((\d+), (\d+), (\d+)/g)];
+      const [, r, g, b] = colours[1].map(Number);
+      return (r + g + b) / 3;
+    });
+  expect(await lightness('1 black piece captured')).toBeLessThan(80);
+  expect(await lightness('1 white piece captured')).toBeGreaterThan(180);
+});

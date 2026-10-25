@@ -43,6 +43,12 @@ describe('Scoreboard', () => {
     expect(el().querySelectorAll('.tab')[1].classList).not.toContain('active');
   });
 
+  it("mirrors the right-hand player's stacks, so their \"+N\" faces the middle, not the screen's edge", () => {
+    const stacks = el().querySelectorAll('app-captured-stacks');
+    expect(stacks[0].classList).not.toContain('mirrored');
+    expect(stacks[1].classList).toContain('mirrored');
+  });
+
   it('has no clocks without a move timer', async () => {
     fixture.componentRef.setInput('moveTimeMs', 0);
     fixture.componentRef.setInput('clock', null);
@@ -71,5 +77,31 @@ describe('CapturedStacks', () => {
     const stacks = [...(fixture.nativeElement as HTMLElement).querySelectorAll('.stack')].map((s) => s.children.length);
     expect(stacks).toEqual([4, 3]);
     expect((fixture.nativeElement as HTMLElement).getAttribute('aria-label')).toBe('7 black pieces captured');
+  });
+});
+
+describe('CapturedStacks, with room for only so many stacks', () => {
+  async function stacks(count: number, maxStacks: number | null) {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({ imports: [CapturedStacks], providers: [provideZonelessChangeDetection()] });
+    const fixture = TestBed.createComponent(CapturedStacks);
+    fixture.componentRef.setInput('color', 'light');
+    fixture.componentRef.setInput('count', count);
+    fixture.componentRef.setInput('maxStacks', maxStacks);
+    await fixture.whenStable();
+    const el = fixture.nativeElement as HTMLElement;
+    return {
+      sizes: [...el.querySelectorAll('.stack')].map((s) => s.querySelectorAll('.chip').length),
+      more: el.querySelector('.stack:last-child .more')?.textContent?.trim() ?? null,
+    };
+  }
+
+  it('shows them all while they fit', async () => {
+    expect(await stacks(12, 3)).toEqual({ sizes: [4, 4, 4], more: null });
+  });
+
+  it('puts "+N" on the last stack when there are more', async () => {
+    expect(await stacks(13, 3)).toEqual({ sizes: [4, 4, 4], more: '+1' });
+    expect(await stacks(19, 3)).toEqual({ sizes: [4, 4, 4], more: '+7' });
   });
 });
