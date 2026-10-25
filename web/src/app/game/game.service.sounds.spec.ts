@@ -22,6 +22,7 @@ function fakeAudio() {
     promotion: record('promotion'),
     win: record('win'),
     loss: record('loss'),
+    nope: record('nope'),
   };
   return audio;
 }

@@ -227,3 +227,34 @@ describe('Board nfikh', () => {
     expect(fixture.nativeElement.querySelector('[data-square="c3"][data-testid="piece"]')).toBeNull();
   });
 });
+
+describe('Board refused tap', () => {
+  it('flashes the tapped square and shakes the piece, each time, with no CSS classes needed', async () => {
+    await TestBed.configureTestingModule({
+      imports: [Board],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(Board);
+    fixture.componentRef.setInput('board', boardFrom({ light: ['b4'] }));
+    await fixture.whenStable();
+
+    // jsdom has no Web Animations: record the calls instead.
+    const played: string[] = [];
+    const original = HTMLElement.prototype.animate;
+    HTMLElement.prototype.animate = function (this: HTMLElement) {
+      played.push(this.getAttribute('data-square') ?? this.className);
+      return {} as Animation;
+    };
+    try {
+      fixture.componentRef.setInput('rejectedTap', { square: parseSquare('e5'), shake: parseSquare('b4'), id: 1 });
+      await fixture.whenStable();
+      expect(played).toEqual(['e5', 'piece-disc']);
+
+      fixture.componentRef.setInput('rejectedTap', { square: parseSquare('e5'), shake: null, id: 2 });
+      await fixture.whenStable();
+      expect(played).toEqual(['e5', 'piece-disc', 'e5']); // again, same square
+    } finally {
+      HTMLElement.prototype.animate = original;
+    }
+  });
+});

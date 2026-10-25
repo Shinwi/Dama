@@ -19,16 +19,31 @@ test('1v1 turns alternate between White and Black', async ({ page }) => {
   await expect(page.getByTestId('status')).toContainText('White to move.');
 });
 
-test('tapping an illegal target does nothing', async ({ page }) => {
+test('an illegal tap says why, keeps the piece selected, and moves nothing', async ({ page }) => {
   await startGame(page, { mode: '1v1' });
 
   await tap(page, 'b4');
   // e5 is an empty middle-row square, nowhere near b4 and not a legal destination.
   await tap(page, 'e5');
 
+  await expect(page.getByTestId('tap-feedback')).toHaveText("That piece can't go there.");
+  await expect(page.locator('button[data-square="b4"]')).toHaveClass(/selected/);
   await expect(page.locator('[data-testid="piece"][data-square="b4"][data-color="light"]')).toBeVisible();
   await expect(page.locator('[data-testid="piece"][data-square="e5"]')).toHaveCount(0);
   await expect(page.locator('[data-testid="piece"][data-color="light"]')).toHaveCount(20);
+
+  // Still holding b4: the right square plays it. The message goes away by itself.
+  await tap(page, 'a5');
+  await expect(page.locator('[data-testid="piece"][data-square="a5"][data-color="light"]')).toBeVisible();
+  await expect(page.getByTestId('tap-feedback')).toHaveText('', { timeout: 3000 });
+});
+
+test("tapping the other side's piece, or a blocked one, says so", async ({ page }) => {
+  await startGame(page, { mode: '1v1' });
+  await tap(page, 'c7'); // Black's piece, on White's turn
+  await expect(page.getByTestId('tap-feedback')).toHaveText("You can't take that piece.");
+  await tap(page, 'a1'); // White's own, boxed in at the back
+  await expect(page.getByTestId('tap-feedback')).toHaveText("That piece can't move.");
 });
 
 test('nfikh: a piece that skipped a capture can be taken, then the taker moves', async ({ page }) => {

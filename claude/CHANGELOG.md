@@ -3,6 +3,25 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-25
+
+Issue #31, branch `fix/illegal-tap-feedback`: a refused tap used to do nothing at all.
+
+- `GameController.tapSquare` returns `'illegal'` with a `rejection` reason, describing only
+  what's on the tapped square, never what to do instead (no hints): `empty`, `unreachable`,
+  `opponent` (includes "can't be taken by nfikh"), `stuck` or `route`.
+  - A refused tap now **keeps the selection** (before, it dropped the piece).
+  - Picking a piece up, putting it down and switching pieces aren't refusals.
+- `GameService.tapFeedback` turns that into a message, a soft "nope" sound (new
+  `playNope`), and a shake of the selected (or tapped) piece. It also covers taps during the
+  computer's or the opponent's turn ("Wait for …"). The message clears after 1.8 s.
+- Board: the square flashes a red ring and the piece shakes, played with the Web Animations
+  API so each refusal starts over on the same square. That also kept board.css under its 4 kB
+  budget. No shake with prefers-reduced-motion.
+- `app-tap-toast`: the message over the top of the board (no layout shift), as an aria-live
+  region.
+- Also saved the user's feature ideas as a Backlog in PLAN.md.
+
 ## 2026-10-24 (night)
 
 Issue #38, branch `feature/online-server-metrics`: usage metrics for the online server.

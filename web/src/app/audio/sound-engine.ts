@@ -59,6 +59,14 @@ export class SoundEngine {
     this.tone(ctx, 720, 0.04, 'sine', 0.18, ctx.currentTime);
   }
 
+  /** A refused tap: two quick, soft, falling notes. */
+  playNope(): void {
+    const ctx = this.ensureContext();
+    const start = ctx.currentTime;
+    this.tone(ctx, 233.08, 0.07, 'sine', 0.16, start);
+    this.tone(ctx, 196.0, 0.1, 'sine', 0.14, start + 0.075);
+  }
+
   playMoveTap(): void {
     const ctx = this.ensureContext();
     this.woodTap(ctx, ctx.currentTime, 0.5);

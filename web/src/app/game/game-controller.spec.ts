@@ -33,18 +33,20 @@ describe('GameController multi-jump tap sequencing', () => {
     expect(controller.selectionInfo.selected).toBeNull();
   });
 
-  it('a tap on a square the piece cannot end on plays nothing', () => {
+  it('a tap on a square the piece cannot end on is refused, and the piece stays selected', () => {
     const controller = controllerAt(chain);
 
     controller.tapSquare(parseSquare('c3'));
     // e5 is only a stop on the way, not where the move ends.
-    expect(controller.tapSquare(parseSquare('e5'))).toBe('none');
+    expect(controller.tapSquare(parseSquare('e5'))).toBe('illegal');
+    expect(controller.rejection).toEqual({ square: parseSquare('e5'), reason: 'unreachable' });
     expect(controller.state.board[parseSquare('d4')]).toBe(-1); // nothing captured
     expect(controller.state.toMove).toBe(LIGHT);
 
-    // The piece can still be picked up and played.
-    controller.tapSquare(parseSquare('c3'));
+    // Still holding c3: the right square plays the move.
+    expect(controller.selectionInfo.selected).toBe(parseSquare('c3'));
     expect(controller.tapSquare(parseSquare('g7'))).toBe('move');
+    expect(controller.rejection).toBeNull();
   });
 
   it('a second piece that could also capture cannot move in the same turn', () => {
@@ -59,7 +61,8 @@ describe('GameController multi-jump tap sequencing', () => {
     // c3 still has an unplayed capture, but it's not Light's turn anymore — tapping it
     // must not select it or let it move: one piece moves per turn. (Light did capture, so
     // c3 isn't open to nfikh either.)
-    expect(controller.tapSquare(parseSquare('c3'))).toBe('none');
+    expect(controller.tapSquare(parseSquare('c3'))).toBe('illegal');
+    expect(controller.rejection?.reason).toBe('opponent'); // a Light piece, on Dark's turn
     expect(controller.selectionInfo.selected).toBeNull();
     expect(controller.state.board[parseSquare('c3')]).toBe(1); // untouched
   });
@@ -71,7 +74,7 @@ describe('GameController multi-jump tap sequencing', () => {
     // chain is available. g1 can still make a plain move (captures are optional).
     controller.tapSquare(parseSquare('g1'));
     expect(controller.selectionInfo.candidateMoves.map(moveNotation)).toEqual(['g1-f2']);
-    expect(controller.tapSquare(parseSquare('i3'))).toBe('none');
+    expect(controller.tapSquare(parseSquare('i3'))).toBe('illegal');
     expect(controller.state.board[parseSquare('h2')]).toBe(-1);
   });
 
@@ -130,6 +133,40 @@ describe('GameController multi-jump tap sequencing', () => {
   });
 });
 
+describe('GameController refused taps', () => {
+  // Light a9 is stuck: its only square forward, b10, holds a Dark piece it can't jump.
+  const position = { light: ['c3', 'a9'], dark: ['b10', 'j10'] };
+
+  it('says why, from what is on the tapped square only', () => {
+    const controller = controllerAt(position);
+    expect(controller.tapSquare(parseSquare('e5'))).toBe('illegal');
+    expect(controller.rejection).toEqual({ square: parseSquare('e5'), reason: 'empty' });
+    expect(controller.tapSquare(parseSquare('j10'))).toBe('illegal');
+    expect(controller.rejection?.reason).toBe('opponent');
+    expect(controller.tapSquare(parseSquare('a9'))).toBe('illegal');
+    expect(controller.rejection?.reason).toBe('stuck');
+  });
+
+  it('picking a piece up, putting it down, or switching pieces is not refused', () => {
+    const controller = controllerAt({ light: ['c3', 'e3'], dark: ['j10'] });
+    expect(controller.tapSquare(parseSquare('c3'))).toBe('none');
+    expect(controller.tapSquare(parseSquare('e3'))).toBe('none'); // switched
+    expect(controller.selectionInfo.selected).toBe(parseSquare('e3'));
+    expect(controller.tapSquare(parseSquare('e3'))).toBe('none'); // put down
+    expect(controller.selectionInfo.selected).toBeNull();
+    expect(controller.rejection).toBeNull();
+  });
+
+  it('while choosing the way, a square off every route is refused', () => {
+    const controller = controllerAt({ light: ['c1'], dark: ['d2', 'd4', 'b2', 'b4'] });
+    controller.tapSquare(parseSquare('c1'));
+    controller.tapSquare(parseSquare('c5')); // two ways there: choose
+    expect(controller.tapSquare(parseSquare('j10'))).toBe('illegal');
+    expect(controller.rejection?.reason).toBe('route');
+    expect(controller.selectionInfo.target).toBe(parseSquare('c5')); // still choosing
+  });
+});
+
 describe('GameController nfikh', () => {
   // Light c3 can take d4 but plays a1-b2 instead: Dark may then take c3.
   function afterMissedCapture() {
@@ -164,7 +201,8 @@ describe('GameController nfikh', () => {
     controller.tapSquare(parseSquare('b2'));
 
     expect(controller.tapSquare(parseSquare('c3'))).toBe('nfikh');
-    expect(controller.tapSquare(parseSquare('g3'))).toBe('none');
+    expect(controller.tapSquare(parseSquare('g3'))).toBe('illegal');
+    expect(controller.rejection?.reason).toBe('opponent'); // only one piece per turn
     expect(controller.state.board[parseSquare('g3')]).toBe(1);
   });
 
@@ -178,7 +216,8 @@ describe('GameController nfikh', () => {
 
   it('a piece that did not miss a capture cannot be taken', () => {
     const controller = afterMissedCapture();
-    expect(controller.tapSquare(parseSquare('b2'))).toBe('none');
+    expect(controller.tapSquare(parseSquare('b2'))).toBe('illegal');
+    expect(controller.rejection?.reason).toBe('opponent');
     expect(controller.state.board[parseSquare('b2')]).toBe(1);
   });
 });

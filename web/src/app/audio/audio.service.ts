@@ -32,6 +32,11 @@ export class AudioService {
     if (this.soundOn) this.engine?.playClick();
   }
 
+  /** A refused tap: short and soft, so it's no fuss to hear a few times. */
+  nope(): void {
+    if (this.soundOn) this.engine?.playNope();
+  }
+
   moveTap(): void {
     if (this.soundOn) this.engine?.playMoveTap();
   }

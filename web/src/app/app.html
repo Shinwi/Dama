@@ -37,9 +37,11 @@
             [captureRings]="captureRings()"
             [lastMove]="game.lastMove()"
             [updateKind]="game.updateKind()"
+            [rejectedTap]="game.tapFeedback()"
             (squareTap)="onSquareTap($event)"
             (settled)="game.boardSettled()"
           ></app-board>
+          <app-tap-toast [message]="game.tapFeedback()?.message ?? null"></app-tap-toast>
 
           @if (gameOver(); as result) {
             <div

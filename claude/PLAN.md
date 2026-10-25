@@ -88,6 +88,37 @@ Phase 1 is functionally complete, animated, responsive, deployed, and all tests 
 22. Known rough edge, seen only at test-bot speed: taps queued during a move's animation that
     add up to more than one full move are dropped after the first.
 
+## Backlog (saved 2026-10-25, the user's pick of ideas for later)
+
+In rough order of value. The polish round (#28: #29–#34) is being worked through first.
+
+**Quick wins**
+- Faster server shutdown: close idle HTTP connections on SIGINT. It currently waits 10 s for
+  Fly's SIGTERM, which lengthens "Reconnecting…" on every deploy.
+- Deploy guard: deploy-server.yml checks /stats.json and waits or warns while games are being
+  played.
+- Bump actions/checkout to v5 in all workflows (Node 20 deprecation warning in the logs).
+- Uptime monitor on /health (the user's step, e.g. UptimeRobot).
+
+**Online play**
+1. Rematch (same room, colours swapped) and Resign.
+2. Games survive server restarts: persist rooms (SQLite on a Fly volume, or Redis).
+3. #32 (dropped taps) and #30 (move list), from the polish round. They matter more online.
+- Quick reactions / preset phrases; an "opponent is choosing…" indicator; an optional move
+  clock; spectators by room code.
+- Random opponent / matchmaking (roadmap phase 4).
+
+**Testing and infrastructure**
+- A staging Fly app for PR previews, so a preview tests website + server together (the #37
+  preview confusion).
+- A load test (k6 or Artillery with Socket.IO) to find the real capacity of one machine. The
+  estimate is a few hundred games easily, 1,000–2,000 at the edge (256 MB, shared CPU).
+
+**Later**
+- Accounts, game history, Elo (phase 5, needs a database). Consider AWS (RDS) then; Fly is
+  fine until then, and the Docker image makes moving cheap.
+- Spring Boot backend track (S), tournaments (phase 6).
+
 ## Open items / decisions to revisit
 
 - **Angular version**: on Angular 20, not 21, because of the Node version on this machine
