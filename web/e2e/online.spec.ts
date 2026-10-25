@@ -299,3 +299,12 @@ test('the move timer: the server skips a turn that runs out, on both screens', a
   await expect(white.getByTestId('timeout-note')).toBeEmpty();
   await expect(white.getByTestId('move-list')).toContainText('c7-b6');
 });
+
+test('"Play someone" says it is coming soon until the server can match players', async ({ browser }) => {
+  const page = await player(browser);
+  await page.getByRole('group', { name: 'Opponent' }).getByRole('button', { name: 'Play someone' }).click();
+  await page.getByRole('button', { name: 'Find a player', exact: true }).click();
+  await expect(page.getByTestId('match-unavailable')).toBeVisible();
+  await page.getByRole('button', { name: 'Play the computer' }).click();
+  await expect(page.getByTestId('status')).toHaveText('Your move.');
+});

@@ -4,8 +4,12 @@ import {
   ActionReply,
   ClientToServerEvents,
   DEFAULT_SERVER_PORT,
+  FindMatchReply,
+  HealthReply,
   JoinedReply,
   OnlineAction,
+  ReactionEvent,
+  ReactionId,
   RoomView,
   ServerToClientEvents,
 } from '../../protocol/online';
@@ -55,17 +59,47 @@ export async function checkOnlineServer(
   timeoutMs = SERVER_CHECK_TIMEOUT_MS,
   fetchFn: typeof fetch = (...args) => fetch(...args),
 ): Promise<boolean> {
+  return (await onlineServerInfo(url, timeoutMs, fetchFn)) !== null;
+}
+
+/** What the server can do beyond rooms (HealthReply.features). */
+export type ServerFeature = NonNullable<HealthReply['features']>[number];
+
+/**
+ * Like checkOnlineServer, and also says what the server can do: null if it isn't there,
+ * else its features (none for a server from before they were listed).
+ */
+export async function onlineServerInfo(
+  url: string,
+  timeoutMs = SERVER_CHECK_TIMEOUT_MS,
+  fetchFn: typeof fetch = (...args) => fetch(...args),
+): Promise<{ features: ServerFeature[] } | null> {
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), timeoutMs);
   try {
     const response = await fetchFn(`${url.replace(/\/+$/, '')}/health`, { signal: abort.signal, cache: 'no-store' });
-    if (!response.ok) return false;
-    const body = (await response.json()) as { ok?: unknown } | null;
-    return body?.ok === true;
+    if (!response.ok) return null;
+    const body = (await response.json()) as { ok?: unknown; features?: unknown } | null;
+    if (body?.ok !== true) return null;
+    const features = Array.isArray(body.features) ? (body.features.filter((f) => f === 'reactions' || f === 'matchmaking') as ServerFeature[]) : [];
+    return { features };
   } catch {
-    return false;
+    return null;
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** How many players are in a room on the server right now (its public /stats.json), or null. */
+export async function playersOnline(url: string, fetchFn: typeof fetch = (...args) => fetch(...args)): Promise<number | null> {
+  try {
+    const response = await fetchFn(`${url.replace(/\/+$/, '')}/stats.json`, { cache: 'no-store' });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { now?: { playersConnected?: unknown } } | null;
+    const count = body?.now?.playersConnected;
+    return typeof count === 'number' ? count : null;
+  } catch {
+    return null;
   }
 }
 
@@ -82,6 +116,10 @@ export class OnlineClient {
   onUpdate: (view: RoomView) => void = () => {};
   /** Called when the connection drops and when it comes back (`reconnected` true then). */
   onConnection: (state: ConnectionState, reconnected: boolean) => void = () => {};
+  /** Called with every quick reaction sent in the room (yours too). */
+  onReaction: (event: ReactionEvent) => void = () => {};
+  /** Called when match:find has found an opponent: your seat in the new room. */
+  onMatchFound: (joined: { token: string; view: RoomView }) => void = () => {};
 
   /** `playerId`: this browser's anonymous ID (see player-id.ts), sent so the server can count players. */
   constructor(
@@ -90,6 +128,8 @@ export class OnlineClient {
   ) {
     this.socket = io(url, { transports: ['websocket'] });
     this.socket.on('room:update', (view) => this.onUpdate(view));
+    this.socket.on('room:reaction', (event) => this.onReaction(event));
+    this.socket.on('match:found', (joined) => this.onMatchFound(joined));
     this.socket.on('connect', () => {
       this.onConnection('connected', this.connectedOnce);
       this.connectedOnce = true;
@@ -135,6 +175,19 @@ export class OnlineClient {
 
   rematch(code: string, token: string, yes: boolean): Promise<ActionReply | Unreachable> {
     return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:rematch', { code, token, yes }));
+  }
+
+  react(code: string, token: string, reaction: ReactionId): Promise<ActionReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:react', { code, token, reaction }));
+  }
+
+  /** Starts looking for a random opponent; onMatchFound is called once there is one. */
+  findMatch(moveTimeSeconds: number): Promise<FindMatchReply | Unreachable> {
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('match:find', { moveTimeSeconds, playerId: this.playerId }));
+  }
+
+  cancelMatch(): void {
+    this.socket.emit('match:cancel');
   }
 
   /** Leaves the room and closes the connection. */

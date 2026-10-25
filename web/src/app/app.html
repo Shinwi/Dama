@@ -15,6 +15,16 @@
       [error]="homeError()"
       (start)="startGame($event)"
     ></app-home>
+  } @else if (screen() === 'match') {
+    @if (game.matchmaking(); as status) {
+      <app-matchmaking
+        [status]="status"
+        [playersOnline]="game.playersOnline()"
+        [moveTimeMs]="game.settings().moveTime * 1000"
+        (cancel)="cancelMatch()"
+        (playComputer)="playComputerInstead()"
+      ></app-matchmaking>
+    }
   } @else {
     <div class="layout">
       <div class="board-column">
@@ -25,6 +35,11 @@
           [moveTimeMs]="game.moveTimeMs()"
           [moveNumber]="moveNumber()"
         ></app-scoreboard>
+        <app-reaction-bubble
+          [reaction]="game.reaction()"
+          [from]="reactionFrom()?.name ?? ''"
+          [align]="reactionFrom()?.align ?? 'left'"
+        ></app-reaction-bubble>
         <!--
           One line of messages above the board, always the same height, so the board never moves
           when one appears or goes. Only the most important one shows; the others stay in the page
@@ -70,6 +85,7 @@
             @if (gameOver(); as result) {
               <app-game-over-card
                 [info]="result"
+                [stats]="gameOverStats()"
                 [rematch]="game.online()?.rematch ?? null"
                 (newGame)="newGameFromGameOver()"
                 (menu)="openMenu()"
@@ -84,6 +100,10 @@
             [count]="scoreboardPlayers()[1].captured"
           ></app-captured-tray>
         </div>
+
+        @if (game.reactionsAvailable() && !gameOver()) {
+          <app-reaction-bar [reactions]="reactionChoices" (pick)="sendReaction($event)"></app-reaction-bar>
+        }
 
         @if (drawOfferToAnswer()) {
           <app-online-prompt

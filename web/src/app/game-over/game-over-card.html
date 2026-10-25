@@ -8,6 +8,13 @@
   >
     <p class="game-over-title" id="game-over-title">{{ info().title }}</p>
     <p class="game-over-subtitle" id="game-over-subtitle">{{ info().subtitle }}</p>
+    @if (stats(); as stats) {
+      <dl class="stats" data-testid="game-stats">
+        <div><dt>Pieces taken</dt><dd>{{ stats.taken }}</dd></div>
+        <div><dt>Moves</dt><dd>{{ stats.moves }}</dd></div>
+        <div><dt>Time</dt><dd>{{ stats.time }}</dd></div>
+      </dl>
+    }
 
     @if (rematch(); as rematch) {
       @if (rematch.you) {

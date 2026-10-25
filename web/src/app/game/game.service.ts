@@ -1,12 +1,12 @@
-import { Injectable, computed, effect, inject, signal } from '@angular/core';
+import { Injectable, computed, effect, inject, signal, untracked } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
-import { checkOnlineServer, OnlineClient, onlineServerUrl } from '../online/online-client';
+import { OnlineClient, onlineServerInfo, onlineServerUrl, playersOnline, ServerFeature } from '../online/online-client';
 import { playerId } from '../online/player-id';
 import { Seat, SeatStore } from '../online/seat-store';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
-import { ActionReply, OnlineAction, RoomAction, RoomResult, RoomView, WireState } from '../../protocol/online';
+import { ActionReply, OnlineAction, ReactionId, RoomAction, RoomResult, RoomView, WireState } from '../../protocol/online';
 import { defaultSettings, GameController, RejectReason, Settings, UpdateKind } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
@@ -20,6 +20,66 @@ const REJOIN_RETRY_MS = 2000;
 const CLOCK_TICK_MS = 250;
 /** The last stretch of a turn, when the clock turns red and ticks. */
 export const LOW_TIME_MS = 10_000;
+
+/** How long a quick reaction stays on screen. */
+const REACTION_SHOW_MS = 3000;
+/** The shortest gap between two reactions from the same player, so nobody can spam them. */
+const REACTION_COOLDOWN_MS = 1500;
+/** How long the computer takes to react back. */
+const COMPUTER_REACTION_DELAY_MS = 1200;
+/** How long a combo ("Double jump!") stays up. */
+const COMBO_SHOW_MS = 1800;
+
+/** What the computer says back to each reaction. */
+const COMPUTER_ANSWERS: Record<ReactionId, ReactionId> = {
+  happy: 'happy',
+  laugh: 'laugh',
+  wow: 'cheeky',
+  oops: 'laugh',
+  grumpy: 'cheeky',
+  cheeky: 'cheeky',
+  thinking: 'take-your-time',
+  'good-move': 'happy',
+  hurry: 'thinking',
+  'take-your-time': 'happy',
+  'good-game': 'good-game',
+  'well-played': 'good-game',
+  'one-more': 'happy',
+};
+
+/** A quick reaction on screen: who sent it, and which. */
+export interface ShownReaction {
+  by: Side;
+  reaction: ReactionId;
+  /** Different for every reaction, so the same one twice still shows again. */
+  id: number;
+}
+
+/** A move that took two or more pieces, while it's news: who played it and how many it took. */
+export interface Combo {
+  by: Side;
+  count: number;
+  id: number;
+}
+
+/** "Play someone": looking for a random opponent. */
+export interface MatchmakingStatus {
+  /** When (Date.now()) the search started. */
+  since: number;
+  /** 'unavailable': this server can't match players yet; 'error': it refused. */
+  state: 'searching' | 'unavailable' | 'error';
+  error?: string;
+}
+
+/** The numbers on the game-over screen. */
+export interface GameStats {
+  /** Moves played by both sides (skipped turns not counted). */
+  moves: number;
+  /** The most pieces one move took, per side. */
+  bestCombo: { light: number; dark: number };
+  /** From the first move's turn to the end (or now, while the game is on). */
+  durationMs: number;
+}
 
 /** The move timer for the turn being played. */
 export interface TurnClock {
@@ -90,7 +150,8 @@ const TAP_FEEDBACK_MS = 1800;
 export type OnlineServerState = 'checking' | 'up' | 'down';
 
 /** How to get into an online room, from the home screen. */
-export type OnlineEntry = { kind: 'create' } | { kind: 'join'; code: string };
+/** 'match': "Play someone", a random opponent (GameService.findMatch, not startOnline). */
+export type OnlineEntry = { kind: 'create' } | { kind: 'join'; code: string } | { kind: 'match' };
 
 
 function loadSettings(): Settings {
@@ -173,8 +234,29 @@ export class GameService {
   private pendingAction: { action: OnlineAction; seqBefore: number } | null = null;
   readonly online = signal<OnlineStatus | null>(null);
   readonly onlineServer = signal<OnlineServerState>('checking');
-  /** Replaceable in tests. */
-  private onlineServerProbe = (url: string) => checkOnlineServer(url);
+  /** Replaceable in tests. Null (or false) when the server isn't there. */
+  private onlineServerProbe: (url: string) => Promise<{ features: ServerFeature[] } | null | boolean> = (url) => onlineServerInfo(url);
+  private playersOnlineProbe = (url: string) => playersOnline(url);
+  /** What the online server can do beyond rooms ('reactions', 'matchmaking'), from its last check. */
+  readonly serverFeatures = signal<ServerFeature[]>([]);
+  /** How many players are in rooms on the server, from the last check; null if unknown. */
+  readonly playersOnline = signal<number | null>(null);
+
+  /** The quick reaction on screen, if any. */
+  readonly reaction = signal<ShownReaction | null>(null);
+  private reactionCount = 0;
+  private reactionTimer: ReturnType<typeof setTimeout> | null = null;
+  private lastReactionSentAt = Number.NEGATIVE_INFINITY;
+
+  /** A move that took two or more pieces, while it's news. */
+  readonly combo = signal<Combo | null>(null);
+  private comboTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /** "Play someone", while looking for an opponent; null otherwise. */
+  readonly matchmaking = signal<MatchmakingStatus | null>(null);
+
+  /** When the game being played started, and ended (null while it's on). */
+  private readonly gameTimes = signal<{ startedAt: number; endedAt: number | null }>({ startedAt: Date.now(), endedAt: null });
   /** Bumped for every check, so only the latest one's answer counts. */
   private onlineServerChecks = 0;
 
@@ -247,6 +329,31 @@ export class GameService {
     return online ? online.moveTimeMs : this.settings().moveTime * 1000;
   });
 
+  /**
+   * Whether quick reactions can be sent: always vs the computer and in 1v1; online once the
+   * opponent is in, if the server passes reactions on.
+   */
+  readonly reactionsAvailable = computed(() => {
+    const online = this.online();
+    if (!online) return true;
+    return this.serverFeatures().includes('reactions') && online.opponentJoined && online.connection === 'connected';
+  });
+
+  /** The numbers for the game-over screen. */
+  readonly stats = computed<GameStats>(() => {
+    const plies = this.plies();
+    const bestCombo = { light: 0, dark: 0 };
+    let moves = 0;
+    for (const ply of plies) {
+      if (!ply.move) continue;
+      moves++;
+      const key = ply.side === LIGHT ? 'light' : 'dark';
+      bestCombo[key] = Math.max(bestCombo[key], ply.move.captures.length);
+    }
+    const { startedAt, endedAt } = this.gameTimes();
+    return { moves, bestCombo, durationMs: (endedAt ?? this.now()) - startedAt };
+  });
+
   constructor() {
     this.audio.setSoundOn(this.controller.settings.soundOn);
     this.audio.setMusicOn(this.controller.settings.musicOn);
@@ -267,6 +374,7 @@ export class GameService {
         if (justPlayed) {
           this.announceMove(move, settings);
           this.announcement.set(describeMove(move, settings));
+          untracked(() => this.moveFeedback(move, settings));
         }
       }
     });
@@ -278,6 +386,13 @@ export class GameService {
       // only the move that ends the game plays the jingle, not every tap or toggle after it.
       const justEnded = outcome.kind !== 'ongoing' && !this.wasOver;
       this.wasOver = outcome.kind !== 'ongoing';
+      if (justEnded) {
+        untracked(() => {
+          this.gameTimes.update((times) => ({ ...times, endedAt: this.now() }));
+          // The computer is a good sport.
+          if (settings.mode === 'computer') this.computerReacts('good-game');
+        });
+      }
       if (justEnded && outcome.kind === 'win') {
         const playerLost = settings.mode !== 'pvp' && outcome.winner !== settings.playerSide;
         if (playerLost) this.audio.loss();
@@ -368,6 +483,7 @@ export class GameService {
     this.stopMoving();
     this.updateKindValue = 'reset';
     this.announcement.set('New game.');
+    this.startGameTimes();
     this.bump();
     saveSettings(this.controller.settings);
     this.restartClock();
@@ -439,7 +555,7 @@ export class GameService {
     const reply =
       entry.kind === 'create'
         ? await client.create(settings.playerSide, settings.strictMode, settings.moveTime)
-        : await client.join(entry.code);
+        : await client.join(entry.kind === 'join' ? entry.code : '');
     if (client !== this.onlineClient) return 'Cancelled.'; // left again before the server answered
     if (!reply.ok) {
       this.leaveOnline();
@@ -477,8 +593,106 @@ export class GameService {
    */
   async checkOnlineServer(): Promise<void> {
     const check = ++this.onlineServerChecks;
-    const up = await this.onlineServerProbe(onlineServerUrl());
-    if (check === this.onlineServerChecks) this.onlineServer.set(up ? 'up' : 'down');
+    const url = onlineServerUrl();
+    const info = await this.onlineServerProbe(url);
+    if (check !== this.onlineServerChecks) return;
+    this.onlineServer.set(info ? 'up' : 'down');
+    this.serverFeatures.set(info && typeof info === 'object' ? info.features : []);
+    if (info) {
+      const players = await this.playersOnlineProbe(url);
+      if (check === this.onlineServerChecks) this.playersOnline.set(players);
+    }
+  }
+
+  // ---- Quick reactions -----------------------------------------------------------------
+
+  /**
+   * Sends a quick reaction (shown at once). Vs the computer, it answers; in 1v1 it comes from
+   * the side to move; online the server passes it on. Ignored if sent too soon after the last.
+   */
+  sendReaction(reaction: ReactionId): void {
+    if (!this.reactionsAvailable()) return;
+    const now = this.now();
+    if (now - this.lastReactionSentAt < REACTION_COOLDOWN_MS) return;
+    this.lastReactionSentAt = now;
+    const settings = this.controller.settings;
+    this.showReaction(settings.mode === 'pvp' ? this.controller.state.toMove : this.playerSide(), reaction);
+    if (settings.mode === 'computer') this.computerReacts(COMPUTER_ANSWERS[reaction]);
+    const client = this.onlineClient;
+    const seat = this.onlineSession;
+    if (this.online() && client && seat) void client.react(seat.code, seat.token, reaction);
+  }
+
+  private showReaction(by: Side, reaction: ReactionId): void {
+    const shown: ShownReaction = { by, reaction, id: ++this.reactionCount };
+    this.reaction.set(shown);
+    if (this.reactionTimer !== null) clearTimeout(this.reactionTimer);
+    this.reactionTimer = setTimeout(() => {
+      if (this.reaction() === shown) this.reaction.set(null);
+    }, REACTION_SHOW_MS);
+  }
+
+  /** Vs the computer: it reacts, after a beat, unless a new game started meanwhile. */
+  private computerReacts(reaction: ReactionId): void {
+    const computer = (-this.controller.settings.playerSide) as Side;
+    const game = this.gameTimes();
+    setTimeout(() => {
+      if (this.controller.settings.mode === 'computer' && this.gameTimes() === game) this.showReaction(computer, reaction);
+    }, COMPUTER_REACTION_DELAY_MS);
+  }
+
+  /** After a move: a combo for a multi-capture, and the computer's two cents on it. */
+  private moveFeedback(move: Move, settings: Settings): void {
+    if (move.captures.length < 2) return;
+    const by = Math.sign(move.piece) as Side;
+    const combo: Combo = { by, count: move.captures.length, id: ++this.reactionCount };
+    this.combo.set(combo);
+    if (this.comboTimer !== null) clearTimeout(this.comboTimer);
+    this.comboTimer = setTimeout(() => {
+      if (this.combo() === combo) this.combo.set(null);
+    }, COMBO_SHOW_MS);
+    if (settings.mode === 'computer') this.computerReacts(by === settings.playerSide ? 'wow' : 'cheeky');
+  }
+
+  private startGameTimes(): void {
+    this.gameTimes.set({ startedAt: this.now(), endedAt: null });
+    this.reaction.set(null);
+    this.combo.set(null);
+  }
+
+  // ---- "Play someone" ---------------------------------------------------------------------
+
+  /**
+   * Looks for a random opponent on the server. Once one turns up, the game starts as an
+   * online room (online() is set). If this server can't match players yet, says so instead.
+   */
+  async findMatch(partial: Partial<Settings> = {}): Promise<void> {
+    this.leaveOnline();
+    this.controller.updateSettings(partial);
+    saveSettings(this.controller.settings);
+    const since = this.now();
+    if (!this.serverFeatures().includes('matchmaking')) {
+      this.matchmaking.set({ since, state: 'unavailable' });
+      return;
+    }
+    const client = this.connectOnline();
+    client.onMatchFound = ({ token, view }) => {
+      if (client !== this.onlineClient) return;
+      this.matchmaking.set(null);
+      this.setSession({ code: view.code, token });
+      this.enterRoom(view);
+    };
+    this.matchmaking.set({ since, state: 'searching' });
+    const reply = await client.findMatch(this.controller.settings.moveTime);
+    if (client !== this.onlineClient || reply.ok) return;
+    this.leaveOnline();
+    this.matchmaking.set({ since, state: 'error', error: reply.error });
+  }
+
+  /** Stops looking for an opponent. */
+  cancelMatch(): void {
+    this.onlineClient?.cancelMatch();
+    this.leaveOnline();
   }
 
   /**
@@ -494,6 +708,7 @@ export class GameService {
     this.onlineSession = null;
     this.seats.leave();
     this.setClock(null);
+    this.matchmaking.set(null);
   }
 
   private setSession(seat: Seat): void {
@@ -512,6 +727,11 @@ export class GameService {
     this.onlineClient = client;
     client.onUpdate = (view) => {
       if (client === this.onlineClient && this.online()) this.applyRoomView(view, false);
+    };
+    client.onReaction = (event) => {
+      const online = this.online();
+      // Your own reaction was shown when you sent it.
+      if (client === this.onlineClient && online && event.by !== online.side) this.showReaction(event.by, event.reaction);
     };
     client.onConnection = (connection, reconnected) => {
       if (client !== this.onlineClient || !this.online()) return;
@@ -554,6 +774,7 @@ export class GameService {
   private enterRoom(view: RoomView): void {
     this.abandonComputerMove();
     this.controller.newGame({ mode: 'online' });
+    this.startGameTimes();
     this.online.set({
       code: view.code,
       side: view.yourSide,
@@ -584,6 +805,7 @@ export class GameService {
     const nextGame = view.game !== online.game;
     if (nextGame) {
       this.controller.newGame({ mode: 'online' });
+      this.startGameTimes();
       this.pendingAction = null;
       snap = true;
     }

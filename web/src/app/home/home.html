@@ -6,6 +6,7 @@
       <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="setMode('pvp')">1v1</button>
       @if (onlineAvailable()) {
         <button type="button" [attr.aria-pressed]="mode() === 'online'" (click)="setMode('online')">Online</button>
+        <button type="button" [attr.aria-pressed]="mode() === 'match'" (click)="setMode('match')">Play someone</button>
       }
     </div>
     @if (inviteUnavailable()) {

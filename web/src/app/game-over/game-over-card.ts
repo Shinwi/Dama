@@ -13,6 +13,8 @@ import type { GameOverInfo } from '../app';
 })
 export class GameOverCard {
   readonly info = input.required<GameOverInfo>();
+  /** Pieces you took, moves played, how long it took, your best multi-capture. */
+  readonly stats = input<{ taken: number; moves: number; time: string; bestCombo: number } | null>(null);
   /** Online: rematch requests instead of New game. Null offline. */
   readonly rematch = input<{ you: boolean; opponent: boolean } | null>(null);
 

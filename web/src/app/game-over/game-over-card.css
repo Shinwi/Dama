@@ -104,3 +104,28 @@
   color: var(--color-text-muted);
   font-weight: normal;
 }
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0;
+}
+
+.stats div {
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+}
+
+.stats dt {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.stats dd {
+  margin: 0;
+  font-family: var(--font-title);
+  font-size: 1.3rem;
+}
