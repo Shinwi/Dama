@@ -2,11 +2,11 @@
   <div class="step">
     <h2 class="step-title">Opponent</h2>
     <div class="segmented" role="group" aria-label="Opponent">
-      <button type="button" [attr.aria-pressed]="mode() === 'computer'" (click)="setMode('computer')">Vs computer</button>
-      <button type="button" [attr.aria-pressed]="mode() === 'pvp'" (click)="setMode('pvp')">1v1</button>
+      <button type="button" data-mode="computer" [attr.aria-pressed]="mode() === 'computer'" (click)="setMode('computer')">Vs computer</button>
+      <button type="button" data-mode="pvp" [attr.aria-pressed]="mode() === 'pvp'" (click)="setMode('pvp')">1v1</button>
       @if (onlineAvailable()) {
-        <button type="button" [attr.aria-pressed]="mode() === 'online'" (click)="setMode('online')">Online</button>
-        <button type="button" [attr.aria-pressed]="mode() === 'match'" (click)="setMode('match')">Play someone</button>
+        <button type="button" data-mode="online" [attr.aria-pressed]="mode() === 'online'" (click)="setMode('online')">Online</button>
+        <button type="button" data-mode="match" [attr.aria-pressed]="mode() === 'match'" (click)="setMode('match')">Play someone</button>
       }
     </div>
     @if (inviteUnavailable()) {
@@ -20,8 +20,8 @@
     <div class="step">
       <h2 class="step-title">Room</h2>
       <div class="segmented" role="group" aria-label="Room">
-        <button type="button" [attr.aria-pressed]="onlineEntry() === 'create'" (click)="onlineEntry.set('create')">Create room</button>
-        <button type="button" [attr.aria-pressed]="onlineEntry() === 'join'" (click)="onlineEntry.set('join')">Join room</button>
+        <button type="button" data-entry="create" [attr.aria-pressed]="onlineEntry() === 'create'" (click)="onlineEntry.set('create')">Create room</button>
+        <button type="button" data-entry="join" [attr.aria-pressed]="onlineEntry() === 'join'" (click)="onlineEntry.set('join')">Join room</button>
       </div>
     </div>
 
@@ -29,8 +29,8 @@
       <div class="step">
         <h2 class="step-title">Play as</h2>
         <div class="segmented" role="group" aria-label="Play as">
-          <button type="button" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
-          <button type="button" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
+          <button type="button" data-side="white" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
+          <button type="button" data-side="black" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
         </div>
       </div>
     } @else {
@@ -57,17 +57,17 @@
     <div class="step">
       <h2 class="step-title">Difficulty</h2>
       <div class="segmented" role="group" aria-label="Difficulty">
-        <button type="button" [attr.aria-pressed]="difficulty() === 'beginner'" (click)="difficulty.set('beginner')">Beginner</button>
-        <button type="button" [attr.aria-pressed]="difficulty() === 'novice'" (click)="difficulty.set('novice')">Novice</button>
-        <button type="button" [attr.aria-pressed]="difficulty() === 'very-good'" (click)="difficulty.set('very-good')">Very good</button>
+        <button type="button" data-difficulty="beginner" [attr.aria-pressed]="difficulty() === 'beginner'" (click)="difficulty.set('beginner')">Beginner</button>
+        <button type="button" data-difficulty="novice" [attr.aria-pressed]="difficulty() === 'novice'" (click)="difficulty.set('novice')">Novice</button>
+        <button type="button" data-difficulty="very-good" [attr.aria-pressed]="difficulty() === 'very-good'" (click)="difficulty.set('very-good')">Very good</button>
       </div>
     </div>
 
     <div class="step">
       <h2 class="step-title">Play as</h2>
       <div class="segmented" role="group" aria-label="Play as">
-        <button type="button" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
-        <button type="button" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
+        <button type="button" data-side="white" [attr.aria-pressed]="playerSide() === LIGHT" (click)="playerSide.set(LIGHT)">White</button>
+        <button type="button" data-side="black" [attr.aria-pressed]="playerSide() === DARK" (click)="playerSide.set(DARK)">Black</button>
       </div>
     </div>
   }
@@ -77,7 +77,7 @@
       <h2 class="step-title">Move timer</h2>
       <div class="segmented" role="group" aria-label="Move timer">
         @for (option of moveTimes; track option.seconds) {
-          <button type="button" [attr.aria-pressed]="moveTime() === option.seconds" (click)="moveTime.set(option.seconds)">{{ option.label }}</button>
+          <button type="button" [attr.data-move-time]="option.seconds" [attr.aria-pressed]="moveTime() === option.seconds" (click)="moveTime.set(option.seconds)">{{ option.label }}</button>
         }
       </div>
       @if (moveTime() > 0) {
@@ -112,5 +112,5 @@
     <p class="error" role="alert" data-testid="home-error">{{ message }}</p>
   }
 
-  <button type="button" class="start" [disabled]="!canStart()" (click)="startGame()">{{ startLabel() }}</button>
+  <button type="button" class="start" data-testid="start" [disabled]="!canStart()" (click)="startGame()">{{ startLabel() }}</button>
 </section>
