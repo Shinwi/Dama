@@ -15,8 +15,9 @@ import { ReactionFace } from './reaction-face';
     @if (shown(); as r) {
       <p class="bubble" [class.right]="align() === 'right'" [attr.data-from]="r.from" data-testid="reaction-bubble" aria-live="polite">
         @if (r.face) {
+          <span class="who">{{ r.from }}</span>
           <app-reaction-face class="face" [face]="r.id" [size]="faceSize()"></app-reaction-face>
-          <span class="visually-hidden">{{ r.from }}: {{ r.label }}</span>
+          <span class="visually-hidden">{{ r.label }}</span>
         } @else {
           <span class="who">{{ r.from }}:</span> {{ r.label }}
         }
