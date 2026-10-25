@@ -1,6 +1,9 @@
 <div class="page">
-  <header class="header">
+  <header class="header" [class.in-game]="screen() === 'game'">
     <h1 class="title">Dama <span class="arabic" lang="ar" dir="rtl">ضامة</span></h1>
+    @if (screen() === 'game' && game.online()?.opponentJoined) {
+      <app-room-chip [status]="game.online()!" (leave)="openMenu()"></app-room-chip>
+    }
   </header>
 
   @if (screen() === 'home') {
@@ -15,10 +18,73 @@
   } @else {
     <div class="layout">
       <div class="board-column">
-        <p class="status" data-testid="status" aria-live="polite">{{ statusText() }}</p>
+        <app-scoreboard
+          [players]="scoreboardPlayers()"
+          [toMove]="scoreboardToMove()"
+          [clock]="scoreboardClock()"
+          [moveTimeMs]="game.moveTimeMs()"
+          [moveNumber]="moveNumber()"
+        ></app-scoreboard>
+        <!--
+          One line of messages above the board, always the same height, so the board never moves
+          when one appears or goes. Only the most important one shows; the others stay in the page
+          for screen readers (and tests). The status line shows only when it says more than whose
+          move it is, which the scoreboard already shows.
+        -->
+        <div class="messages">
+          <p class="status" [class.visually-hidden]="shownMessage() !== 'status'" data-testid="status" aria-live="polite">{{ statusText() }}</p>
+          <p class="nfikh-note" [class.visually-hidden]="shownMessage() !== 'nfikh'" data-testid="nfikh-note" aria-live="polite">{{ nfikhNote() }}</p>
+          <p class="timeout-note" [class.visually-hidden]="shownMessage() !== 'timeout'" data-testid="timeout-note" aria-live="polite">{{ timeoutNote() }}</p>
+          @if (onlineError(); as error) {
+            <p class="online-error" role="alert" data-testid="online-error">{{ error }}</p>
+          }
+        </div>
         <p class="visually-hidden" aria-live="polite" data-testid="announcement">{{ game.announcement() }}</p>
-        <!-- Always in the page, so screen readers announce it when the text appears. -->
-        <p class="nfikh-note" data-testid="nfikh-note" aria-live="polite">{{ nfikhNote() }}</p>
+
+        <div class="board-row">
+          <app-captured-tray
+            data-testid="tray-left"
+            at="bottom"
+            [name]="scoreboardPlayers()[0].name"
+            [color]="scoreboardPlayers()[0].side === LIGHT ? 'dark' : 'light'"
+            [count]="scoreboardPlayers()[0].captured"
+          ></app-captured-tray>
+          <div class="board-wrap">
+            <app-board
+              [board]="game.state().board"
+              [theme]="game.settings().boardTheme"
+              [flipped]="flipped()"
+              [selected]="selection().selected"
+              [pathSoFar]="selection().path"
+              [capturedSoFar]="capturedSoFar()"
+              [landingDots]="landingDots()"
+              [captureRings]="captureRings()"
+              [lastMove]="game.lastMove()"
+              [updateKind]="game.updateKind()"
+              [rejectedTap]="game.tapFeedback()"
+              (squareTap)="onSquareTap($event)"
+              (settled)="game.boardSettled()"
+            ></app-board>
+            <app-tap-toast [message]="game.tapFeedback()?.message ?? null"></app-tap-toast>
+
+            @if (gameOver(); as result) {
+              <app-game-over-card
+                [info]="result"
+                [rematch]="game.online()?.rematch ?? null"
+                (newGame)="newGameFromGameOver()"
+                (menu)="openMenu()"
+                (answerRematch)="answerRematch($event)"
+              ></app-game-over-card>
+            }
+          </div>
+          <app-captured-tray
+            data-testid="tray-right"
+            [name]="scoreboardPlayers()[1].name"
+            [color]="scoreboardPlayers()[1].side === LIGHT ? 'dark' : 'light'"
+            [count]="scoreboardPlayers()[1].captured"
+          ></app-captured-tray>
+        </div>
+
         @if (drawOfferToAnswer()) {
           <app-online-prompt
             data-testid="draw-offer"
@@ -39,51 +105,23 @@
             (no)="keepWaiting()"
           ></app-online-prompt>
         }
-
-        <p class="piece-counts">
-          <span [class.active-turn]="game.state().toMove === LIGHT">○ White {{ pieceCounts().light }}</span>
-          <span [class.active-turn]="game.state().toMove === DARK">● Black {{ pieceCounts().dark }}</span>
-        </p>
-
-        <div class="board-wrap">
-          <app-board
-            [board]="game.state().board"
-            [theme]="game.settings().boardTheme"
-            [flipped]="flipped()"
-            [selected]="selection().selected"
-            [pathSoFar]="selection().path"
-            [capturedSoFar]="capturedSoFar()"
-            [landingDots]="landingDots()"
-            [captureRings]="captureRings()"
-            [lastMove]="game.lastMove()"
-            [updateKind]="game.updateKind()"
-            [rejectedTap]="game.tapFeedback()"
-            (squareTap)="onSquareTap($event)"
-            (settled)="game.boardSettled()"
-          ></app-board>
-          <app-tap-toast [message]="game.tapFeedback()?.message ?? null"></app-tap-toast>
-
-          @if (gameOver(); as result) {
-            <app-game-over-card
-              [info]="result"
-              [rematch]="game.online()?.rematch ?? null"
-              (newGame)="newGameFromGameOver()"
-              (menu)="openMenu()"
-              (answerRematch)="answerRematch($event)"
-            ></app-game-over-card>
-          }
-        </div>
       </div>
 
       <aside class="sidebar">
-        <p class="setup-summary" data-testid="setup-summary">{{ setupSummary() }}</p>
-
         @if (game.online(); as online) {
-          <app-room-panel [status]="online"></app-room-panel>
+          @if (!online.opponentJoined) {
+            <app-room-panel [status]="online"></app-room-panel>
+          }
         }
 
+        <app-move-list [plies]="game.plies()" [names]="moveListNames()" [note]="moveTimeNote()"></app-move-list>
+
         <section class="actions">
-          <button type="button" (click)="openMenu()">{{ game.online() ? 'Leave room' : 'Menu' }}</button>
+          @if (!game.online()) {
+            <button type="button" (click)="openMenu()">Menu</button>
+          } @else if (!game.online()!.opponentJoined) {
+            <button type="button" (click)="openMenu()">Leave room</button>
+          }
           @if (!game.online()) {
             <button type="button" (click)="newGame()">New game</button>
           }
@@ -101,9 +139,15 @@
               </button>
             }
           }
-          <button type="button" [attr.aria-pressed]="game.settings().soundOn" (click)="toggleSound()">🔊 Sound</button>
-          <button type="button" [attr.aria-pressed]="game.settings().musicOn" (click)="toggleMusic()">🎵 Music</button>
+          <button type="button" class="icon-button" [attr.aria-pressed]="game.settings().soundOn" (click)="toggleSound()">
+            <span aria-hidden="true">🔊</span><span class="button-label">Sound</span>
+          </button>
+          <button type="button" class="icon-button" [attr.aria-pressed]="game.settings().musicOn" (click)="toggleMusic()">
+            <span aria-hidden="true">🎵</span><span class="button-label">Music</span>
+          </button>
         </section>
+
+        <p class="setup-summary" data-testid="setup-summary">{{ setupSummary() }}</p>
 
         <details class="rules">
           <summary>Rules</summary>
@@ -114,6 +158,7 @@
             <li>A man only becomes a king if its move ends on the far row.</li>
             <li>Kings fly any distance along a diagonal, and capture at any distance, in any direction.</li>
             <li>You lose if you have no legal move. 50 quiet moves in a row (no capture, no man move) is a draw.</li>
+            <li>With a move timer, running out of time skips your turn. Three skipped turns in a row lose the game.</li>
           </ul>
           <label class="strict-toggle">
             <input

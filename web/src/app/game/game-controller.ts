@@ -1,6 +1,15 @@
 import { Difficulty } from '../../engine/ai';
-import { advanceState, createInitialState, legalMoves as engineLegalMoves, outcome as engineOutcome, pieceCounts as enginePieceCounts, takeForfeit } from '../../engine/game';
+import {
+  advanceState,
+  createInitialState,
+  legalMoves as engineLegalMoves,
+  outcome as engineOutcome,
+  passTurn,
+  pieceCounts as enginePieceCounts,
+  takeForfeit,
+} from '../../engine/game';
 import { GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
+import { RoomAction } from '../../protocol/online';
 
 export type GameMode = 'computer' | 'pvp' | 'online';
 export type BoardTheme = 'classic' | 'wood' | 'green';
@@ -37,6 +46,19 @@ export interface Nfikh {
   by: Side;
 }
 
+/**
+ * One turn as the move list shows it: who played, the piece they took by nfikh first (if
+ * any), and their move, or null if they ran out of time and the turn was skipped.
+ */
+export interface Ply {
+  side: Side;
+  nfikh: number | null;
+  move: Move | null;
+}
+
+/** The move timer choices on the home screen, in seconds; 0 is no timer. */
+export const MOVE_TIMES = [0, 30, 45, 60] as const;
+
 export interface Settings {
   mode: GameMode;
   difficulty: Difficulty;
@@ -49,12 +71,20 @@ export interface Settings {
   soundOn: boolean;
   musicOn: boolean;
   boardTheme: BoardTheme;
+  /**
+   * The move timer, in seconds (0: none). Online, the room's creator sets it for both
+   * players and the server keeps the time; offline, the browser does.
+   */
+  moveTime: number;
 }
 
 interface Snapshot {
   state: GameState;
   lastMove: Move | null;
   lastNfikh: Nfikh | null;
+  lastTimeout: Side | null;
+  plyCount: number;
+  turnNfikh: number | null;
 }
 
 export interface SelectionInfo {
@@ -79,6 +109,7 @@ export function defaultSettings(): Settings {
     soundOn: true,
     musicOn: false,
     boardTheme: 'classic',
+    moveTime: 30,
   };
 }
 
@@ -104,8 +135,16 @@ export class GameController {
    */
   lastNfikh: Nfikh | null = null;
 
+  /** The side whose turn was just skipped because its time ran out, until the next move. */
+  lastTimeout: Side | null = null;
+
   /** Why the last 'illegal' tap was refused, and where it was. */
   rejection: { square: number; reason: RejectReason } | null = null;
+
+  /** Every turn played so far, for the move list. */
+  plies: Ply[] = [];
+  /** The piece taken by nfikh on the turn being played, until its move completes it. */
+  private turnNfikh: number | null = null;
 
   private history: Snapshot[] = [];
   private selection: SelectionInfo = EMPTY_SELECTION;
@@ -241,9 +280,26 @@ export class GameController {
   /** Takes an opponent's piece that skipped a capture (nfikh). Ignored if it isn't one. */
   takeForfeit(square: number): void {
     if (!this.state.forfeitable.includes(square)) return;
-    this.history.push({ state: this.state, lastMove: this.lastMove, lastNfikh: this.lastNfikh });
+    this.pushHistory();
     this.lastNfikh = { square, by: this.state.toMove };
+    this.turnNfikh = square;
     this.state = takeForfeit(this.state, square);
+    this.resetSelection();
+  }
+
+  /**
+   * The side to move ran out of time: its turn is skipped (see the engine's passTurn). A
+   * capture being tapped out is dropped. Ignored once the game is over.
+   */
+  passTurn(): void {
+    if (this.outcome.kind !== 'ongoing') return;
+    this.pushHistory();
+    const side = this.state.toMove;
+    this.plies = [...this.plies, { side, nfikh: this.turnNfikh, move: null }];
+    this.turnNfikh = null;
+    if (this.lastNfikh && this.lastNfikh.by !== side) this.lastNfikh = null;
+    this.lastTimeout = side;
+    this.state = passTurn(this.state);
     this.resetSelection();
   }
 
@@ -260,6 +316,9 @@ export class GameController {
     this.state = previous.state;
     this.lastMove = previous.lastMove;
     this.lastNfikh = previous.lastNfikh;
+    this.lastTimeout = previous.lastTimeout;
+    this.plies = this.plies.slice(0, previous.plyCount);
+    this.turnNfikh = previous.turnNfikh;
     this.resetSelection();
   }
 
@@ -276,12 +335,37 @@ export class GameController {
    * Jumps straight to a position that came from elsewhere (the online server, when this
    * copy has fallen out of step with it). No history: there's nothing to undo online.
    */
-  loadPosition(state: GameState): void {
+  loadPosition(state: GameState, plies: Ply[] = []): void {
     this.state = state;
     this.lastMove = null;
     this.lastNfikh = null;
+    this.lastTimeout = null;
+    this.plies = plies;
+    this.turnNfikh = null;
     this.history = [];
     this.resetSelection();
+  }
+
+  /**
+   * Like loadPosition, from the server's list of the game's actions, which also gives the
+   * move list. `state` is the server's position: it's the one used, should replaying the
+   * actions here ever come out different.
+   */
+  loadHistory(actions: RoomAction[], state: GameState): void {
+    const replay = new GameController({ ...this.settings, strictMode: state.strictMode });
+    for (const action of actions) {
+      if (action.kind === 'nfikh') replay.takeForfeit(action.square);
+      else if (action.kind === 'timeout') replay.passTurn();
+      else {
+        const move = replay.legalMoves.find((m) => m.path.length === action.path.length && m.path.every((sq, i) => sq === action.path[i]));
+        if (!move) return this.loadPosition(state); // can't follow it: just the position, no list
+        replay.commitMove(move);
+      }
+    }
+    this.loadPosition(state, replay.plies);
+    // The latest move stays highlighted, as it would have been had it been played here.
+    this.lastMove = replay.lastMove;
+    this.lastTimeout = replay.lastTimeout;
   }
 
   newGame(partial?: Partial<Settings>): void {
@@ -289,6 +373,9 @@ export class GameController {
     this.state = createInitialState(this.settings.strictMode);
     this.lastMove = null;
     this.lastNfikh = null;
+    this.lastTimeout = null;
+    this.plies = [];
+    this.turnNfikh = null;
     this.history = [];
     this.resetSelection();
   }
@@ -311,11 +398,25 @@ export class GameController {
   }
 
   private commitMove(move: Move): void {
-    this.history.push({ state: this.state, lastMove: this.lastMove, lastNfikh: this.lastNfikh });
+    this.pushHistory();
     // A piece taken by nfikh stays news through the taker's own move, until the other side moves.
     if (this.lastNfikh && this.lastNfikh.by !== this.state.toMove) this.lastNfikh = null;
+    this.lastTimeout = null;
+    this.plies = [...this.plies, { side: this.state.toMove, nfikh: this.turnNfikh, move }];
+    this.turnNfikh = null;
     this.state = advanceState(this.state, move);
     this.lastMove = move;
     this.resetSelection();
+  }
+
+  private pushHistory(): void {
+    this.history.push({
+      state: this.state,
+      lastMove: this.lastMove,
+      lastNfikh: this.lastNfikh,
+      lastTimeout: this.lastTimeout,
+      plyCount: this.plies.length,
+      turnNfikh: this.turnNfikh,
+    });
   }
 }

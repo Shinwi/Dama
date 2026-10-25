@@ -37,6 +37,11 @@ export interface GameState {
    * unless the last move skipped an available capture.
    */
   forfeitable: number[];
+  /**
+   * Each side's time-outs in a row: turns skipped because the move timer ran out, since that
+   * side last moved. MAX_TIMEOUTS of them lose the game.
+   */
+  timeouts: { light: number; dark: number };
 }
 
 /** One player's turn: an optional nfikh (the square of the piece taken), then a move. */
@@ -47,5 +52,6 @@ export interface Turn {
 
 export type Outcome =
   | { kind: 'ongoing' }
-  | { kind: 'win'; winner: Side }
+  /** `onTime`: the loser ran out of time MAX_TIMEOUTS turns in a row. */
+  | { kind: 'win'; winner: Side; onTime?: boolean }
   | { kind: 'draw' };

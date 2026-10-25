@@ -22,7 +22,14 @@ export interface WireState {
   strictMode: boolean;
   quietMoves: number;
   forfeitable: number[];
+  timeouts: { light: number; dark: number };
 }
+
+/**
+ * Something that happened on a turn, and whose turn it was: a player's action, or the server
+ * skipping the turn because the move timer ran out.
+ */
+export type RoomAction = (OnlineAction | { kind: 'timeout' }) & { by: Side };
 
 /**
  * How a game ended other than on the board. (A win or draw on the board isn't here: both
@@ -47,7 +54,17 @@ export interface RoomView {
   /** Counts accepted actions, so a client can tell whether it has missed one. */
   seq: number;
   /** The action that made this the position, and who played it. Null at the start. */
-  lastAction: (OnlineAction & { by: Side }) | null;
+  lastAction: RoomAction | null;
+  /** Every action of this game so far, in order (so a client can rebuild the move list). */
+  actions: RoomAction[];
+  /** The move timer: how long each turn may take, or 0 for no timer. */
+  moveTimeMs: number;
+  /**
+   * Time left on the turn being played, as the server sent this; null while no clock runs
+   * (no timer, waiting for the friend, game over). The server allows a little extra for the
+   * network before it skips the turn.
+   */
+  turnLeftMs: number | null;
   /** Counts games in this room: a rematch starts the next one (with `seq` back at 0). */
   game: number;
   /** Set when the game ended by resigning, an agreed draw, or a claimed win. */
@@ -74,6 +91,8 @@ export interface CreateRoomRequest extends WithPlayerId {
   /** The side the room's creator plays; the friend who joins gets the other one. */
   side: Side;
   strictMode: boolean;
+  /** The move timer, in seconds; 0 (or absent) for none. */
+  moveTimeSeconds?: number;
 }
 
 export interface JoinRoomRequest extends WithPlayerId {

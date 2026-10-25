@@ -123,6 +123,25 @@ describe('Dama server over Socket.IO', () => {
     expect(view.state.board[parseSquare('a5')]).toBe(1);
   });
 
+  it('skips a turn when the move timer runs out, and tells both players', async () => {
+    const white = client();
+    const black = client();
+    // A tiny timer (0.2 s, plus the server's 1 s grace), so the test doesn't wait long.
+    const created = (await white.emitWithAck('room:create', { side: LIGHT, strictMode: false, moveTimeSeconds: 0.2 })) as Extract<
+      JoinedReply,
+      { ok: true }
+    >;
+    expect(created.view.moveTimeMs).toBe(200);
+    const blackSeesTimeout = updateWhere(black, (v) => v.lastAction?.kind === 'timeout');
+    await black.emitWithAck('room:join', { code: created.view.code });
+
+    const view = await blackSeesTimeout;
+    expect(view.lastAction).toEqual({ kind: 'timeout', by: LIGHT });
+    expect(view.state.toMove).toBe(DARK);
+    expect(view.state.timeouts).toEqual({ light: 1, dark: 0 });
+    expect(logged.some((l) => l['event'] === 'turn_timed_out' && l['side'] === 'white')).toBe(true);
+  });
+
   it('rejects an illegal move and sends the real position back', async () => {
     const white = client();
     const created = (await white.emitWithAck('room:create', { side: LIGHT, strictMode: false })) as Extract<JoinedReply, { ok: true }>;

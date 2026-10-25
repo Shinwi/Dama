@@ -1,6 +1,6 @@
-import { advanceState, createInitialState, legalMoves, outcome, takeForfeit } from '../../web/src/engine/game';
+import { advanceState, createInitialState, legalMoves, outcome, passTurn, takeForfeit } from '../../web/src/engine/game';
 import { DARK, GameState, LIGHT, Side } from '../../web/src/engine/types';
-import { OnlineAction, RoomResult, RoomView, WireState } from '../../web/src/protocol/online';
+import { OnlineAction, RoomAction, RoomResult, RoomView, WireState } from '../../web/src/protocol/online';
 
 /** No 0/O or 1/I/L: a code is read off one screen and typed on another. */
 const CODE_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -21,12 +21,26 @@ interface Seat {
 /** How long an opponent must be gone before the other player can claim the win. */
 export const DEFAULT_CLAIM_WIN_AFTER_MS = 5 * 60 * 1000;
 
+/**
+ * Extra time past the move timer before the server skips a turn: a move made at "0:00" on
+ * the player's screen still has to cross the network.
+ */
+export const TURN_GRACE_MS = 1000;
+/** The longest move timer a room can have. */
+const MAX_MOVE_TIME_MS = 10 * 60 * 1000;
+
 export interface Room {
   code: string;
   state: GameState;
   seats: Partial<Record<'light' | 'dark', Seat>>;
   seq: number;
-  lastAction: (OnlineAction & { by: Side }) | null;
+  lastAction: RoomAction | null;
+  /** Every action of the current game, in order. */
+  actions: RoomAction[];
+  /** How long each turn may take, or 0 for no timer. */
+  moveTimeMs: number;
+  /** When the turn being played started, while the game is on; null otherwise. */
+  turnStartedAt: number | null;
   /** When the last player disconnected, or null while anyone is connected. */
   emptySince: number | null;
   /** When the second player joined (the game started), or null while waiting for them. */
@@ -45,7 +59,8 @@ export interface Room {
 
 /** A game that has just ended, for the metrics. */
 export interface FinishedGame {
-  result: 'win' | 'draw' | RoomResult['kind'];
+  /** 'timeout': a player ran out of time too many turns in a row. */
+  result: 'win' | 'draw' | 'timeout' | RoomResult['kind'];
   durationMs: number;
   /** Accepted actions: moves and nfikh. */
   actions: number;
@@ -90,13 +105,17 @@ export class RoomManager {
     return this.rooms.get(normalizeCode(code));
   }
 
-  create(side: Side, strictMode: boolean): { room: Room; token: string } {
+  /** `moveTimeMs`: the move timer, 0 for none (anything else off the network counts as none). */
+  create(side: Side, strictMode: boolean, moveTimeMs = 0): { room: Room; token: string } {
     const room: Room = {
       code: this.freshCode(),
       state: createInitialState(strictMode),
       seats: {},
       seq: 0,
       lastAction: null,
+      actions: [],
+      moveTimeMs: validMoveTime(moveTimeMs),
+      turnStartedAt: null,
       emptySince: null,
       startedAt: null,
       finishedAt: null,
@@ -121,6 +140,7 @@ export class RoomManager {
     room.seats[seatKey(side)] = { token, connected: true, disconnectedAt: null };
     room.emptySince = null;
     room.startedAt = this.now(); // both seats are taken now
+    room.turnStartedAt = room.startedAt;
     return { ok: true, value: { room, side, token } };
   }
 
@@ -152,6 +172,7 @@ export class RoomManager {
     const notOn = this.gameNotOn(room);
     if (notOn) return { ok: false, error: notOn };
     if (room.state.toMove !== side) return { ok: false, error: 'Not your turn.' };
+    if (this.turnExpired(room)) return { ok: false, error: 'Out of time.' };
 
     if (action.kind === 'nfikh') {
       if (!room.state.forfeitable.includes(action.square)) return { ok: false, error: 'That piece cannot be taken.' };
@@ -160,16 +181,50 @@ export class RoomManager {
       const move = legalMoves(room.state).find((m) => samePath(m.path, action.path));
       if (!move) return { ok: false, error: 'Illegal move.' };
       room.state = advanceState(room.state, move);
+      room.turnStartedAt = this.now(); // the next player's turn (an nfikh is part of this one)
     }
-    room.seq++;
     // Rebuilt rather than spread, so nothing else the client sent along is kept.
-    room.lastAction =
-      action.kind === 'nfikh' ? { kind: 'nfikh', square: action.square, by: side } : { kind: 'move', path: [...action.path], by: side };
-    // A draw offer stands until the player it was made to plays a move instead of answering.
-    if (room.drawOffer !== null && room.drawOffer !== side) room.drawOffer = null;
+    this.record(room, action.kind === 'nfikh' ? { kind: 'nfikh', square: action.square, by: side } : { kind: 'move', path: [...action.path], by: side });
+    return { ok: true, value: { finished: this.finishedOnBoard(room) } };
+  }
+
+  /**
+   * Skips every turn whose move timer (plus TURN_GRACE_MS) has run out, in every room. Called
+   * a few times a second; returns the rooms that changed, and whether each one's game ended.
+   */
+  expireTurns(): { room: Room; finished: FinishedGame | null }[] {
+    const changed: { room: Room; finished: FinishedGame | null }[] = [];
+    for (const room of this.rooms.values()) {
+      if (!this.turnExpired(room) || this.gameNotOn(room)) continue;
+      const side = room.state.toMove;
+      room.state = passTurn(room.state);
+      room.turnStartedAt = this.now();
+      this.record(room, { kind: 'timeout', by: side });
+      changed.push({ room, finished: this.finishedOnBoard(room) });
+    }
+    return changed;
+  }
+
+  /** The turn being played has gone past the move timer and its grace. */
+  private turnExpired(room: Room): boolean {
+    return room.moveTimeMs > 0 && room.turnStartedAt !== null && this.now() >= room.turnStartedAt + room.moveTimeMs + TURN_GRACE_MS;
+  }
+
+  /** Counts an accepted action (or a skipped turn) in the room's history. */
+  private record(room: Room, action: RoomAction): void {
+    room.seq++;
+    room.lastAction = action;
+    room.actions.push(action);
+    // A draw offer stands until the player it was made to plays (or lets the clock run out)
+    // instead of answering.
+    if (room.drawOffer !== null && room.drawOffer !== action.by) room.drawOffer = null;
+  }
+
+  /** Ends the game if the board (or the clock) says it's over; null if it goes on. */
+  private finishedOnBoard(room: Room): FinishedGame | null {
     const result = outcome(room.state);
-    if (result.kind === 'ongoing' || room.finishedAt !== null) return { ok: true, value: { finished: null } };
-    return { ok: true, value: { finished: this.finish(room, result.kind) } };
+    if (result.kind === 'ongoing' || room.finishedAt !== null) return null;
+    return this.finish(room, result.kind === 'win' && result.onTime ? 'timeout' : result.kind);
   }
 
   /** Ends the game: `side` resigns, and the opponent wins. */
@@ -233,11 +288,13 @@ export class RoomManager {
     room.state = createInitialState(room.state.strictMode);
     room.seq = 0;
     room.lastAction = null;
+    room.actions = [];
     room.result = null;
     room.drawOffer = null;
     room.rematch = { light: false, dark: false };
     room.game++;
     room.startedAt = this.now();
+    room.turnStartedAt = room.startedAt;
     room.finishedAt = null;
     return { ok: true, value: { started: true } };
   }
@@ -256,6 +313,7 @@ export class RoomManager {
 
   private finish(room: Room, result: FinishedGame['result']): FinishedGame {
     room.finishedAt = this.now();
+    room.turnStartedAt = null;
     room.drawOffer = null;
     return { result, durationMs: room.finishedAt - (room.startedAt ?? room.finishedAt), actions: room.seq };
   }
@@ -300,6 +358,12 @@ export class RoomManager {
       state: toWire(room.state),
       seq: room.seq,
       lastAction: room.lastAction,
+      actions: room.actions,
+      moveTimeMs: room.moveTimeMs,
+      turnLeftMs:
+        room.moveTimeMs > 0 && room.turnStartedAt !== null && !this.gameNotOn(room)
+          ? Math.max(0, room.turnStartedAt + room.moveTimeMs - this.now())
+          : null,
       game: room.game,
       result: room.result,
       drawOffer: room.drawOffer === null ? null : room.drawOffer === side ? 'you' : 'opponent',
@@ -331,6 +395,11 @@ export class RoomManager {
 
 export function normalizeCode(code: string): string {
   return code.trim().toUpperCase();
+}
+
+/** A move timer off the network: a whole number of ms up to MAX_MOVE_TIME_MS, else 0 (none). */
+function validMoveTime(ms: unknown): number {
+  return typeof ms === 'number' && Number.isInteger(ms) && ms > 0 && ms <= MAX_MOVE_TIME_MS ? ms : 0;
 }
 
 export function toWire(state: GameState): WireState {

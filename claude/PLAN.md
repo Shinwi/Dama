@@ -103,7 +103,7 @@ In rough order of value. The polish round (#28: #29–#34) is being worked throu
 **Online play**
 1. ✅ Rematch (same room, colours swapped), Resign, offer a draw, claim a win, share invite (#43).
 2. Games survive server restarts: persist rooms (SQLite on a Fly volume, or Redis).
-3. #32 (dropped taps) and #30 (move list), from the polish round. They matter more online.
+3. ✅ #32 (dropped taps) and #30 (move list), with a move timer, scoreboard and room chip (#45).
 - Quick reactions / preset phrases; an "opponent is choosing…" indicator; an optional move
   clock; spectators by room code.
 - Random opponent / matchmaking (roadmap phase 4).

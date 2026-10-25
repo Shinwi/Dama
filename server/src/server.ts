@@ -11,6 +11,9 @@ const sideName = (side: Side) => (side === LIGHT ? 'white' : 'black');
 /** How long an opponent must be gone before the other player can claim the win. */
 const CLAIM_WIN_AFTER_MS = Number(process.env['CLAIM_WIN_AFTER_SECONDS'] ?? 300) * 1000;
 
+/** How often the server checks for turns whose move timer has run out. */
+const CLOCK_CHECK_MS = 250;
+
 /** Rooms nobody has been connected to for this long are forgotten. */
 const ROOM_IDLE_MS = 30 * 60 * 1000;
 /**
@@ -195,11 +198,17 @@ export function createDamaServer(
   io.on('connection', (socket: DamaSocket) => {
     socket.on('room:create', (request, reply) => {
       const side: Side = request?.side === DARK ? DARK : LIGHT;
-      const { room, token } = rooms.create(side, request?.strictMode === true);
+      const { room, token } = rooms.create(side, request?.strictMode === true, Number(request?.moveTimeSeconds ?? 0) * 1000);
       seat(socket, room, token);
       metrics.roomCreated();
       metrics.playerSeen(request?.playerId);
-      log('room_created', { room: room.code, side: sideName(side), strictMode: room.state.strictMode, rooms: rooms.size });
+      log('room_created', {
+        room: room.code,
+        side: sideName(side),
+        strictMode: room.state.strictMode,
+        moveTimeSeconds: room.moveTimeMs / 1000,
+        rooms: rooms.size,
+      });
       reply({ ok: true, token, view: rooms.view(room, side) });
     });
 
@@ -354,6 +363,17 @@ export function createDamaServer(
     socket.on('disconnect', (reason) => leaveSeat(socket, reason));
   });
 
+  // The move timer: skip the turns that have run out, and tell both players.
+  const clock = setInterval(() => {
+    for (const { room, finished } of rooms.expireTurns()) {
+      metrics.turnTimedOut();
+      log('turn_timed_out', { room: room.code, side: sideName(room.lastAction!.by) });
+      if (finished) gameEnded(room, finished);
+      broadcast(room);
+    }
+  }, CLOCK_CHECK_MS);
+  clock.unref();
+
   const sweeper = setInterval(() => {
     const removed = rooms.sweep(ROOM_IDLE_MS);
     if (removed > 0) log('rooms_removed', { removed, rooms: rooms.size });
@@ -368,6 +388,7 @@ export function createDamaServer(
     close: () =>
       new Promise<void>((resolve) => {
         clearInterval(sweeper);
+        clearInterval(clock);
         void io.close(() => resolve());
       }),
   };

@@ -17,6 +17,7 @@ const status: OnlineStatus = {
   drawOffer: null,
   rematch: { you: false, opponent: false },
   claimWinAt: null,
+  moveTimeMs: 0,
 };
 
 describe('RoomPanel invite', () => {

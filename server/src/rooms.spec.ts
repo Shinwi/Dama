@@ -234,3 +234,108 @@ describe('rematch', () => {
     expect(room.state.strictMode).toBe(true);
   });
 });
+
+describe('the move timer', () => {
+  /** A room with a 30 s move timer and a clock the test moves forward by hand. */
+  function timedRoom() {
+    let time = 1_000_000;
+    const manager = new RoomManager(Math.random, () => time);
+    const { room } = manager.create(LIGHT, false, 30_000);
+    const joined = manager.join(room.code);
+    if (!joined.ok) throw new Error(joined.error);
+    return { manager, room, wait: (ms: number) => (time += ms) };
+  }
+
+  it("starts when the second player joins, and shows each player the turn's time left", () => {
+    const { manager, room, wait } = timedRoom();
+    wait(12_000);
+    expect(manager.view(room, LIGHT)).toMatchObject({ moveTimeMs: 30_000, turnLeftMs: 18_000 });
+    expect(manager.view(room, DARK)).toMatchObject({ moveTimeMs: 30_000, turnLeftMs: 18_000 });
+  });
+
+  it('does not run while waiting for the friend, or without a timer', () => {
+    const manager = new RoomManager();
+    const waiting = manager.create(LIGHT, false, 30_000).room;
+    expect(manager.view(waiting, LIGHT).turnLeftMs).toBeNull();
+    const { room } = twoPlayers(manager);
+    expect(manager.view(room, LIGHT)).toMatchObject({ moveTimeMs: 0, turnLeftMs: null });
+  });
+
+  it('starts over for the next player after a move, but not after an nfikh', () => {
+    const { manager, room, wait } = timedRoom();
+    wait(10_000);
+    expect(manager.play(room, LIGHT, { kind: 'move', path: [sq('b4'), sq('a5')] }).ok).toBe(true);
+    expect(manager.view(room, DARK).turnLeftMs).toBe(30_000);
+  });
+
+  it('skips the turn once the timer and its grace have run out', () => {
+    const { manager, room, wait } = timedRoom();
+    wait(30_500);
+    expect(manager.expireTurns()).toEqual([]); // still inside the grace
+    wait(500);
+    const expired = manager.expireTurns();
+    expect(expired).toEqual([{ room, finished: null }]);
+    expect(room.state.toMove).toBe(DARK);
+    expect(room.lastAction).toEqual({ kind: 'timeout', by: LIGHT });
+    expect(room.seq).toBe(1);
+    expect(manager.view(room, DARK).turnLeftMs).toBe(30_000);
+  });
+
+  it('accepts a move made at 0:00 that arrives inside the grace, and refuses one after it', () => {
+    const { manager, room, wait } = timedRoom();
+    wait(30_400);
+    expect(manager.play(room, LIGHT, { kind: 'move', path: [sq('b4'), sq('a5')] }).ok).toBe(true);
+    wait(31_000);
+    expect(manager.play(room, DARK, { kind: 'move', path: [sq('c7'), sq('b6')] })).toEqual({ ok: false, error: 'Out of time.' });
+  });
+
+  it('three time-outs in a row lose the game', () => {
+    const { manager, room, wait } = timedRoom();
+    const blackMoves = [
+      [sq('c7'), sq('b6')],
+      [sq('b6'), sq('a5')],
+    ];
+    for (const path of blackMoves) {
+      wait(31_000);
+      manager.expireTurns(); // White's turn skipped
+      expect(manager.play(room, DARK, { kind: 'move', path }).ok).toBe(true);
+    }
+    wait(31_000);
+    const [{ finished }] = manager.expireTurns();
+    expect(finished).toMatchObject({ result: 'timeout', actions: 5 });
+    expect(manager.isOver(room)).toBe(true);
+    expect(manager.view(room, LIGHT).turnLeftMs).toBeNull();
+    wait(60_000);
+    expect(manager.expireTurns()).toEqual([]); // the clock stopped with the game
+  });
+
+  it('keeps every action of the game, and a rematch keeps the timer', () => {
+    const { manager, room, wait } = timedRoom();
+    manager.play(room, LIGHT, { kind: 'move', path: [sq('b4'), sq('a5')] });
+    wait(31_000);
+    manager.expireTurns();
+    expect(manager.view(room, LIGHT).actions).toEqual([
+      { kind: 'move', path: [sq('b4'), sq('a5')], by: LIGHT },
+      { kind: 'timeout', by: DARK },
+    ]);
+    manager.resign(room, LIGHT);
+    manager.rematch(room, LIGHT, true);
+    manager.rematch(room, DARK, true);
+    expect(manager.view(room, LIGHT)).toMatchObject({ actions: [], moveTimeMs: 30_000, turnLeftMs: 30_000 });
+  });
+
+  it('a draw offer goes away if the player it was made to runs out of time', () => {
+    const { manager, room, wait } = timedRoom();
+    manager.offerDraw(room, DARK);
+    wait(31_000);
+    manager.expireTurns();
+    expect(room.drawOffer).toBeNull();
+  });
+
+  it('treats a move timer that makes no sense as none', () => {
+    const manager = new RoomManager();
+    for (const bad of [-5, 1.5, Number.NaN, 24 * 60 * 60 * 1000]) {
+      expect(manager.create(LIGHT, false, bad).room.moveTimeMs).toBe(0);
+    }
+  });
+});

@@ -6,7 +6,7 @@ import { moveNotation } from './moves';
 import { DARK, GameState, LIGHT, Side } from './types';
 
 function stateAt(pieces: Parameters<typeof boardFrom>[0], toMove: Side = LIGHT): GameState {
-  return { board: boardFrom(pieces), toMove, strictMode: false, quietMoves: 0, forfeitable: [] };
+  return { board: boardFrom(pieces), toMove, strictMode: false, quietMoves: 0, forfeitable: [], timeouts: { light: 0, dark: 0 } };
 }
 
 function play(state: GameState, notation: string): GameState {

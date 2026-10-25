@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { boardFrom, parseSquare } from '../../engine/board';
-import { advanceState, createInitialState, legalMoves, takeForfeit } from '../../engine/game';
+import { advanceState, createInitialState, legalMoves, passTurn, takeForfeit } from '../../engine/game';
 import { DARK, GameState, LIGHT, Side } from '../../engine/types';
 import { ActionReply, JoinedReply, OnlineAction, RoomView } from '../../protocol/online';
 import { GameService } from './game.service';
@@ -57,6 +57,9 @@ function view(state: GameState, side: Side, seq: number, extra: Partial<RoomView
     state: { ...state, board: Array.from(state.board) },
     seq,
     lastAction: null,
+    actions: [],
+    moveTimeMs: 0,
+    turnLeftMs: null,
     game: 0,
     result: null,
     drawOffer: null,
@@ -413,5 +416,55 @@ describe('GameService online', () => {
     expect(service.updateKind()).toBe('reset');
     expect(Array.from(service.state().board)).toEqual(Array.from(createInitialState().board));
     expect(service.isHumanTurn()).toBe(false); // White (the opponent now) opens
+  });
+
+  it("runs the server's clock: the turn's time left, as it sent it", async () => {
+    (service as unknown as { now: () => number }).now = () => 50_000;
+    await enterRoom(LIGHT, true);
+    client.onUpdate(view(createInitialState(), LIGHT, 0, { moveTimeMs: 30_000, turnLeftMs: 21_000 }));
+    expect(service.moveTimeMs()).toBe(30_000);
+    expect(service.turnClock()).toEqual({ side: LIGHT, deadline: 71_000, totalMs: 30_000 });
+    // The clock never skips a turn itself online: the server does, and says so.
+    (service as unknown as { now: () => number }).now = () => 200_000;
+    (service as unknown as { clockTick: () => void }).clockTick();
+    expect(service.state().toMove).toBe(LIGHT);
+    service.leaveOnline();
+    expect(service.turnClock()).toBeNull();
+  });
+
+  it('skips the turn when the server says the time ran out', async () => {
+    await enterRoom(LIGHT, true);
+    service.tapSquare(sq('b4')); // picked up, but too late
+    const skipped = passTurn(createInitialState());
+    client.onUpdate(view(skipped, LIGHT, 1, { lastAction: { kind: 'timeout', by: LIGHT }, actions: [{ kind: 'timeout', by: LIGHT }] }));
+    expect(service.state().toMove).toBe(DARK);
+    expect(service.lastTimeout()).toBe(LIGHT);
+    expect(service.selection().selected).toBeNull();
+    expect(service.plies()).toEqual([{ side: LIGHT, nfikh: null, move: null }]);
+    expect(service.updateKind()).toBe('reset');
+  });
+
+  it('rebuilds the move list from the server when it snaps to its position', async () => {
+    const after = play(createInitialState(), 'b4', 'a5');
+    client.joinedReply = {
+      ok: true,
+      token: 'secret',
+      view: view(after, DARK, 1, { lastAction: { kind: 'move', path: [sq('b4'), sq('a5')], by: LIGHT }, actions: [{ kind: 'move', path: [sq('b4'), sq('a5')], by: LIGHT }] }),
+    };
+    expect(await service.startOnline({ kind: 'create' })).toBeNull();
+    expect(service.plies()).toHaveLength(1);
+    expect(service.plies()[0]).toMatchObject({ side: LIGHT, nfikh: null });
+    expect(service.lastMove()?.to).toBe(sq('a5'));
+  });
+
+  it('sends the move timer when it creates a room', async () => {
+    let asked: unknown[] = [];
+    client.create = async (...args: unknown[]) => {
+      asked = args;
+      return client.joinedReply;
+    };
+    client.joinedReply = { ok: true, token: 'secret', view: view(createInitialState(), LIGHT, 0, { opponentJoined: false }) };
+    await service.startOnline({ kind: 'create' }, { moveTime: 45 });
+    expect(asked).toEqual([LIGHT, false, 45]);
   });
 });

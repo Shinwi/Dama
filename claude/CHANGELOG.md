@@ -3,6 +3,51 @@
 Chronological log of what we've done and decided in this project, across Claude Code
 sessions. Newest entries at the top. See `PLAN.md` for what's next.
 
+## 2026-10-25 (evening)
+
+Issue #45, branch `feature/move-timer-scoreboard`: move timer, scoreboard, room chip, move list
+(#30) and dropped taps (#32).
+
+- **Design:** "C, TV score bug", picked by the user from three mockups (the first round's dark
+  navy scoreboard was rejected: the colours felt off). Captured pieces are side-view stacks of
+  at most 4. Random player names were dropped; the scoreboard says You / Opponent / Computer, or
+  White / Black in 1v1.
+- **Engine:** `GameState.timeouts` ({light, dark}: time-outs in a row) and `passTurn()`. A skipped
+  turn flips the side, drops `forfeitable` and doesn't touch `quietMoves`; a move resets the
+  mover's count. `MAX_TIMEOUTS` = 3 loses (`Outcome.onTime`).
+- **Server:**
+  - `moveTimeSeconds` on `room:create` (0 or a whole number of ms up to 10 min, else none).
+  - The room keeps `turnStartedAt`; `expireTurns()` runs every 250 ms and skips turns past
+    the timer plus `TURN_GRACE_MS` (1 s). A move after that is refused ("Out of time.").
+  - `RoomView` gains `moveTimeMs`, `turnLeftMs` (time left, not a timestamp, so phone clocks
+    don't matter) and `actions` (the whole game, so a snapping client rebuilds its move list).
+    `lastAction` can be `{kind: 'timeout'}`.
+  - New log `turn_timed_out`, metric `dama_turns_timed_out_total`, result `timeout`.
+- **Client:**
+  - `Settings.moveTime` (seconds, default 30). Offline, GameService runs the clock (`turnClock`,
+    `turnLeftMs`, a 250 ms ticker) for whoever's turn it is, except the computer. It starts
+    once the previous move has landed. Online it shows the server's clock and never skips a turn
+    itself.
+  - Ticks in the player's own last 10 s.
+  - `GameController.plies` (side, nfikh, move or null) for the move list, with Undo and
+    `loadHistory(actions, state)`.
+  - #32: taps made while a move slides are queued in GameService and played after `settled`,
+    one move at a time.
+  - New components: `Scoreboard`, `CapturedStacks`, `MoveList`, `RoomChip` (with a menu:
+    share / copy code / leave). `online/invite.ts` holds the share code.
+  - The room card shows only until both players are in. The status line is screen-reader-only
+    while it just says whose move it is.
+- **After review:**
+  - The tray overlap is fixed: the wide-screen board-width rule was being overridden.
+  - The board-edge turn bar is removed: it felt laggy.
+  - The messages above the board (status, nfikh, time-out, server error) share one
+    fixed-height line, and only the most important one shows. The draw and claim-win prompts
+    moved below the board, and the scoreboard's tab row has a fixed height. The board never
+    moves up or down now; an e2e test checks it while the computer thinks.
+- **Tests:** engine 52, component 156, server 49, Playwright 54 (including an online time-out
+  between two browsers and the fast-taps case). e2e sets a tiny timer through the saved
+  settings (`moveTime`), as the home screen only offers 30 s and up.
+
 ## 2026-10-25 (afternoon)
 
 Issue #43, branch `feature/online-complete-game`: a complete online game.

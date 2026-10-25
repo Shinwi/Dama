@@ -13,21 +13,26 @@ import {
 } from '@angular/core';
 import { Board } from './board/board';
 import { GameSetup, Home } from './home/home';
-import { RoomPanel } from './online/room-panel';
+import { describeMoveTime, RoomPanel } from './online/room-panel';
+import { RoomChip } from './online/room-chip';
+import { Scoreboard, ScoreboardPlayer } from './scoreboard/scoreboard';
+import { CapturedTray } from './scoreboard/captured-tray';
+import { MoveList } from './move-list/move-list';
 import { OnlinePrompt } from './online/online-prompt';
 import { GameOverCard } from './game-over/game-over-card';
 import { TapToast } from './tap-toast/tap-toast';
 import { AudioService } from './audio/audio.service';
-import { GameService } from './game/game.service';
+import { GameService, playerName } from './game/game.service';
 import { squareName } from '../engine/board';
-import { DARK, LIGHT, Outcome } from '../engine/types';
+import { DARK, LIGHT, Outcome, Side } from '../engine/types';
+import { MAX_TIMEOUTS } from '../engine/game';
 import { RoomResult } from '../protocol/online';
 import { Difficulty } from '../engine/ai';
 import { Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Home, RoomPanel, TapToast, OnlinePrompt, GameOverCard],
+  imports: [Board, Home, RoomPanel, RoomChip, Scoreboard, CapturedTray, MoveList, TapToast, OnlinePrompt, GameOverCard],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -136,7 +141,72 @@ export class App {
     return `${sideName(state.toMove)} to move.`;
   });
 
-  protected readonly pieceCounts = computed(() => this.game.pieceCounts());
+  /**
+   * The status line says whose move it is, which the scoreboard already shows: then it's
+   * only there for screen readers. Anything else it says (thinking, reconnecting, the result)
+   * is shown.
+   */
+  protected readonly statusIsTurn = computed(() => /^(Your move\.|Opponent's move\.|(White|Black) to move\.)$/.test(this.statusText()));
+
+  /** The latest problem the server reported, once both players are in (the room card shows it before). */
+  protected readonly onlineError = computed(() => {
+    const online = this.game.online();
+    return online?.opponentJoined ? online.error : null;
+  });
+
+  /** Which message the one line above the board shows: the most important one there is. */
+  protected readonly shownMessage = computed<'error' | 'timeout' | 'nfikh' | 'status' | null>(() => {
+    if (this.onlineError()) return 'error';
+    if (this.timeoutNote()) return 'timeout';
+    if (this.nfikhNote()) return 'nfikh';
+    return this.statusIsTurn() ? null : 'status';
+  });
+
+  /** The scoreboard's two players: you on the left (White on the left in 1v1), then the other. */
+  protected readonly scoreboardPlayers = computed<readonly [ScoreboardPlayer, ScoreboardPlayer]>(() => {
+    const settings = this.perspective();
+    const counts = this.game.pieceCounts();
+    const left: Side = settings.mode === 'pvp' ? LIGHT : settings.playerSide;
+    const player = (side: Side): ScoreboardPlayer => {
+      const name = playerName(side, settings);
+      return {
+        side,
+        name,
+        // Every piece starts on the board: what's missing was captured (or taken by nfikh).
+        captured: PIECES_PER_SIDE - (side === LIGHT ? counts.dark : counts.light),
+        turnLabel: name === 'You' ? 'Your move' : name === 'Computer' ? 'Thinking…' : 'To move',
+      };
+    };
+    return [player(left), player((-left) as Side)];
+  });
+
+  /** The side the scoreboard lights up: nobody's while waiting for the friend, or once it's over. */
+  protected readonly scoreboardToMove = computed(() => {
+    const online = this.game.online();
+    if ((online && !online.opponentJoined) || this.game.outcome().kind !== 'ongoing') return null;
+    return this.game.state().toMove;
+  });
+
+  protected readonly scoreboardClock = computed(() => {
+    const clock = this.game.turnClock();
+    const left = this.game.turnLeftMs();
+    return clock && left !== null ? { side: clock.side, leftMs: left } : null;
+  });
+
+  protected readonly moveNumber = computed(() => Math.floor(this.game.plies().length / 2) + 1);
+
+  /** Who plays White and Black, for the move list's columns. */
+  protected readonly moveListNames = computed(() => {
+    const settings = this.perspective();
+    return { light: playerName(LIGHT, settings), dark: playerName(DARK, settings) };
+  });
+
+  protected readonly moveTimeNote = computed(() => describeMoveTime(this.game.moveTimeMs()));
+
+  /** Says whose turn was just skipped because their time ran out, until the next move. */
+  protected readonly timeoutNote = computed(() =>
+    describeTimeout(this.game.lastTimeout(), this.game.state().timeouts, this.perspective(), this.game.outcome().kind === 'ongoing'),
+  );
 
   /**
    * The game-over card, once the move that ended the game has finished playing out on the
@@ -301,6 +371,31 @@ export class App {
   }
 }
 
+/** How many pieces each side starts with. */
+const PIECES_PER_SIDE = 20;
+
+/**
+ * Pure, like describeNfikh: what to say about a turn just skipped because time ran out, e.g.
+ * "Opponent ran out of time: your move again." With the count of time-outs in a row, as
+ * three lose the game.
+ */
+export function describeTimeout(
+  side: Side | null,
+  timeouts: { light: number; dark: number },
+  settings: Settings,
+  gameOn = true,
+): string | null {
+  if (side === null || !gameOn) return null;
+  const count = side === LIGHT ? timeouts.light : timeouts.dark;
+  const inARow = `Time-outs in a row: ${count} of ${MAX_TIMEOUTS}.`;
+  if (settings.mode === 'pvp') {
+    return `${sideName(side)} ran out of time: ${sideName((-side) as Side)} to move. ${inARow}`;
+  }
+  return side === settings.playerSide
+    ? `You ran out of time: your turn was skipped. ${inARow}`
+    : `${playerName(side, settings)} ran out of time: your move again. ${inARow}`;
+}
+
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
@@ -376,8 +471,11 @@ export function describeGameOver(
   if (settings.mode !== 'pvp') {
     const youWon = outcome.winner === settings.playerSide;
     const them = settings.mode === 'online' ? 'Your opponent' : 'The computer';
-    const subtitle =
-      reason === 'resigned'
+    const subtitle = outcome.onTime
+      ? youWon
+        ? `${them} ran out of time ${MAX_TIMEOUTS} turns in a row.`
+        : `You ran out of time ${MAX_TIMEOUTS} turns in a row.`
+      : reason === 'resigned'
         ? youWon
           ? 'Your opponent resigned.'
           : 'You resigned.'
@@ -395,6 +493,6 @@ export function describeGameOver(
   return {
     variant: 'win',
     title: `${sideName(outcome.winner)} wins!`,
-    subtitle: `${sideName(loser)} has no legal move left.`,
+    subtitle: outcome.onTime ? `${sideName(loser)} ran out of time ${MAX_TIMEOUTS} turns in a row.` : `${sideName(loser)} has no legal move left.`,
   };
 }

@@ -6,7 +6,7 @@ import { playerId } from '../online/player-id';
 import { Seat, SeatStore } from '../online/seat-store';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, GameState, LIGHT, Move, Outcome, Side } from '../../engine/types';
-import { ActionReply, OnlineAction, RoomResult, RoomView, WireState } from '../../protocol/online';
+import { ActionReply, OnlineAction, RoomAction, RoomResult, RoomView, WireState } from '../../protocol/online';
 import { defaultSettings, GameController, RejectReason, Settings, UpdateKind } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
@@ -16,6 +16,20 @@ const SETTLE_TIMEOUT_MS = 5000;
 const NFIKH_PAUSE_MS = 600;
 /** After a reconnect, how long to wait before asking for the seat again if the server didn't answer. */
 const REJOIN_RETRY_MS = 2000;
+/** How often the move timer's countdown is updated on screen. */
+const CLOCK_TICK_MS = 250;
+/** The last stretch of a turn, when the clock turns red and ticks. */
+export const LOW_TIME_MS = 10_000;
+
+/** The move timer for the turn being played. */
+export interface TurnClock {
+  /** Whose turn it is. */
+  side: Side;
+  /** When (Date.now()) the time runs out. */
+  deadline: number;
+  /** The whole time for a turn. */
+  totalMs: number;
+}
 
 /** Where this player is in an online game, for the screen. Null when not playing online. */
 export interface OnlineStatus {
@@ -42,6 +56,8 @@ export interface OnlineStatus {
   rematch: { you: boolean; opponent: boolean };
   /** When (Date.now()) the player may claim the win, while the opponent is gone; else null. */
   claimWinAt: number | null;
+  /** The room's move timer, or 0 for none. */
+  moveTimeMs: number;
 }
 
 /** A refused tap, for the board (a shake) and a short message. */
@@ -128,6 +144,16 @@ export class GameService {
   private settleTimer: ReturnType<typeof setTimeout> | null = null;
   /** Bumped for every question put to the computer, and to abandon the one in flight. */
   private aiRequest = 0;
+  /** Taps made while a move was still playing out, played once it has (issue #32). */
+  private queuedTaps: number[] = [];
+
+  /** The move timer for the turn being played; null while no clock runs. */
+  readonly turnClock = signal<TurnClock | null>(null);
+  /** Time left on `turnClock`, updated a few times a second; null while no clock runs. */
+  readonly turnLeftMs = signal<number | null>(null);
+  private clockTicker: ReturnType<typeof setInterval> | null = null;
+  /** The last whole second a "hurry up" tick was played for. */
+  private tickedSecond: number | null = null;
 
   /** Made when an online game starts; replaceable in tests. */
   private onlineClientFactory = () => new OnlineClient(onlineServerUrl(), playerId());
@@ -205,6 +231,21 @@ export class GameService {
     this.version();
     return this.controller.canUndo();
   });
+  /** Every turn played so far, for the move list. */
+  readonly plies = computed(() => {
+    this.version();
+    return this.controller.plies;
+  });
+  /** The side whose turn was just skipped because its time ran out, until the next move. */
+  readonly lastTimeout = computed(() => {
+    this.version();
+    return this.controller.lastTimeout;
+  });
+  /** How long each turn may take, in ms; 0 for no timer. Online, the room's setting. */
+  readonly moveTimeMs = computed(() => {
+    const online = this.online();
+    return online ? online.moveTimeMs : this.settings().moveTime * 1000;
+  });
 
   constructor() {
     this.audio.setSoundOn(this.controller.settings.soundOn);
@@ -247,8 +288,11 @@ export class GameService {
   }
 
   tapSquare(square: number): void {
-    // While a move is still playing out, Board holds taps back, so this is rare: ignore it.
-    if (this.moving()) return;
+    // A move is still playing out: this tap waits for it to land (see boardSettled).
+    if (this.moving()) {
+      this.queuedTaps.push(square);
+      return;
+    }
     if (this.thinking() || !this.isHumanTurn()) {
       if (this.controller.outcome.kind === 'ongoing') this.rejectTap(square, null, this.waitMessage());
       return;
@@ -298,6 +342,10 @@ export class GameService {
   boardSettled(): void {
     if (!this.moving()) return;
     this.stopMoving();
+    // Taps made in the meantime, in order, until one of them starts another move: the rest
+    // then wait for that one to land.
+    while (this.queuedTaps.length > 0 && !this.moving()) this.tapSquare(this.queuedTaps.shift()!);
+    this.restartClock();
     void this.maybeTriggerComputer();
   }
 
@@ -309,6 +357,7 @@ export class GameService {
     this.updateKindValue = 'reset';
     this.announcement.set('Your last move was taken back.');
     this.bump();
+    this.restartClock();
   }
 
   /** A new offline game (vs the computer or 1v1). Leaves the online room, if in one. */
@@ -321,6 +370,7 @@ export class GameService {
     this.announcement.set('New game.');
     this.bump();
     saveSettings(this.controller.settings);
+    this.restartClock();
     void this.maybeTriggerComputer();
   }
 
@@ -387,7 +437,9 @@ export class GameService {
     }
 
     const reply =
-      entry.kind === 'create' ? await client.create(settings.playerSide, settings.strictMode) : await client.join(entry.code);
+      entry.kind === 'create'
+        ? await client.create(settings.playerSide, settings.strictMode, settings.moveTime)
+        : await client.join(entry.code);
     if (client !== this.onlineClient) return 'Cancelled.'; // left again before the server answered
     if (!reply.ok) {
       this.leaveOnline();
@@ -441,6 +493,7 @@ export class GameService {
     this.online.set(null);
     this.onlineSession = null;
     this.seats.leave();
+    this.setClock(null);
   }
 
   private setSession(seat: Seat): void {
@@ -514,6 +567,7 @@ export class GameService {
       drawOffer: null,
       rematch: { you: false, opponent: false },
       claimWinAt: null,
+      moveTimeMs: view.moveTimeMs ?? 0,
     });
     this.applyRoomView(view, true);
   }
@@ -549,26 +603,39 @@ export class GameService {
       drawOffer: view.drawOffer,
       rematch: view.rematch,
       claimWinAt: view.opponentGoneForMs === null ? null : now + Math.max(0, view.claimWinAfterMs - view.opponentGoneForMs),
+      moveTimeMs: view.moveTimeMs ?? 0,
     });
 
-    const opponentsNext =
-      !snap && view.seq === this.onlineSeq + 1 && view.lastAction !== null && view.lastAction.by !== online.side;
-    if (opponentsNext && view.lastAction) {
+    // The opponent's action, or either player's turn skipped by the server's clock.
+    const last = view.lastAction;
+    const theirsToPlay = !snap && view.seq === this.onlineSeq + 1 && last !== null && (last.by !== online.side || last.kind === 'timeout');
+    if (theirsToPlay && last) {
       this.onlineSeq = view.seq;
-      this.playOpponentAction(view.lastAction);
+      this.playRoomAction(last);
     }
 
     const inStep = !snap && view.seq === this.onlineSeq && sameState(this.controller.state, view.state);
     if (!inStep) {
-      this.controller.loadPosition(fromWire(view.state));
+      this.controller.loadHistory(view.actions ?? [], fromWire(view.state));
       this.onlineSeq = view.seq;
       this.stopMoving();
+      this.queuedTaps = [];
       this.updateKindValue = 'reset';
     }
+    // The server keeps the time online: its clock, from what's left on it as it sent this.
+    this.setClock(
+      view.turnLeftMs === null || view.turnLeftMs === undefined || !view.moveTimeMs
+        ? null
+        : { side: view.state.toMove, deadline: now + view.turnLeftMs, totalMs: view.moveTimeMs },
+    );
     this.bump();
   }
 
-  private playOpponentAction(action: OnlineAction): void {
+  private playRoomAction(action: RoomAction): void {
+    if (action.kind === 'timeout') {
+      this.skipTurn();
+      return;
+    }
     if (action.kind === 'nfikh') {
       this.controller.takeForfeit(action.square);
       this.showNfikh();
@@ -587,6 +654,11 @@ export class GameService {
         ? { kind: 'nfikh', square: this.controller.lastNfikh!.square }
         : { kind: 'move', path: this.controller.lastMove!.path };
     this.sendAction(action);
+    // The opponent's clock starts now; the server's update brings its exact time shortly.
+    const online = this.online();
+    if (result === 'move' && online && online.moveTimeMs > 0) {
+      this.setClock({ side: this.controller.state.toMove, deadline: this.now() + online.moveTimeMs, totalMs: online.moveTimeMs });
+    }
   }
 
   private sendAction(action: OnlineAction): void {
@@ -704,10 +776,14 @@ export class GameService {
     }
   }
 
-  /** Forgets the computer's reply still being worked out, if any: it will be ignored. */
+  /**
+   * Forgets the computer's reply still being worked out, if any (it will be ignored), and any
+   * taps still waiting for a move to land: the position they were meant for is gone.
+   */
   private abandonComputerMove(): void {
     this.aiRequest++;
     this.thinking.set(false);
+    this.queuedTaps = [];
   }
 
   private showNfikh(): void {
@@ -715,9 +791,91 @@ export class GameService {
     this.audio.capture(1);
   }
 
+  // ---- The move timer ------------------------------------------------------------------
+
+  /**
+   * Offline: starts the clock for the turn about to be played, if there's one to run: a move
+   * timer is set, the game is on, nothing is still moving, and it's a person's turn (the
+   * computer has no clock). Online the server keeps the time (see applyRoomView).
+   */
+  private restartClock(): void {
+    if (this.online()) return;
+    const settings = this.controller.settings;
+    const totalMs = settings.moveTime * 1000;
+    const side = this.controller.state.toMove;
+    const personToMove = settings.mode === 'pvp' || side === settings.playerSide;
+    const run = totalMs > 0 && personToMove && !this.moving() && this.controller.outcome.kind === 'ongoing';
+    this.setClock(run ? { side, deadline: this.now() + totalMs, totalMs } : null);
+  }
+
+  private setClock(clock: TurnClock | null): void {
+    this.turnClock.set(clock);
+    this.tickedSecond = null;
+    if (clock === null) {
+      if (this.clockTicker !== null) clearInterval(this.clockTicker);
+      this.clockTicker = null;
+      this.turnLeftMs.set(null);
+      return;
+    }
+    this.clockTick();
+    if (this.clockTicker === null) this.clockTicker = setInterval(() => this.clockTick(), CLOCK_TICK_MS);
+  }
+
+  /**
+   * Counts down: the time left for the screen, a soft tick each second of the player's own
+   * last 10 seconds, and, offline, the turn skipped when the time is up. (Online the server
+   * skips it and says so.)
+   */
+  private clockTick(): void {
+    const clock = this.turnClock();
+    if (!clock) return;
+    const left = Math.max(0, clock.deadline - this.now());
+    this.turnLeftMs.set(left);
+    const second = Math.ceil(left / 1000);
+    if (left > 0 && left <= LOW_TIME_MS && second !== this.tickedSecond && this.isOwnClock(clock.side)) {
+      this.tickedSecond = second;
+      this.audio.clockTick();
+    }
+    if (left === 0 && !this.online()) this.timeUp();
+  }
+
+  /** Whether the clock running is the player's own, the one to hurry them (both sides in 1v1). */
+  private isOwnClock(side: Side): boolean {
+    return this.controller.settings.mode === 'pvp' || side === this.playerSide();
+  }
+
+  /** Offline: the time for the turn ran out. */
+  private timeUp(): void {
+    if (this.moving() || this.controller.outcome.kind !== 'ongoing') {
+      this.setClock(null);
+      return;
+    }
+    this.skipTurn();
+    this.bump();
+    this.restartClock();
+    void this.maybeTriggerComputer();
+  }
+
+  /** The side to move ran out of time: its turn is skipped. */
+  private skipTurn(): void {
+    const side = this.controller.state.toMove;
+    this.controller.passTurn();
+    this.queuedTaps = [];
+    this.updateKindValue = 'reset';
+    this.audio.nope();
+    this.announcement.set(`${this.whoIs(side)} ran out of time: the turn is skipped.`);
+  }
+
+  /** "You", "Opponent", "Computer", or the side's colour in 1v1. */
+  private whoIs(side: Side): string {
+    return playerName(side, this.perspective());
+  }
+
   private startMove(): void {
     this.updateKindValue = 'move';
     this.moving.set(true);
+    // Offline, the next turn's clock starts once this move has landed.
+    if (!this.online()) this.setClock(null);
     if (this.settleTimer !== null) clearTimeout(this.settleTimer);
     this.settleTimer = setTimeout(() => this.boardSettled(), SETTLE_TIMEOUT_MS);
   }
@@ -764,17 +922,7 @@ export class GameService {
  * "You"/"Opponent"; in 1v1 it names the side.
  */
 export function describeMove(move: Move, settings: Settings): string {
-  const side = Math.sign(move.piece);
-  const who =
-    settings.mode !== 'pvp'
-      ? side === settings.playerSide
-        ? 'You'
-        : settings.mode === 'online'
-          ? 'Opponent'
-          : 'Computer'
-      : side === LIGHT
-        ? 'White'
-        : 'Black';
+  const who = playerName(Math.sign(move.piece) as Side, settings);
   const route = move.path.map(squareName).join(move.captures.length > 0 ? ' takes ' : ' to ');
   const details: string[] = [];
   if (move.captures.length > 1) details.push(`${move.captures.length} pieces captured`);
@@ -783,12 +931,19 @@ export function describeMove(move: Move, settings: Settings): string {
   return `${who} played ${[route, ...details].join(', ')}.`;
 }
 
+/** Who plays `side`: "You" and "Computer" or "Opponent", or in 1v1 the side's colour. */
+export function playerName(side: Side, settings: Settings): string {
+  if (settings.mode === 'pvp') return side === LIGHT ? 'White' : 'Black';
+  if (side === settings.playerSide) return 'You';
+  return settings.mode === 'online' ? 'Opponent' : 'Computer';
+}
+
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function fromWire(state: WireState): GameState {
-  return { ...state, board: Int8Array.from(state.board) };
+  return { ...state, board: Int8Array.from(state.board), timeouts: state.timeouts ?? { light: 0, dark: 0 } };
 }
 
 function sameState(local: GameState, remote: WireState): boolean {
@@ -797,7 +952,9 @@ function sameState(local: GameState, remote: WireState): boolean {
     local.board.length === remote.board.length &&
     local.board.every((cell, i) => cell === remote.board[i]) &&
     local.forfeitable.length === remote.forfeitable.length &&
-    local.forfeitable.every((square) => remote.forfeitable.includes(square))
+    local.forfeitable.every((square) => remote.forfeitable.includes(square)) &&
+    // An older server sends no time-outs.
+    (remote.timeouts === undefined || (local.timeouts.light === remote.timeouts.light && local.timeouts.dark === remote.timeouts.dark))
   );
 }
 

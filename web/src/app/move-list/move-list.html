@@ -1,0 +1,30 @@
+<button type="button" class="toggle" [attr.aria-expanded]="open()" (click)="toggle()">
+  <span class="label">Moves</span>
+  <span class="summary" data-testid="move-summary">{{ summary() }}</span>
+  <span class="chevron" aria-hidden="true">{{ open() ? '▴' : '▾' }}</span>
+</button>
+<div class="panel">
+  <h2 class="heading">Moves @if (note(); as note) {<small>{{ note }}</small>}</h2>
+  <div class="scroller" #scroller>
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">#</th>
+          <th scope="col"><span class="disc light" aria-hidden="true"></span>{{ names().light }}</th>
+          <th scope="col"><span class="disc" aria-hidden="true"></span>{{ names().dark }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of rows(); track row.number; let last = $last) {
+          <tr>
+            <td>{{ row.number }}</td>
+            <td [class.capture]="row.lightCapture" [class.latest]="last && row.dark === null">{{ row.light }}</td>
+            <td [class.capture]="row.darkCapture" [class.latest]="last && row.dark !== null">{{ row.dark }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="3" class="empty">No moves yet</td></tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</div>

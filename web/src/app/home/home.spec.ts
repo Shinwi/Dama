@@ -66,4 +66,22 @@ describe('Home and the online server', () => {
     expect(el().querySelector('[data-testid="online-unavailable"]')).toBeNull();
     expect((el().querySelector('[data-testid="room-code-input"]') as HTMLInputElement).value).toBe('K7QX');
   });
+
+  it('picks a move timer, except when joining a room (the room has its own)', async () => {
+    await show('up');
+    const emitted: unknown[] = [];
+    fixture.componentInstance.start.subscribe((setup) => emitted.push(setup.moveTime));
+    const timer = () => el().querySelector('[aria-label="Move timer"]');
+    expect(timer()?.querySelector('[aria-pressed="true"]')?.textContent?.trim()).toBe('30s');
+    button('1 min')!.click();
+    button('Start game')!.click();
+    expect(emitted).toEqual([60]);
+
+    button('Online')!.click();
+    await fixture.whenStable();
+    expect(timer()).not.toBeNull(); // creating a room
+    button('Join room')!.click();
+    await fixture.whenStable();
+    expect(timer()).toBeNull();
+  });
 });

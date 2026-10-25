@@ -71,6 +71,20 @@
     </div>
   }
 
+  @if (showMoveTime()) {
+    <div class="step">
+      <h2 class="step-title">Move timer</h2>
+      <div class="segmented" role="group" aria-label="Move timer">
+        @for (option of moveTimes; track option.seconds) {
+          <button type="button" [attr.aria-pressed]="moveTime() === option.seconds" (click)="moveTime.set(option.seconds)">{{ option.label }}</button>
+        }
+      </div>
+      @if (moveTime() > 0) {
+        <p class="hint">Out of time: the turn is skipped. Three in a row lose the game.</p>
+      }
+    </div>
+  }
+
   <div class="step">
     <h2 class="step-title">Board</h2>
     <div class="themes" role="group" aria-label="Board pattern">

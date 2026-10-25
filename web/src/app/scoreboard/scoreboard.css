@@ -1,0 +1,226 @@
+/* Design "C" from issue #45: a TV score bug. One slim bar (names and the score), with the
+   clocks hanging underneath as tabs. The player to move gets a tint and an underline;
+   red for their last 10 seconds. */
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  --tint: #fbf0d6;
+  --tint-low: #fdebe8;
+  --low: #d23b42;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --tint: #3a3020;
+    --tint-low: #45222a;
+    --low: #e5484d;
+  }
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto minmax(0, 1fr);
+  width: min(100%, 560px);
+  height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: 0 5px 16px rgba(40, 25, 5, 0.14);
+}
+
+.name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
+  min-width: 0;
+  font-weight: 700;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.name.right {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+
+.name.active {
+  background: var(--tint);
+  box-shadow: inset 0 -3px 0 var(--color-saffron);
+}
+
+.name.active.low {
+  background: var(--tint-low);
+  box-shadow: inset 0 -3px 0 var(--low);
+}
+
+.disc {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  flex: none;
+  background: radial-gradient(circle at 38% 32%, var(--piece-black-shine), var(--piece-black-fill) 70%);
+  border: 1px solid var(--piece-black-edge);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.disc.light {
+  background: radial-gradient(circle at 38% 32%, var(--piece-white-shine), var(--piece-white-fill) 70%);
+  border-color: var(--piece-white-edge);
+}
+
+.score {
+  width: 44px;
+  display: grid;
+  place-items: center;
+  background: var(--color-accent);
+  color: var(--color-accent-contrast);
+  font-family: var(--font-title);
+  font-size: 1.6rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.score + .score {
+  border-left: 1px solid color-mix(in srgb, var(--color-accent-contrast) 25%, transparent);
+}
+
+.tabs {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px minmax(0, 1fr);
+  width: min(100%, 560px);
+  /* The same height whatever is in it (clocks or not, stacks growing), so the board below
+     never moves. */
+  height: 30px;
+  overflow: hidden;
+  padding: 0 8px;
+}
+
+.tab {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tab.right {
+  flex-direction: row-reverse;
+}
+
+.stacks {
+  --chip-width: 17px;
+  --chip-height: 7px;
+  --stack-gap: 3px;
+  padding-top: 6px;
+  flex-wrap: nowrap;
+}
+
+.turn {
+  flex: 1;
+  min-width: 0;
+  padding-top: 6px;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #a06f05;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tab:not(.right) .turn {
+  text-align: right;
+}
+
+.tab.low .turn {
+  color: var(--low);
+}
+
+@media (prefers-color-scheme: dark) {
+  .turn {
+    color: var(--color-saffron);
+  }
+}
+
+.clock {
+  flex: none;
+  font-weight: 800;
+  font-size: 1rem;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  padding: 5px 11px;
+  border-radius: 0 0 9px 9px;
+  background: color-mix(in srgb, var(--color-border) 70%, transparent);
+  color: var(--color-text-muted);
+}
+
+.tab.active .clock {
+  background: var(--color-saffron);
+  color: #2b1d00;
+}
+
+.tab.active.low .clock {
+  background: var(--low);
+  color: #fff;
+}
+
+.middle {
+  padding-top: 5px;
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  text-align: center;
+  line-height: 1.35;
+}
+
+/* Wide screens show the captured pieces beside the board instead (App). */
+@media (min-width: 1000px) {
+  .stacks {
+    display: none;
+  }
+}
+
+@media (max-width: 420px) {
+  .bar {
+    height: 40px;
+  }
+
+  .name {
+    padding: 0 8px;
+    gap: 6px;
+    font-size: 0.74rem;
+    letter-spacing: 0.02em;
+  }
+
+  .score {
+    width: 36px;
+    font-size: 1.35rem;
+  }
+
+  .tabs {
+    grid-template-columns: minmax(0, 1fr) 64px minmax(0, 1fr);
+    padding: 0 4px;
+  }
+
+  .clock {
+    font-size: 0.92rem;
+    padding: 4px 8px;
+  }
+
+  /* No room for "Your move" beside the stacks and the clock: the tint says it. */
+  .turn {
+    display: none;
+  }
+}

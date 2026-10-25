@@ -293,3 +293,75 @@ describe('GameController undo (vs computer)', () => {
     expect(c.state).toBe(state);
   });
 });
+
+describe('GameController move list and the move timer', () => {
+  const start = () => new GameController({ ...defaultSettings(), mode: 'pvp' });
+  const tap = (controller: GameController, ...squares: string[]) => squares.forEach((s) => controller.tapSquare(parseSquare(s)));
+
+  it('lists every turn: who played, and the move', () => {
+    const controller = start();
+    tap(controller, 'b4', 'a5', 'c7', 'b6');
+    expect(controller.plies.map((p) => [p.side, p.nfikh, p.move && moveNotation(p.move)])).toEqual([
+      [LIGHT, null, 'b4-a5'],
+      [DARK, null, 'c7-b6'],
+    ]);
+  });
+
+  it('a skipped turn goes in the list with no move, and the other side moves', () => {
+    const controller = start();
+    tap(controller, 'b4'); // picked up, then the time runs out
+    controller.passTurn();
+    expect(controller.state.toMove).toBe(DARK);
+    expect(controller.selectionInfo.selected).toBeNull();
+    expect(controller.lastTimeout).toBe(LIGHT);
+    expect(controller.plies).toEqual([{ side: LIGHT, nfikh: null, move: null }]);
+    tap(controller, 'c7', 'b6');
+    expect(controller.lastTimeout).toBeNull(); // old news once a move is played
+  });
+
+  it('an nfikh goes with the move that follows it', () => {
+    // White skips a capture (b4 could take c5), so Black may take b4 by nfikh.
+    const controller = controllerAt({ light: ['b4', 'g3'], dark: ['c5', 'h8'] });
+    tap(controller, 'g3', 'h4', 'b4', 'h8', 'g7');
+    expect(controller.plies.map((p) => [p.nfikh === null ? null : squareName(p.nfikh), p.move && moveNotation(p.move)])).toEqual([
+      [null, 'g3-h4'],
+      ['b4', 'h8-g7'],
+    ]);
+  });
+
+  it('Undo takes the moves back out of the list', () => {
+    const controller = new GameController({ ...defaultSettings(), mode: 'computer', playerSide: LIGHT });
+    tap(controller, 'b4', 'a5');
+    controller.applyExternalMove(controller.legalMoves.find((m) => moveNotation(m) === 'c7-b6')!);
+    controller.undo();
+    expect(controller.plies).toEqual([]);
+  });
+
+  it("rebuilds the list from the server's actions", () => {
+    const controller = start();
+    const reference = start();
+    tap(reference, 'b4', 'a5');
+    reference.passTurn();
+    controller.loadHistory(
+      [
+        { kind: 'move', path: [parseSquare('b4'), parseSquare('a5')], by: LIGHT },
+        { kind: 'timeout', by: DARK },
+      ],
+      reference.state,
+    );
+    expect(controller.plies.map((p) => [p.side, p.move && moveNotation(p.move)])).toEqual([
+      [LIGHT, 'b4-a5'],
+      [DARK, null],
+    ]);
+    expect(controller.lastTimeout).toBe(DARK);
+    expect(controller.state).toBe(reference.state);
+  });
+
+  it("falls back to the server's position alone if its actions can't be followed", () => {
+    const controller = start();
+    const state = start().state;
+    controller.loadHistory([{ kind: 'move', path: [parseSquare('b4'), parseSquare('b5')], by: LIGHT }], state);
+    expect(controller.plies).toEqual([]);
+    expect(controller.state).toBe(state);
+  });
+});

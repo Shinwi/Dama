@@ -1,10 +1,10 @@
 import { ChangeDetectionStrategy, Component, computed, input, linkedSignal, output } from '@angular/core';
 import { Difficulty } from '../../engine/ai';
 import { DARK, LIGHT, Side } from '../../engine/types';
-import { BoardTheme, GameMode, Settings } from '../game/game-controller';
+import { BoardTheme, GameMode, MOVE_TIMES, Settings } from '../game/game-controller';
 import { OnlineEntry, OnlineServerState } from '../game/game.service';
 
-export type GameSetup = Pick<Settings, 'mode' | 'difficulty' | 'playerSide' | 'boardTheme'> & {
+export type GameSetup = Pick<Settings, 'mode' | 'difficulty' | 'playerSide' | 'boardTheme' | 'moveTime'> & {
   /** Set when mode is 'online': make a new room, or join a friend's. */
   online?: OnlineEntry;
 };
@@ -64,6 +64,14 @@ export class Home {
   protected readonly difficulty = linkedSignal<Difficulty>(() => this.settings().difficulty);
   protected readonly playerSide = linkedSignal<Side>(() => this.settings().playerSide);
   protected readonly boardTheme = linkedSignal<BoardTheme>(() => this.settings().boardTheme);
+  protected readonly moveTime = linkedSignal(() => this.settings().moveTime);
+
+  protected readonly moveTimes = MOVE_TIMES.map((seconds) => ({
+    seconds,
+    label: seconds === 0 ? 'No timer' : seconds % 60 === 0 ? `${seconds / 60} min` : `${seconds}s`,
+  }));
+  /** Joining a room plays by its creator's timer, so there's nothing to pick then. */
+  protected readonly showMoveTime = computed(() => this.mode() !== 'online' || this.onlineEntry() === 'create');
 
   /** The 4×4 corner of the board drawn in each pattern's swatch. */
   protected readonly swatchSquares = Array.from({ length: 16 }, (_, i) => (Math.floor(i / 4) + i) % 2 === 1);
@@ -99,6 +107,7 @@ export class Home {
       difficulty: this.difficulty(),
       playerSide: this.playerSide(),
       boardTheme: this.boardTheme(),
+      moveTime: this.moveTime(),
       online,
     });
   }

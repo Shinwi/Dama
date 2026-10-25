@@ -62,10 +62,11 @@ export class Today {
 }
 
 /** Why a move was refused, as a short label for the metrics (not the full message). */
-export type RefusalReason = 'not_your_turn' | 'illegal' | 'game_over' | 'waiting' | 'invalid' | 'no_room' | 'other';
+export type RefusalReason = 'not_your_turn' | 'out_of_time' | 'illegal' | 'game_over' | 'waiting' | 'invalid' | 'no_room' | 'other';
 
 export function refusalReason(error: string): RefusalReason {
   if (error.startsWith('Not your turn')) return 'not_your_turn';
+  if (error.startsWith('Out of time')) return 'out_of_time';
   if (error.startsWith('Illegal') || error.startsWith('That piece cannot')) return 'illegal';
   if (error.startsWith('The game is over')) return 'game_over';
   if (error.startsWith('Waiting for')) return 'waiting';
@@ -91,8 +92,13 @@ export class ServerMetrics {
   });
   private readonly gamesFinished = new Counter({
     name: 'dama_games_finished_total',
-    help: 'Games that ended: win / draw on the board, resigned, draw_agreed, abandoned (win claimed)',
+    help: 'Games that ended: win / draw on the board, timeout (lost on time), resigned, draw_agreed, abandoned (win claimed)',
     labelNames: ['result'] as const,
+    registers: [this.registry],
+  });
+  private readonly turnsTimedOut = new Counter({
+    name: 'dama_turns_timed_out_total',
+    help: 'Turns skipped because the move timer ran out',
     registers: [this.registry],
   });
   private readonly actions = new Counter({
@@ -166,6 +172,11 @@ export class ServerMetrics {
 
   actionPlayed(kind: 'move' | 'nfikh'): void {
     this.actions.inc({ kind });
+  }
+
+  /** The move timer ran out, and the server skipped the turn. */
+  turnTimedOut(): void {
+    this.turnsTimedOut.inc();
   }
 
   /** A game ended, however it ended. */
