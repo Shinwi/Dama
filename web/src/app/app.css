@@ -107,37 +107,6 @@
   margin-top: 4px;
 }
 
-@media (min-width: 1000px) {
-  .board-wrap {
-    width: min(calc(100% - 224px), calc(560px + var(--coord-gutter)), calc(100vh - var(--board-vh-reserve, 240px)));
-  }
-}
-
-/* A bar along the edge of the board on the side of the player to move; red when their
-   time is nearly up. */
-.board-wrap[data-turn]::after {
-  content: '';
-  position: absolute;
-  left: var(--coord-gutter);
-  right: 0;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--color-saffron);
-  pointer-events: none;
-}
-
-.board-wrap[data-turn='bottom']::after {
-  bottom: -8px;
-}
-
-.board-wrap[data-turn='top']::after {
-  top: -8px;
-}
-
-.board-wrap.low::after {
-  background: #d23b42;
-}
-
 .board-wrap {
   position: relative;
   /* Board plus its coordinate strips: a square that fits the same height budget the board
@@ -151,6 +120,13 @@
 @media (max-width: 999px) {
   .board-wrap {
     flex: 0 1 auto;
+  }
+}
+
+/* Wide screens: room for the captured-pieces trays (2 × 100px, plus the gaps) beside it. */
+@media (min-width: 1000px) {
+  .board-wrap {
+    width: min(calc(100% - 224px), calc(560px + var(--coord-gutter)), calc(100vh - var(--board-vh-reserve, 240px)));
   }
 }
 

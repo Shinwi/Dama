@@ -63,7 +63,7 @@
             [color]="scoreboardPlayers()[0].side === LIGHT ? 'dark' : 'light'"
             [count]="scoreboardPlayers()[0].captured"
           ></app-captured-tray>
-          <div class="board-wrap" [attr.data-turn]="turnEdge()" [class.low]="lowTime()">
+          <div class="board-wrap">
             <app-board
               [board]="game.state().board"
               [theme]="game.settings().boardTheme"

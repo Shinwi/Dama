@@ -22,7 +22,7 @@ import { OnlinePrompt } from './online/online-prompt';
 import { GameOverCard } from './game-over/game-over-card';
 import { TapToast } from './tap-toast/tap-toast';
 import { AudioService } from './audio/audio.service';
-import { GameService, LOW_TIME_MS, playerName } from './game/game.service';
+import { GameService, playerName } from './game/game.service';
 import { squareName } from '../engine/board';
 import { DARK, LIGHT, Outcome, Side } from '../engine/types';
 import { MAX_TIMEOUTS } from '../engine/game';
@@ -188,19 +188,6 @@ export class App {
   });
 
   protected readonly moveTimeNote = computed(() => describeMoveTime(this.game.moveTimeMs()));
-
-  /** Which edge of the board belongs to the player to move (for its coloured bar), or null. */
-  protected readonly turnEdge = computed(() => {
-    const toMove = this.scoreboardToMove();
-    if (toMove === null) return null;
-    return toMove === (this.flipped() ? DARK : LIGHT) ? 'bottom' : 'top';
-  });
-
-  /** The player to move is in their last 10 seconds. */
-  protected readonly lowTime = computed(() => {
-    const left = this.game.turnLeftMs();
-    return left !== null && left <= LOW_TIME_MS && this.game.outcome().kind === 'ongoing';
-  });
 
   /** Says whose turn was just skipped because their time ran out, until the next move. */
   protected readonly timeoutNote = computed(() =>
