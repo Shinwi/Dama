@@ -50,6 +50,12 @@ const STACK_HEIGHT = 4;
       margin-bottom: 0;
     }
 
+    .chip.light {
+      background: linear-gradient(180deg, var(--piece-white-shine) 0%, var(--piece-white-fill) 45%, #c9c5bb 100%);
+      border-color: var(--piece-white-edge);
+      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.18);
+    }
+
     .stack {
       position: relative;
     }
