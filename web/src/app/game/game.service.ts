@@ -2,6 +2,7 @@ import { Injectable, computed, effect, inject, signal } from '@angular/core';
 import { AiClient } from '../ai/ai-client';
 import { AudioService } from '../audio/audio.service';
 import { checkOnlineServer, OnlineClient, onlineServerUrl } from '../online/online-client';
+import { playerId } from '../online/player-id';
 import { Seat, SeatStore } from '../online/seat-store';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, GameState, LIGHT, Move, Side } from '../../engine/types';
@@ -89,7 +90,7 @@ export class GameService {
   private aiRequest = 0;
 
   /** Made when an online game starts; replaceable in tests. */
-  private onlineClientFactory = () => new OnlineClient(onlineServerUrl());
+  private onlineClientFactory = () => new OnlineClient(onlineServerUrl(), playerId());
   private onlineClient: OnlineClient | null = null;
   /** The seat in the room being played. Every action is sent with it. */
   private onlineSession: Seat | null = null;

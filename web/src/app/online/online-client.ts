@@ -83,7 +83,11 @@ export class OnlineClient {
   /** Called when the connection drops and when it comes back (`reconnected` true then). */
   onConnection: (state: ConnectionState, reconnected: boolean) => void = () => {};
 
-  constructor(url: string) {
+  /** `playerId`: this browser's anonymous ID (see player-id.ts), sent so the server can count players. */
+  constructor(
+    url: string,
+    private readonly playerId?: string,
+  ) {
     this.socket = io(url, { transports: ['websocket'] });
     this.socket.on('room:update', (view) => this.onUpdate(view));
     this.socket.on('connect', () => {
@@ -94,15 +98,15 @@ export class OnlineClient {
   }
 
   create(side: Side, strictMode: boolean): Promise<JoinedReply | Unreachable> {
-    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:create', { side, strictMode }));
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:create', { side, strictMode, playerId: this.playerId }));
   }
 
   join(code: string): Promise<JoinedReply | Unreachable> {
-    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:join', { code }));
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:join', { code, playerId: this.playerId }));
   }
 
   rejoin(code: string, token: string): Promise<JoinedReply | Unreachable> {
-    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:rejoin', { code, token }));
+    return this.request(() => this.socket.timeout(REPLY_TIMEOUT_MS).emitWithAck('room:rejoin', { code, token, playerId: this.playerId }));
   }
 
   /** Sends an action for the seat `code`/`token` (see ActionRequest for why it says which). */

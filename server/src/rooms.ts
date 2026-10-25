@@ -24,6 +24,30 @@ export interface Room {
   lastAction: (OnlineAction & { by: Side }) | null;
   /** When the last player disconnected, or null while anyone is connected. */
   emptySince: number | null;
+  /** When the second player joined (the game started), or null while waiting for them. */
+  startedAt: number | null;
+  /** When the game ended (a win or a draw), or null while it's on. */
+  finishedAt: number | null;
+}
+
+/** A game that has just ended, for the metrics. */
+export interface FinishedGame {
+  result: 'win' | 'draw';
+  durationMs: number;
+  /** Accepted actions: moves and nfikh. */
+  actions: number;
+}
+
+/** How many rooms and players there are right now. */
+export interface RoomCounts {
+  /** All rooms in memory. */
+  open: number;
+  /** One player in, waiting for the friend to join. */
+  waiting: number;
+  /** Both players have joined, the game isn't over, and at least one of them is connected. */
+  active: number;
+  /** Seats whose player is connected right now. */
+  playersConnected: number;
 }
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -60,6 +84,8 @@ export class RoomManager {
       seq: 0,
       lastAction: null,
       emptySince: null,
+      startedAt: null,
+      finishedAt: null,
     };
     const token = this.newToken();
     room.seats[seatKey(side)] = { token, connected: true };
@@ -76,6 +102,7 @@ export class RoomManager {
     const token = this.newToken();
     room.seats[seatKey(side)] = { token, connected: true };
     room.emptySince = null;
+    room.startedAt = this.now(); // both seats are taken now
     return { ok: true, value: { room, side, token } };
   }
 
@@ -98,9 +125,9 @@ export class RoomManager {
 
   /**
    * Checks an action with the engine and, if it's legal, plays it. `action` comes straight off
-   * the network, so its shape is checked too.
+   * the network, so its shape is checked too. Says whether this action ended the game.
    */
-  play(room: Room, side: Side, action: unknown): Result<void> {
+  play(room: Room, side: Side, action: unknown): Result<{ finished: FinishedGame | null }> {
     if (!isAction(action)) return { ok: false, error: 'Not a valid action.' };
     if (!room.seats.light || !room.seats.dark) return { ok: false, error: 'Waiting for the other player.' };
     if (outcome(room.state).kind !== 'ongoing') return { ok: false, error: 'The game is over.' };
@@ -118,7 +145,27 @@ export class RoomManager {
     // Rebuilt rather than spread, so nothing else the client sent along is kept.
     room.lastAction =
       action.kind === 'nfikh' ? { kind: 'nfikh', square: action.square, by: side } : { kind: 'move', path: [...action.path], by: side };
-    return { ok: true, value: undefined };
+    const result = outcome(room.state);
+    if (result.kind === 'ongoing' || room.finishedAt !== null) return { ok: true, value: { finished: null } };
+    room.finishedAt = this.now();
+    const finished: FinishedGame = {
+      result: result.kind,
+      durationMs: room.finishedAt - (room.startedAt ?? room.finishedAt),
+      actions: room.seq,
+    };
+    return { ok: true, value: { finished } };
+  }
+
+  counts(): RoomCounts {
+    const counts: RoomCounts = { open: this.rooms.size, waiting: 0, active: 0, playersConnected: 0 };
+    for (const room of this.rooms.values()) {
+      const seats = [room.seats.light, room.seats.dark].filter((seat) => seat !== undefined);
+      const connected = seats.filter((seat) => seat.connected).length;
+      counts.playersConnected += connected;
+      if (seats.length < 2) counts.waiting++;
+      else if (room.finishedAt === null && connected > 0) counts.active++;
+    }
+    return counts;
   }
 
   /** Forgets rooms nobody has been connected to for `maxIdleMs`. Returns how many went. */

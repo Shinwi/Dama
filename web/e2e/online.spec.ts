@@ -179,3 +179,21 @@ test('joining your own room with its code takes your seat back; a third player i
     'That room already has two players. If one of them is you, open the game on the device you started it on.',
   );
 });
+
+test('each browser sends its own anonymous player ID, and the server counts the players', async ({ browser }) => {
+  const white = await player(browser);
+  const code = await createRoom(white);
+  const black = await player(browser);
+  await joinRoom(black, code);
+  await expect(white.getByTestId('status')).toHaveText('Your move.');
+
+  const idOf = (page: Page) => page.evaluate(() => localStorage.getItem('dama.player.v1'));
+  const [whiteId, blackId] = [await idOf(white), await idOf(black)];
+  expect(whiteId).toMatch(/^[A-Za-z0-9-]{8,64}$/);
+  expect(blackId).not.toBe(whiteId);
+
+  // Other tests share this server, so at least these two.
+  const stats = await (await fetch('http://localhost:3000/stats.json')).json();
+  expect(stats.today.uniquePlayers).toBeGreaterThanOrEqual(2);
+  expect(stats.now.roomsActive).toBeGreaterThanOrEqual(1);
+});
