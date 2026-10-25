@@ -50,6 +50,17 @@ const STACK_HEIGHT = 4;
       margin-bottom: 0;
     }
 
+    /* The right-hand player's side: stacks fill from the middle outwards, and the "+N" sits on
+       the inner corner, so it never runs off the edge of the screen. */
+    :host(.mirrored) {
+      flex-direction: row-reverse;
+    }
+
+    :host(.mirrored) .more {
+      right: auto;
+      left: -11px;
+    }
+
     .chip.light {
       background: linear-gradient(180deg, var(--piece-white-shine) 0%, var(--piece-white-fill) 45%, #c9c5bb 100%);
       border-color: var(--piece-white-edge);
@@ -83,11 +94,13 @@ const STACK_HEIGHT = 4;
     }
   `,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  host: { role: 'img', '[attr.aria-label]': 'label()', '[attr.data-count]': 'count()' },
+  host: { '[class.mirrored]': 'mirrored()', role: 'img', '[attr.aria-label]': 'label()', '[attr.data-count]': 'count()' },
 })
 export class CapturedStacks {
   readonly color = input.required<'light' | 'dark'>();
   readonly count = input.required<number>();
+  /** The right-hand side of the scoreboard: mirrored, so the "+N" faces the middle. */
+  readonly mirrored = input(false);
   /** At most this many stacks; if there are more pieces than they hold, the last gets "+N". */
   readonly maxStacks = input<number | null>(null);
 

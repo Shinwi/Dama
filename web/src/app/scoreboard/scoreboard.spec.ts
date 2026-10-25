@@ -43,6 +43,12 @@ describe('Scoreboard', () => {
     expect(el().querySelectorAll('.tab')[1].classList).not.toContain('active');
   });
 
+  it("mirrors the right-hand player's stacks, so their \"+N\" faces the middle, not the screen's edge", () => {
+    const stacks = el().querySelectorAll('app-captured-stacks');
+    expect(stacks[0].classList).not.toContain('mirrored');
+    expect(stacks[1].classList).toContain('mirrored');
+  });
+
   it('has no clocks without a move timer', async () => {
     fixture.componentRef.setInput('moveTimeMs', 0);
     fixture.componentRef.setInput('clock', null);
