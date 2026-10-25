@@ -7,7 +7,7 @@ import { Seat, SeatStore } from '../online/seat-store';
 import { isKing, squareName } from '../../engine/board';
 import { DARK, GameState, LIGHT, Move, Side } from '../../engine/types';
 import { OnlineAction, RoomView, WireState } from '../../protocol/online';
-import { defaultSettings, GameController, Settings, UpdateKind } from './game-controller';
+import { defaultSettings, GameController, RejectReason, Settings, UpdateKind } from './game-controller';
 
 const STORAGE_KEY = 'dama.settings.v1';
 /** Backstop in case the board never reports a move as settled: no animation is this long. */
@@ -33,6 +33,32 @@ export interface OnlineStatus {
   /** When (Date.now()) the opponent was seen to lose their connection, while they're gone. */
   opponentGoneSince: number | null;
 }
+
+/** A refused tap, for the board (a shake) and a short message. */
+export interface TapFeedback {
+  /** The square tapped. */
+  square: number;
+  /** The square of the piece to shake (the selected one, or the one tapped), or null. */
+  shake: number | null;
+  message: string;
+  /** Different for every refusal, so the same square can shake twice in a row. */
+  id: number;
+}
+
+/**
+ * What to say about a refused tap. Only what's at the tapped square, never what to do instead:
+ * the game gives no hints (which piece can capture, which can be taken by nfikh).
+ */
+const REJECT_MESSAGES: Record<RejectReason, string> = {
+  empty: 'Pick one of your pieces first.',
+  unreachable: "That piece can't go there.",
+  opponent: "You can't take that piece.",
+  stuck: "That piece can't move.",
+  route: 'Tap a marked square to choose the way.',
+};
+
+/** How long a refused tap's message stays up. */
+const TAP_FEEDBACK_MS = 1800;
 
 /** Whether the online server answered the last check. 'checking' only until the first answer. */
 export type OnlineServerState = 'checking' | 'up' | 'down';
@@ -81,6 +107,10 @@ export class GameService {
   private updateKindValue: UpdateKind = 'reset';
 
   readonly thinking = signal(false);
+  /** The latest refused tap, while its message is up. */
+  readonly tapFeedback = signal<TapFeedback | null>(null);
+  private feedbackCount = 0;
+  private feedbackTimer: ReturnType<typeof setTimeout> | null = null;
   /** What just happened (a move, Undo, New game) in words, for screen readers to announce. */
   readonly announcement = signal('');
   /** A move is still playing out on the board: nobody can move until it has landed. */
@@ -199,12 +229,48 @@ export class GameService {
   }
 
   tapSquare(square: number): void {
-    if (this.thinking() || this.moving() || !this.isHumanTurn()) return;
+    // While a move is still playing out, Board holds taps back, so this is rare: ignore it.
+    if (this.moving()) return;
+    if (this.thinking() || !this.isHumanTurn()) {
+      if (this.controller.outcome.kind === 'ongoing') this.rejectTap(square, null, this.waitMessage());
+      return;
+    }
     const result = this.controller.tapSquare(square);
     if (result === 'move') this.startMove();
     if (result === 'nfikh') this.showNfikh();
+    if (result === 'illegal') {
+      const { reason } = this.controller.rejection!;
+      // Shake the piece the player meant to move: the selected one, or the one tapped.
+      const shake = this.controller.selectionInfo.selected ?? (this.controller.state.board[square] !== 0 ? square : null);
+      this.rejectTap(square, shake, REJECT_MESSAGES[reason]);
+    }
     this.bump();
-    if (result !== 'none' && this.online()) this.sendOnline(result);
+    if ((result === 'move' || result === 'nfikh') && this.online()) this.sendOnline(result);
+  }
+
+  /** Why it isn't the player's turn to tap, in a few words. */
+  private waitMessage(): string {
+    const online = this.online();
+    if (online) {
+      if (online.connection !== 'connected') return 'Reconnecting… one moment.';
+      if (!online.opponentJoined) return 'Wait for your friend to join.';
+      return "Wait for your opponent's move.";
+    }
+    return "Wait for the computer's move.";
+  }
+
+  /**
+   * A refused tap: a short "nope" sound, the piece shakes (if there is one to shake), and a
+   * few words say what's wrong. The message goes away by itself.
+   */
+  private rejectTap(square: number, shake: number | null, message: string): void {
+    const feedback: TapFeedback = { square, shake, message, id: ++this.feedbackCount };
+    this.tapFeedback.set(feedback);
+    this.audio.nope();
+    if (this.feedbackTimer !== null) clearTimeout(this.feedbackTimer);
+    this.feedbackTimer = setTimeout(() => {
+      if (this.tapFeedback() === feedback) this.tapFeedback.set(null);
+    }, TAP_FEEDBACK_MS);
   }
 
   /**

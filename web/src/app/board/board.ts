@@ -81,6 +81,9 @@ export class Board {
    * 'reset' (new game / undo) snaps instantly.
    */
   readonly updateKind = input<UpdateKind>('reset');
+  /** The latest refused tap: its square flashes, and the piece it was about shakes "no". */
+  readonly rejectedTap = input<{ square: number; shake: number | null; id: number } | null>(null);
+  private lastRejectionShown = 0;
 
   readonly squareTap = output<number>();
   /**
@@ -179,6 +182,12 @@ export class Board {
 
   constructor() {
     effect(() => {
+      const rejected = this.rejectedTap();
+      if (!rejected || rejected.id === this.lastRejectionShown) return;
+      this.lastRejectionShown = rejected.id;
+      untracked(() => this.showRejection(rejected.square, rejected.shake));
+    });
+    effect(() => {
       const path = this.pathSoFar();
       // Not cleared when the selection empties: that's also what happens when the move is
       // committed, and reconcile() needs the path then. A fresh selection clears it instead.
@@ -260,6 +269,25 @@ export class Board {
 
   squareNameFor(square: number): string {
     return squareName(square);
+  }
+
+  /**
+   * A refused tap: the square flashes a red ring, and the piece it was about shakes "no".
+   * Played with the Web Animations API rather than CSS classes, so each refusal starts the
+   * animation over, even on the same square. No shake for prefers-reduced-motion.
+   */
+  private showRejection(square: number, shake: number | null): void {
+    const name = squareName(square);
+    const root = this.host.nativeElement;
+    const button = root.querySelector<HTMLElement>(`button[data-square="${name}"]`);
+    play(button, [{ boxShadow: `inset 0 0 0 3px ${REJECT_COLOUR}` }, { boxShadow: `inset 0 0 0 3px transparent` }], 650);
+    if (shake === null || this.reducedMotion()) return;
+    const disc = root.querySelector<HTMLElement>(`[data-testid="piece"][data-square="${squareName(shake)}"]:not(.captured) .piece-disc`);
+    play(
+      disc,
+      [{ translate: '0' }, { translate: '-9%' }, { translate: '9%' }, { translate: '-9%' }, { translate: '9%' }, { translate: '0' }],
+      320,
+    );
   }
 
   private reducedMotion(): boolean {
@@ -414,6 +442,13 @@ function describeSquare(cell: Omit<CellView, 'label'>, contents: number): string
   if (cell.isCaptureRing) parts.push('you can capture by moving here');
   if (cell.isLastMove) parts.push('part of the last move');
   return parts.join(', ');
+}
+
+const REJECT_COLOUR = '#d64545';
+
+/** Runs a one-off animation, where the browser can (jsdom, in unit tests, can't). */
+function play(element: HTMLElement | null, keyframes: Keyframe[], durationMs: number): void {
+  if (element && typeof element.animate === 'function') element.animate(keyframes, { duration: durationMs, easing: 'ease-out' });
 }
 
 function delay(ms: number): Promise<void> {

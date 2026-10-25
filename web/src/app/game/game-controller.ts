@@ -8,8 +8,28 @@ export type BoardTheme = 'classic' | 'wood' | 'green';
 /** How the board got to its latest position (see GameService.updateKind). */
 export type UpdateKind = 'reset' | 'move' | 'nfikh';
 
-/** What a tap did: nothing (yet), completed a move, or took a piece by nfikh. */
-export type TapResult = 'none' | 'move' | 'nfikh';
+/**
+ * What a tap did: nothing to complete yet ('none': picked a piece up, put it down, or chose
+ * the way), completed a move, took a piece by nfikh, or was refused ('illegal', see
+ * GameController.rejection for why).
+ */
+export type TapResult = 'none' | 'move' | 'nfikh' | 'illegal';
+
+/**
+ * Why a tap was refused. Says only what's on the board where the player tapped, never what
+ * they could do instead (no hints: spotting captures is up to them).
+ */
+export type RejectReason =
+  /** Nothing selected, and the square is empty. */
+  | 'empty'
+  /** The selected piece can't end its move there. */
+  | 'unreachable'
+  /** An opponent's piece that can't be taken (by nfikh). */
+  | 'opponent'
+  /** One of the player's own pieces, which has no move. */
+  | 'stuck'
+  /** Choosing between routes, and the square isn't on any of them. */
+  | 'route';
 
 /** A piece taken by nfikh: where it was, and which side took it. */
 export interface Nfikh {
@@ -84,6 +104,9 @@ export class GameController {
    */
   lastNfikh: Nfikh | null = null;
 
+  /** Why the last 'illegal' tap was refused, and where it was. */
+  rejection: { square: number; reason: RejectReason } | null = null;
+
   private history: Snapshot[] = [];
   private selection: SelectionInfo = EMPTY_SELECTION;
 
@@ -130,6 +153,7 @@ export class GameController {
    * missed capture is up to the player.
    */
   tapSquare(square: number): TapResult {
+    this.rejection = null;
     if (this.outcome.kind !== 'ongoing') return 'none';
 
     if (this.state.forfeitable.includes(square)) {
@@ -138,8 +162,7 @@ export class GameController {
     }
 
     if (this.selection.selected === null) {
-      this.trySelect(square);
-      return 'none';
+      return this.trySelect(square) ? 'none' : this.reject(square, this.reasonAt(square, 'empty'));
     }
 
     const { selected, path, candidateMoves, target } = this.selection;
@@ -156,10 +179,11 @@ export class GameController {
       }
       if (square === selected) {
         this.resetSelection();
-      } else {
-        this.trySelect(square);
+        return 'none';
       }
-      return 'none';
+      // Another of the player's pieces: pick that one up instead. Anything else is refused,
+      // and the selected piece stays selected, ready for the right square.
+      return this.trySelect(square) ? 'none' : this.reject(square, this.reasonAt(square, 'unreachable'));
     }
 
     // A king's route can pass through its destination and come back to it later; the route
@@ -176,12 +200,27 @@ export class GameController {
     }
     if (routes.length > 1) {
       this.chooseRoute([...path, square], routes, target);
-    } else if (square === selected) {
+      return 'none';
+    }
+    if (square === selected) {
       // Changed their mind: put the piece back down. (A route can also pass back through the
       // starting square, so that's checked first.)
       this.resetSelection();
+      return 'none';
     }
-    return 'none';
+    return this.reject(square, 'route');
+  }
+
+  private reject(square: number, reason: RejectReason): 'illegal' {
+    this.rejection = { square, reason };
+    return 'illegal';
+  }
+
+  /** Why a tap on `square` that selects nothing is refused; `ifEmpty` for an empty square. */
+  private reasonAt(square: number, ifEmpty: 'empty' | 'unreachable'): RejectReason {
+    const owner = Math.sign(this.state.board[square]);
+    if (owner === 0) return ifEmpty;
+    return owner === this.state.toMove ? 'stuck' : 'opponent';
   }
 
   /** Narrows to `routes` and follows them as far as they agree, up to where they split. */
@@ -262,15 +301,13 @@ export class GameController {
     }
   }
 
-  private trySelect(square: number): void {
+  /** Picks up the player's piece on `square`, if it has a move. Leaves the selection alone if not. */
+  private trySelect(square: number): boolean {
     const ownPiece = Math.sign(this.state.board[square]) === this.state.toMove;
     const candidateMoves = ownPiece ? this.legalMoves.filter((m) => m.from === square) : [];
-
-    if (candidateMoves.length === 0) {
-      this.selection = EMPTY_SELECTION;
-      return;
-    }
+    if (candidateMoves.length === 0) return false;
     this.selection = { ...EMPTY_SELECTION, selected: square, path: [square], candidateMoves };
+    return true;
   }
 
   private commitMove(move: Move): void {

@@ -15,6 +15,7 @@ import {
 import { Board } from './board/board';
 import { GameSetup, Home } from './home/home';
 import { RoomPanel } from './online/room-panel';
+import { TapToast } from './tap-toast/tap-toast';
 import { AudioService } from './audio/audio.service';
 import { GameService } from './game/game.service';
 import { squareName } from '../engine/board';
@@ -24,7 +25,7 @@ import { Nfikh, Settings } from './game/game-controller';
 
 @Component({
   selector: 'app-root',
-  imports: [Board, Home, RoomPanel],
+  imports: [Board, Home, RoomPanel, TapToast],
   templateUrl: './app.html',
   styleUrl: './app.css',
   changeDetection: ChangeDetectionStrategy.OnPush,
